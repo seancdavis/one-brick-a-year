@@ -5,6 +5,7 @@ import { buildLandmarks } from './lib/landmarks';
 import { placeLandmarks } from './lib/layout';
 import { heightM, initialSim, step } from './lib/sim';
 import { drawStage, stageBox, type StageView } from './render/stage';
+import { ICONS } from './render/icons';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('missing #app root element');
@@ -68,7 +69,7 @@ function frame(timeMs: number): void {
   sim = step(sim, dtSeconds, held, reducedMotionQuery.matches);
 
   const placed = placeLandmarks(landmarks, heightM(sim), sim.scaleM, stageBox(view));
-  drawStage(ctx, view, sim, placed);
+  drawStage(ctx, view, sim, placed, ICONS);
   hud.update(sim);
 
   requestAnimationFrame(frame);

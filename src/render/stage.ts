@@ -3,9 +3,11 @@
 // pixel-for-pixel. Reads state and draws; never mutates it.
 
 import { BRICK_M } from '../lib/constants';
-import { fmtMeters } from '../lib/format';
+import { fmtMeters, fmtYears } from '../lib/format';
 import type { PlacedLandmark, StageBox } from '../lib/layout';
+import type { IconId } from '../lib/landmarks';
 import { heightM, type SimState } from '../lib/sim';
+import { ICON_SIZE_PX, type Icon } from './icons';
 
 export interface StageView {
   widthCss: number;
@@ -23,6 +25,11 @@ const RED = '#d5281b';
 const GROUND_MARGIN_PX = 56;
 const TOP_MIN_PX = 150;
 const TOP_FRACTION = 0.2;
+
+// Gap between a landmark's icon and its label text, and between the dashed
+// line and the icon, both in px.
+const ICON_LABEL_GAP_PX = 6;
+const ICON_LINE_GAP_PX = 6;
 
 export function stageBox(view: StageView): StageBox {
   return {
@@ -43,6 +50,7 @@ export function drawStage(
   view: StageView,
   sim: SimState,
   placed: PlacedLandmark[],
+  icons: Record<IconId, Icon>,
 ): void {
   const { widthCss: W, heightCss: H, dpr, narrow } = view;
   const { top, ground } = stageBox(view);
@@ -78,17 +86,37 @@ export function drawStage(
     ctx.restore();
   }
 
-  // Landmark lines and labels.
+  // Landmark lines, icons, and labels.
   ctx.font = '12px "IBM Plex Mono", monospace';
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'right';
   for (const p of placed) {
+    const label = `${p.landmark.label} · ${fmtYears(p.landmark.years)}`;
+    const baselineY = p.y + p.labelDy;
+
+    let lineEndX = labelX;
+    if (!narrow) {
+      const textWidth = ctx.measureText(label).width;
+      const iconLeftX = labelX - textWidth - ICON_LABEL_GAP_PX - ICON_SIZE_PX;
+      lineEndX = iconLeftX - ICON_LINE_GAP_PX;
+
+      const icon = icons[p.landmark.icon];
+      ctx.save();
+      ctx.globalAlpha = p.passed ? 1 : 0.45;
+      ctx.fillStyle = INK;
+      ctx.translate(iconLeftX, baselineY - ICON_SIZE_PX / 2);
+      ctx.scale(ICON_SIZE_PX / 24, ICON_SIZE_PX / 24);
+      ctx.fill(icon.path, 'evenodd');
+      ctx.restore();
+    }
+
     ctx.strokeStyle = p.passed ? 'rgba(42,36,32,.6)' : 'rgba(42,36,32,.22)';
     ctx.setLineDash([3, 4]);
-    line(ctx, sx + sw + 10, Math.round(p.y) + 0.5, labelX, Math.round(p.y) + 0.5);
+    line(ctx, sx + sw + 10, Math.round(p.y) + 0.5, lineEndX, Math.round(p.y) + 0.5);
     ctx.setLineDash([]);
+
     ctx.fillStyle = p.passed ? INK : CAPTION;
-    ctx.fillText(p.landmark.label, labelX, p.y + p.labelDy);
+    ctx.fillText(label, labelX, baselineY);
   }
 
   // The stack.
