@@ -1,0 +1,185 @@
+<title>The Brick Stack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@300&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{--sky:#f3efe6;--ink:#2a2420;--cap:#7b736a;--red:#d5281b}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--sky);color:var(--ink);font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,monospace;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-font-smoothing:antialiased}
+  canvas{display:block;width:100vw;height:100vh;height:100dvh}
+  .hud{position:fixed;left:24px;top:20px;pointer-events:none}
+  .big{font-family:'Big Shoulders Display','Arial Narrow',sans-serif;font-weight:300;font-size:clamp(56px,8vw,112px);line-height:.9;font-variant-numeric:tabular-nums;letter-spacing:-.005em}
+  .row{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--cap);margin-top:10px;line-height:1.7}
+  .row b{color:var(--ink);font-weight:500}
+  .prompt{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);width:max-content;max-width:90vw;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--cap);text-align:center;line-height:1.8;pointer-events:none;transition:opacity .5s}
+  .prompt.off{opacity:0}
+  .done{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;pointer-events:none}
+  .done.on{display:flex}
+  .done div{max-width:36ch;font-size:15px;line-height:1.65;background:rgba(243,239,230,.94);padding:24px 28px 26px;border:1px solid var(--ink);text-align:center;pointer-events:auto}
+  .done b{font-weight:500}
+  .done button{margin-top:16px;font:inherit;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:11px 16px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer;border-radius:0}
+  .done button:hover{background:var(--ink);color:var(--sky)}
+  .done button:focus-visible{outline:2px solid var(--red);outline-offset:3px}
+</style>
+
+<canvas id="c"></canvas>
+<div class="hud" aria-live="off">
+  <div class="big" id="years">0</div>
+  <div class="row">years ago<br><b id="bricks">0</b> bricks · <b id="height">0 cm</b> tall</div>
+</div>
+<div class="prompt" id="prompt">Press and hold anywhere.<br>Every brick is one year, going back in time.</div>
+<div class="done" id="done"><div>
+  <b>4,600,000,000 bricks.</b><br>That stack goes all the way around the Earth, and keeps going for another 4,000 kilometers.<br>You were the first eight.
+  <br><button id="again">Build it again</button>
+</div></div>
+
+<script>
+(function(){
+  var BRICK=0.0096;            // meters: the height of one stacked 2×4 LEGO brick
+  var TOTAL=4.6e9;
+  var MARKS=[
+    {y:8,        t:'your whole life'},
+    {m:0.3,      t:'a school ruler'},
+    {m:2.0,      t:'a door'},
+    {m:8,        t:'your house'},
+    {y:5000,     t:'people start writing things down'},
+    {m:93,       t:'the Statue of Liberty'},
+    {m:330,      t:'the Eiffel Tower'},
+    {m:830,      t:'the tallest building on Earth'},
+    {y:300000,   t:'the first humans'},
+    {m:8849,     t:'Mount Everest'},
+    {m:11000,    t:'where airplanes fly'},
+    {m:100000,   t:'space begins'},
+    {m:400000,   t:'the space station'},
+    {y:66e6,     t:'the asteroid hits the dinosaurs'},
+    {y:235e6,    t:'the first dinosaurs'},
+    {y:600e6,    t:'the first animals'},
+    {m:12742000, t:'as wide as the whole Earth'},
+    {y:2.4e9,    t:'the air gets oxygen'},
+    {y:3.7e9,    t:'the first life'},
+    {m:40075000, t:'all the way around the Earth'},
+    {y:4.6e9,    t:'the Earth is born'}
+  ];
+  MARKS.forEach(function(k){
+    if(k.y!=null){ k.m=k.y*BRICK; k.label=k.t+' · '+fmtYears(k.y); }
+    else { k.y=k.m/BRICK; k.label=k.t+' · '+fmtYears(k.y); }
+  });
+  MARKS.sort(function(a,b){return a.m-b.m;});
+
+  function fmtYears(y){
+    if(y>=1e9) return (Math.round(y/1e8)/10).toString().replace(/\.0$/,'')+' billion years';
+    if(y>=1e6) return (Math.round(y/1e5)/10).toString().replace(/\.0$/,'')+' million years';
+    if(y>=1000) return Math.round(y).toLocaleString('en-US')+' years';
+    return Math.round(y)+' years';
+  }
+  function fmtM(m){
+    if(m<1) return (m*100).toFixed(1)+' cm';
+    if(m<1000) return (m<10? m.toFixed(2): Math.round(m))+' m';
+    return Math.round(m/1000).toLocaleString('en-US')+' km';
+  }
+
+  var c=document.getElementById('c'), ctx=c.getContext('2d'), dpr=1, W=0, H=0;
+  var yearsEl=document.getElementById('years'), bricksEl=document.getElementById('bricks'), heightEl=document.getElementById('height');
+  var prompt=document.getElementById('prompt'), doneEl=document.getElementById('done');
+  var years=0, held=false, heldTime=0, scale=0.1, zooming=false, zFrom=0, zTo=0, zStart=0, done=false, last=0, started=false;
+
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=window.innerWidth; H=window.innerHeight;
+    c.width=Math.round(W*dpr); c.height=Math.round(H*dpr);
+  }
+  window.addEventListener('resize',resize); resize();
+
+  function press(e){ if(done) return; held=true; if(!started){ started=true; prompt.classList.add('off'); } if(e && e.preventDefault) e.preventDefault(); }
+  function release(){ held=false; }
+  window.addEventListener('pointerdown',press);
+  window.addEventListener('pointerup',release);
+  window.addEventListener('pointercancel',release);
+  window.addEventListener('blur',release);
+  window.addEventListener('keydown',function(e){ if(e.code==='Space'||e.code==='Enter'){ press(e); } });
+  window.addEventListener('keyup',function(e){ if(e.code==='Space'||e.code==='Enter') release(); });
+  document.getElementById('again').addEventListener('click',function(e){
+    e.stopPropagation(); years=0; heldTime=0; scale=0.1; zooming=false; done=false; doneEl.classList.remove('on'); prompt.classList.remove('off'); started=false;
+  });
+  document.getElementById('again').addEventListener('pointerdown',function(e){ e.stopPropagation(); });
+
+  function easeInOut(p){ return p<.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2; }
+
+  function frame(t){
+    var dt=Math.min((t-last)/1000,0.05); last=t;
+    if(held&&!done){
+      heldTime+=dt;
+      var rate=8*Math.exp(0.25*heldTime);       // years per second, growing the longer she holds
+      years=Math.min(TOTAL,years+rate*dt);
+      if(years>=TOTAL){ done=true; held=false; doneEl.classList.add('on'); }
+    }
+    var h=years*BRICK;
+    if(!zooming&&h>scale*0.82&&scale<1e8){ zooming=true; zFrom=scale; zTo=scale*10; zStart=t; }
+    if(zooming){
+      var p=Math.min(1,(t-zStart)/750);
+      scale=Math.exp(Math.log(zFrom)+(Math.log(zTo)-Math.log(zFrom))*easeInOut(p));
+      if(p>=1){ zooming=false; scale=zTo; }
+    }
+    render(h);
+    yearsEl.textContent=Math.round(years).toLocaleString('en-US');
+    bricksEl.textContent=Math.round(years).toLocaleString('en-US');
+    heightEl.textContent=fmtM(h);
+    requestAnimationFrame(frame);
+  }
+
+  function line(x1,y1,x2,y2){ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+
+  function render(h){
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.fillStyle='#f3efe6'; ctx.fillRect(0,0,W,H);
+    var ground=H-56, top=Math.max(150,H*0.2), pxPerM=(ground-top)/scale;
+    var narrow=W<700;
+    var sw=narrow?34:Math.max(40,Math.min(72,W*0.055));
+    var sx=narrow?Math.round(W*0.12):Math.round(W*0.30);
+    var labelX=W-24;
+
+    // ground
+    ctx.strokeStyle='#2a2420'; ctx.lineWidth=1; line(0,ground+.5,W,ground+.5);
+
+    // scale bar on the left: how tall this screen is right now
+    var bx=narrow?sx-14:Math.round(W*0.30)-40;
+    if(!narrow){
+      ctx.strokeStyle='rgba(42,36,32,.5)'; line(bx+.5,ground,bx+.5,top);
+      line(bx-4,top+.5,bx+4,top+.5); line(bx-4,ground+.5,bx+4,ground+.5);
+      ctx.save(); ctx.translate(bx-10,(ground+top)/2); ctx.rotate(-Math.PI/2);
+      ctx.fillStyle='#7b736a'; ctx.font='11px "IBM Plex Mono", monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('THIS SCREEN IS '+fmtM(scale).toUpperCase()+' TALL',0,0); ctx.restore();
+    }
+
+    // landmarks
+    ctx.font='12px "IBM Plex Mono", monospace'; ctx.textBaseline='alphabetic'; ctx.textAlign='right';
+    var lastY=-999;
+    for(var i=0;i<MARKS.length;i++){
+      var k=MARKS[i], y=ground-k.m*pxPerM;
+      if(y<top-30||y>ground-1) continue;
+      var passed=h>=k.m;
+      ctx.strokeStyle=passed?'rgba(42,36,32,.6)':'rgba(42,36,32,.22)';
+      ctx.setLineDash([3,4]); line(sx+sw+10,Math.round(y)+.5,labelX,Math.round(y)+.5); ctx.setLineDash([]);
+      var dy=(Math.abs(y-lastY)<18)?15:-6; lastY=y;
+      ctx.fillStyle=passed?'#2a2420':'#7b736a';
+      ctx.fillText(k.label,labelX,y+dy);
+    }
+
+    // the stack
+    var sh=h*pxPerM, y0=ground-sh;
+    ctx.fillStyle='#d5281b'; ctx.fillRect(sx,y0,sw,sh);
+    var pxPerBrick=BRICK*pxPerM;
+    if(pxPerBrick>=3&&sh>0){
+      ctx.strokeStyle='rgba(0,0,0,.3)';
+      for(var yy=ground-pxPerBrick; yy>y0-1; yy-=pxPerBrick){ line(sx,Math.round(yy)+.5,sx+sw,Math.round(yy)+.5); }
+      var bw=sw/4, stud=Math.min(pxPerBrick*.2,6);
+      for(var s=0;s<4;s++) ctx.fillRect(sx+s*bw+bw*.25,y0-stud,bw*.5,stud);
+    } else if(sh>0){
+      ctx.fillStyle='rgba(0,0,0,.12)'; ctx.fillRect(sx+sw-Math.max(3,sw*.12),y0,Math.max(3,sw*.12),sh);
+    }
+  }
+
+  requestAnimationFrame(function(t){ last=t; requestAnimationFrame(frame); });
+})();
+</script>
