@@ -36,6 +36,7 @@ export function createHoldInput(target: HTMLElement | Window, onChange: (held: b
   function onKeyDown(e: Event) {
     const ke = e as KeyboardEvent;
     if (!HOLD_KEYS.has(ke.code)) return;
+    if (isInteractiveTarget(ke.target)) return;
     ke.preventDefault();
     setHeld(true);
   }
@@ -43,6 +44,7 @@ export function createHoldInput(target: HTMLElement | Window, onChange: (held: b
   function onKeyUp(e: Event) {
     const ke = e as KeyboardEvent;
     if (!HOLD_KEYS.has(ke.code)) return;
+    if (isInteractiveTarget(ke.target)) return;
     setHeld(false);
   }
 

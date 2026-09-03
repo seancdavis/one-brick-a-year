@@ -1,4 +1,5 @@
 import { BRICK_M } from './constants';
+import type { Personalization } from './personalize';
 
 // The set of flat, single-color icons drawn beside each landmark's label.
 // Mirrored by the ICONS record in src/render/icons.ts (slice 4).
@@ -56,15 +57,7 @@ export interface Landmark {
   icon: IconId;
 }
 
-// The minimal shape of the personalization profile buildLandmarks needs.
-// Slice 6 moves the full `Personalization` type to src/lib/personalize.ts and this becomes an alias for it.
-interface Profile {
-  name: string;
-  ageYears: number;
-  homeMeters: number;
-}
-
-export function buildLandmarks(profile: Profile): Landmark[] {
+export function buildLandmarks(profile: Personalization): Landmark[] {
   const landmarks: Landmark[] = [
     {
       // The child's own age, set at the start screen (default 8).

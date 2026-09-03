@@ -1,11 +1,16 @@
-// The HUD: a big years-ago counter, the brick/height readout, and the
-// press-and-hold prompt. Ports the prototype's HUD markup and copy
-// (docs/prototype/brick-stack.html). DOM glue only.
+// The HUD: a big years-ago counter, the brick/height readout, the
+// press-and-hold prompt, and controls (currently just "Change", which
+// reopens the start screen; later slices add sound and start-over here).
+// Ports the prototype's HUD markup and copy (docs/prototype/brick-stack.html).
+// DOM glue only.
 
 import { fmtInt, fmtMeters } from './lib/format';
 import { heightM, initialSim, type SimState } from './lib/sim';
 
-export function createHud(root: HTMLElement): { update(sim: SimState): void; hidePrompt(): void } {
+export function createHud(
+  root: HTMLElement,
+  opts: { onChange: () => void },
+): { update(sim: SimState): void; hidePrompt(): void } {
   const hud = document.createElement('div');
   hud.className = 'hud';
   hud.setAttribute('aria-live', 'off');
@@ -21,6 +26,13 @@ export function createHud(root: HTMLElement): { update(sim: SimState): void; hid
 
   const controls = document.createElement('div');
   controls.className = 'hud-controls';
+
+  const changeButton = document.createElement('button');
+  changeButton.type = 'button';
+  changeButton.className = 'hud-button';
+  changeButton.textContent = 'Change';
+  changeButton.addEventListener('click', opts.onChange);
+  controls.append(changeButton);
 
   hud.append(years, row, controls);
 

@@ -2,9 +2,11 @@ import './style.css';
 import { createBeatCards } from './beats';
 import { createHoldInput } from './input';
 import { createHud } from './hud';
+import { createStartScreen } from './start-screen';
 import { beatsCrossed } from './lib/beats';
 import { buildLandmarks } from './lib/landmarks';
 import { placeLandmarks } from './lib/layout';
+import { parsePersonalization, serialize, STORAGE_KEY, type Personalization } from './lib/personalize';
 import { heightM, initialSim, step } from './lib/sim';
 import { drawStage, stageBox, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
@@ -23,11 +25,49 @@ function getContext2D(el: HTMLCanvasElement): CanvasRenderingContext2D {
 
 const ctx = getContext2D(canvas);
 
-const hud = createHud(app);
-const beatCards = createBeatCards(app);
+function readStoredProfile(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
 
-// Slice 6 replaces this with the real profile from the start screen and URL params.
-const landmarks = buildLandmarks({ name: 'you', ageYears: 8, homeMeters: 8 });
+function saveProfile(p: Personalization): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, serialize(p));
+  } catch {
+    // Private browsing / disabled storage: personalization just won't
+    // persist across visits. Nothing else depends on this succeeding.
+  }
+}
+
+const urlParams = new URLSearchParams(location.search);
+const storedRaw = readStoredProfile();
+const hasUrlParams = urlParams.has('name') || urlParams.has('age') || urlParams.has('home');
+
+let profile = parsePersonalization(urlParams, storedRaw);
+let landmarks = buildLandmarks(profile);
+
+// URL params are applied and stored like any other source, but the page
+// never writes the child's name (or anything else) back into the URL —
+// "Copy link" (end screen, slice 8) copies the bare page URL only.
+if (hasUrlParams) {
+  saveProfile(profile);
+}
+
+const startScreen = createStartScreen(app, (nextProfile) => {
+  profile = nextProfile;
+  saveProfile(profile);
+  // Rebuild landmarks only — the running sim (years, scale, zoom) is left
+  // untouched, whether this came from the mandatory first-run screen or a
+  // mid-build "Change".
+  landmarks = buildLandmarks(profile);
+  startScreen.close();
+});
+
+const hud = createHud(app, { onChange: () => startScreen.open(profile) });
+const beatCards = createBeatCards(app);
 
 let sim = initialSim();
 let held = false;
@@ -41,6 +81,13 @@ createHoldInput(window, (next) => {
     hud.hidePrompt();
   }
 });
+
+// First visit: no URL params and nothing stored yet. Personalize before the
+// build can begin; the frame loop below ignores holds while this is open.
+// Escape is disabled here since there's no existing profile to fall back to.
+if (!hasUrlParams && storedRaw === null) {
+  startScreen.open(profile, { dismissible: false });
+}
 
 const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 const MAX_DPR = 2;
@@ -70,7 +117,8 @@ function frame(timeMs: number): void {
   const dtSeconds = (timeMs - lastTimeMs) / 1000;
   lastTimeMs = timeMs;
 
-  sim = step(sim, dtSeconds, held, reducedMotionQuery.matches);
+  const effectiveHeld = held && !startScreen.isOpen();
+  sim = step(sim, dtSeconds, effectiveHeld, reducedMotionQuery.matches);
 
   for (const beat of beatsCrossed(prevYears, sim.years)) {
     beatCards.show(beat);

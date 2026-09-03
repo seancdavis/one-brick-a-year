@@ -73,6 +73,24 @@ canvas {
   pointer-events: auto;
 }
 
+.hud-button {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.hud-button:hover {
+  background: var(--ink);
+  color: var(--sky);
+}
+
 .prompt {
   position: fixed;
   left: 50%;
@@ -157,4 +175,99 @@ canvas {
   .beat-card {
     transition: none;
   }
+}
+
+/* Start screen (src/start-screen.ts): full-screen overlay shown on first
+   visit (no URL params, nothing stored) and reopened from the HUD's
+   "Change" button. Shown/hidden via the `hidden` attribute — an instant
+   toggle, so there's no motion here to guard behind prefers-reduced-motion. */
+.start-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--sky);
+}
+
+.start-screen[hidden] {
+  display: none;
+}
+
+.start-form {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  border: 1px solid var(--ink);
+  padding: 32px 28px;
+  background: var(--sky);
+}
+
+.start-title {
+  font-family: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  font-weight: 300;
+  font-size: clamp(36px, 6vw, 56px);
+  line-height: 0.95;
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+.start-blurb {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--cap);
+  margin: 0;
+}
+
+.start-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cap);
+}
+
+.start-field input,
+.start-field select {
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink);
+  background: var(--sky);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 10px 12px;
+}
+
+.start-button {
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sky);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+
+.start-button:hover {
+  background: var(--red);
+  border-color: var(--red);
+}
+
+.start-field input:focus-visible,
+.start-field select:focus-visible,
+.start-button:focus-visible,
+.hud-button:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
 }
