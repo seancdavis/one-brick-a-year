@@ -1,6 +1,8 @@
 import './style.css';
+import { createBeatCards } from './beats';
 import { createHoldInput } from './input';
 import { createHud } from './hud';
+import { beatsCrossed } from './lib/beats';
 import { buildLandmarks } from './lib/landmarks';
 import { placeLandmarks } from './lib/layout';
 import { heightM, initialSim, step } from './lib/sim';
@@ -22,6 +24,7 @@ function getContext2D(el: HTMLCanvasElement): CanvasRenderingContext2D {
 const ctx = getContext2D(canvas);
 
 const hud = createHud(app);
+const beatCards = createBeatCards(app);
 
 // Slice 6 replaces this with the real profile from the start screen and URL params.
 const landmarks = buildLandmarks({ name: 'you', ageYears: 8, homeMeters: 8 });
@@ -29,6 +32,7 @@ const landmarks = buildLandmarks({ name: 'you', ageYears: 8, homeMeters: 8 });
 let sim = initialSim();
 let held = false;
 let hasHeldOnce = false;
+let prevYears = sim.years;
 
 createHoldInput(window, (next) => {
   held = next;
@@ -67,6 +71,11 @@ function frame(timeMs: number): void {
   lastTimeMs = timeMs;
 
   sim = step(sim, dtSeconds, held, reducedMotionQuery.matches);
+
+  for (const beat of beatsCrossed(prevYears, sim.years)) {
+    beatCards.show(beat);
+  }
+  prevYears = sim.years;
 
   const placed = placeLandmarks(landmarks, heightM(sim), sim.scaleM, stageBox(view));
   drawStage(ctx, view, sim, placed, ICONS);

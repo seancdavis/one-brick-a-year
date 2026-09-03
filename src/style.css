@@ -96,3 +96,65 @@ canvas {
 .prompt.off {
   opacity: 0;
 }
+
+/* Milestone card (src/beats.ts). Sits above the prompt, right-of-center on
+   wide screens so it never overlaps the stack column (which sits at 30%
+   from the left, per src/render/stage.ts); full-width on narrow screens. */
+.beat-card {
+  position: fixed;
+  left: 62%;
+  bottom: 92px;
+  transform: translate(-50%, 10px);
+  width: max-content;
+  max-width: 38ch; /* about 38 characters at this font size */
+  background: rgba(243, 239, 230, 0.94);
+  border: 1px solid var(--ink);
+  padding: 14px 18px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
+  z-index: 5;
+}
+
+.beat-card.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.beat-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cap);
+  margin: 0 0 6px;
+}
+
+.beat-line {
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+@media (max-width: 699px) {
+  .beat-card {
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: none;
+    transform: translateY(10px);
+    border-left: none;
+    border-right: none;
+  }
+
+  .beat-card.visible {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beat-card {
+    transition: none;
+  }
+}
