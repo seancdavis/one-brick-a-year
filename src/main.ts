@@ -1,4 +1,5 @@
 import './style.css';
+import { createAnalytics } from './analytics';
 import { createAudio } from './audio';
 import { createBeatCards } from './beats';
 import { createEndScreen } from './end-screen';
@@ -124,6 +125,8 @@ const startScreen = createStartScreen(app, (nextProfile) => {
 const audio = createAudio();
 let soundEnabled = readStoredSound();
 
+const analytics = createAnalytics();
+
 const hud = createHud(app, {
   colorId: profile.colorId,
   onSoundToggle: () => {
@@ -154,38 +157,58 @@ let hasScrolledOnce = false;
 let tickAccumulator = 0;
 
 // The kind of input (wheel, touch, or keyboard) that produced this session's
-// first scroll. First kind wins for the whole session. Exposed for slice 4's
-// session analytics (an `input_kind` field); unused until then.
+// first scroll. First kind wins for the session, then is cleared by
+// resetForReplay() so the next session (after Restart or "Build it again")
+// gets its own accurate reading. Feeds analytics.start()'s `inputKind` field.
 let firstInputKind: ScrollKind | null = null;
 
 function nowSeconds(): number {
   return performance.now() / 1000;
 }
 
-// Ends the current analytics session. A no-op until slice 4 (session
-// analytics) wires this to POST /api/sessions/:id/end.
-function endSession(): void {}
+// Ends the current analytics session (a no-op if none is running — see
+// src/analytics.ts's idempotency note), recording how far the stack got and
+// whether the build actually finished.
+function endSession(finished: boolean): void {
+  analytics.end({ yearsReached: sim.years, finished });
+}
 
 // Shared by "Build it again" (end screen) and Restart (HUD): back to a
-// fresh, unstarted sim, with the prompt and card queue reset to match.
+// fresh, unstarted sim, with the prompt and card queue reset to match. The
+// analytics session itself is not ended here — "Build it again" only runs
+// after finish, which already ended it (see the frame loop below), and
+// Restart ends it itself before calling this. Clearing firstInputKind means
+// the next session's first scroll gets its own input_kind, not a leftover
+// from this one.
 function resetForReplay(): void {
   endScreen.hide();
   beatCards.clear();
   sim = initialSim();
   tickAccumulator = 0;
   hasScrolledOnce = false;
+  firstInputKind = null;
   hud.showPrompt();
   needsRender = true;
 }
 
-// The HUD's Restart button: ends the session, resets the build, and reopens
-// the start screen with the current profile prefilled so the user can
-// change it.
+// The HUD's Restart button: ends the session (not finished, at whatever
+// years it reached), resets the build, and reopens the start screen with
+// the current profile prefilled so the user can change it.
 function restart(): void {
-  endSession();
+  endSession(false);
   resetForReplay();
   startScreen.open(profile);
 }
+
+// A session can end without any further app interaction — the tab is
+// closed or backgrounded mid-build. Both fire reliably across browsers
+// (pagehide covers Safari/iOS, where visibilitychange alone is less
+// dependable); analytics.end()'s idempotency means whichever fires first
+// wins and the other is a no-op.
+window.addEventListener('pagehide', () => endSession(false));
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') endSession(false);
+});
 
 // Creating (or resuming) the AudioContext must happen from an actual user
 // gesture — browsers refuse otherwise — and a wheel event isn't reliably
@@ -217,6 +240,16 @@ createScrollInput(window, (deltaPx, kind) => {
       hasScrolledOnce = true;
       hud.hidePrompt();
       armAudioOnce();
+      analytics.start({
+        ageYears: profile.ageYears,
+        homeMeters: profile.homeMeters,
+        colorId: profile.colorId,
+        soundOn: soundEnabled,
+        inputKind: firstInputKind,
+        viewportW: view.widthCss,
+        viewportH: view.heightCss,
+        userAgent: navigator.userAgent,
+      });
     }
   }
 });
@@ -306,6 +339,7 @@ function frame(timeMs: number): void {
     beatCards.clear();
     endScreen.show(profile);
     audio.finish();
+    endSession(true);
   }
 
   // Idle frame: no active scroll rate, no zoom tween running (in either the

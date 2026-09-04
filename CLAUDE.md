@@ -21,6 +21,7 @@ When Sean wants to align on upcoming work, he uses `/grill-me`.
 - **Framework:** Vite with vanilla TypeScript. No UI framework. One page, one canvas, a small HTML HUD.
 - **Styling:** plain CSS in `src/style.css`. No Tailwind: it is one screen and most pixels are canvas-drawn.
 - **Hosting:** Netlify, via `@netlify/vite-plugin` and `netlify.toml`.
+- **Database:** Netlify Database via `@netlify/database`; SQL migrations in `netlify/database/migrations/<timestamp>_<slug>/migration.sql`, applied by Netlify on deploy; functions in `netlify/functions/` with `_shared/` for cross-function code, `path` declared in the function file.
 - **Tests:** Vitest, for the pure modules only.
 
 ## Development

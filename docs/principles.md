@@ -41,6 +41,10 @@ from the address bar, so nothing personal lingers in the browser history or
 gets shared if the page's URL is copied mid-session. The page never writes
 the name — or anything else personal — into a URL it generates.
 
+## Sessions
+
+Netlify Database gets one row per build session (`sessions` table, `netlify/database/migrations/`): when it started and ended, how long it ran, how far the stack got, whether it finished, and coarse context for reading the numbers later — age, home height, brick color, sound on/off, input kind, viewport size, user agent. It never contains the child's name, or anything else that could identify one: `netlify/functions/_shared/session-payload.ts` rejects any payload that even carries a `name` key. The write endpoint (`netlify/functions/sessions.mts`) is public and unauthenticated by design — it's tiny, write-only, and safe by staying that way — with no read endpoint yet. A deploy preview writes to its own database branch, so preview traffic never lands in the production table.
+
 ## Sound
 
 Off by default. Synthesized only — no audio files. The audio context is
