@@ -39,6 +39,7 @@ export function createScrollInput(target: Window, onScroll: (deltaPx: number, ki
 
   function onWheel(e: Event): void {
     const we = e as WheelEvent;
+    if (isInteractiveTarget(we.target)) return;
     // Either direction builds — only speed matters, not which way the wheel
     // or trackpad moved.
     we.preventDefault();

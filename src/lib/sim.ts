@@ -23,16 +23,19 @@ export function initialSim(): SimState {
   };
 }
 
-export function heightM(s: SimState): number {
-  return s.years * BRICK_M;
-}
-
 // The stack only ever renders whole bricks — years is continuous, but a
 // fractional brick looks uneven and misreports the height. Floors, and never
 // goes negative (years is never negative in practice, but callers might hand
 // this a raw, unclamped number).
 export function bricksFor(years: number): number {
   return Math.max(0, Math.floor(years));
+}
+
+// The stack's actual height: always a whole number of bricks, never a
+// fractional one, so this must agree with what's drawn (src/render/stage.ts)
+// and with the HUD's brick count.
+export function heightM(s: SimState): number {
+  return bricksFor(s.years) * BRICK_M;
 }
 
 function easeInOut(p: number): number {
@@ -52,7 +55,7 @@ export function step(s: SimState, dtSeconds: number, yearsPerSecond: number, red
     }
   }
 
-  const h = years * BRICK_M;
+  const h = bricksFor(years) * BRICK_M;
 
   let scaleM = s.scaleM;
   let zoom = s.zoom;

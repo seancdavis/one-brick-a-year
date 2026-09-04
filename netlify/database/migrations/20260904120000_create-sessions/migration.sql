@@ -12,7 +12,8 @@ CREATE TABLE sessions (
   input_kind text,
   viewport_w smallint,
   viewport_h smallint,
-  user_agent text,
+  device_kind text,
+  browser_family text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX sessions_started_at_idx ON sessions (started_at);

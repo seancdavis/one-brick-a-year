@@ -1,5 +1,5 @@
 import './style.css';
-import { createAnalytics } from './analytics';
+import { createAnalytics, deriveBrowserFamily, deriveDeviceKind } from './analytics';
 import { createAudio } from './audio';
 import { createBeatCards } from './beats';
 import { createEndScreen } from './end-screen';
@@ -133,7 +133,7 @@ const hud = createHud(app, {
     soundEnabled = !soundEnabled;
     saveSound(soundEnabled);
     if (soundEnabled) {
-      audio.enable();
+      void audio.enable();
     } else {
       audio.disable();
     }
@@ -150,6 +150,11 @@ hud.setSound(soundEnabled);
 
 const beatCards = createBeatCards(app);
 const endScreen = createEndScreen(app, () => resetForReplay());
+
+// Whether this device supports touch, for analytics' device-kind derivation
+// (src/analytics.ts's deriveDeviceKind) — checked once, since it never
+// changes over a session.
+const hasTouch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
 
 let sim = initialSim();
 let scroll: ScrollState = INITIAL_SCROLL;
@@ -218,29 +223,31 @@ document.addEventListener('visibilitychange', () => {
 // counted as one. armAudioOnce() is called both from the qualifying first
 // scroll below and from the raw pointerdown/keydown listeners further down,
 // so whichever kind of gesture the browser will accept ends up arming
-// audio; the guard makes every call after the first a no-op.
+// audio. It latches only once enable() actually confirms the context is
+// running: a rejected or otherwise unsuccessful attempt (e.g. a wheel event
+// the browser didn't count as a gesture) leaves hasArmedAudio false, so the
+// next pointerdown or keydown tries again.
 let hasArmedAudio = false;
 function armAudioOnce(): void {
-  if (hasArmedAudio) return;
-  hasArmedAudio = true;
-  // Apply a stored on-preference at the first user gesture.
-  if (soundEnabled) {
-    audio.enable();
-  }
+  if (hasArmedAudio || !soundEnabled) return;
+  void audio.enable().then((ok) => {
+    if (ok) hasArmedAudio = true;
+  });
 }
 
 createScrollInput(window, (deltaPx, kind) => {
-  if (firstInputKind === null) firstInputKind = kind;
   scroll = pushScroll(scroll, deltaPx, nowSeconds());
 
   // A scroll can reach this listener while the start screen is still up (its
   // own padding, its label text are excluded, but a gesture can still land
   // just outside them) or after the sim is already done — neither is the
-  // user's first real scroll on the stack.
+  // user's first real scroll on the stack, so `kind` isn't recorded as
+  // firstInputKind unless this scroll actually qualifies below.
   if (!hasScrolledOnce && !startScreen.isOpen() && !sim.done) {
     const rate = yearsPerSecond(scroll.velocity, sim.years);
     if (rate > 0) {
       hasScrolledOnce = true;
+      firstInputKind = kind;
       hud.hidePrompt();
       armAudioOnce();
       analytics.start({
@@ -251,7 +258,8 @@ createScrollInput(window, (deltaPx, kind) => {
         inputKind: firstInputKind,
         viewportW: view.widthCss,
         viewportH: view.heightCss,
-        userAgent: navigator.userAgent,
+        deviceKind: deriveDeviceKind(navigator.userAgent, view.widthCss, hasTouch),
+        browserFamily: deriveBrowserFamily(navigator.userAgent),
       });
     }
   }

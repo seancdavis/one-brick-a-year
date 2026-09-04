@@ -80,8 +80,8 @@ export default async (req: Request, context: Context): Promise<Response> => {
   if (start === null) return noBody(400);
 
   const rows = await db.sql<{ id: string }>`
-    INSERT INTO sessions (age_years, home_meters, color_id, sound_on, input_kind, viewport_w, viewport_h, user_agent)
-    VALUES (${start.ageYears}, ${start.homeMeters}, ${start.colorId}, ${start.soundOn}, ${start.inputKind}, ${start.viewportW}, ${start.viewportH}, ${start.userAgent})
+    INSERT INTO sessions (age_years, home_meters, color_id, sound_on, input_kind, viewport_w, viewport_h, device_kind, browser_family)
+    VALUES (${start.ageYears}, ${start.homeMeters}, ${start.colorId}, ${start.soundOn}, ${start.inputKind}, ${start.viewportW}, ${start.viewportH}, ${start.deviceKind}, ${start.browserFamily})
     RETURNING id
   `;
   return json(201, { id: rows[0].id });

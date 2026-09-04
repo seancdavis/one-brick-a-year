@@ -11,7 +11,6 @@
 const TOTAL_YEARS = 4.6e9;
 
 const MAX_DURATION_MS = 86_400_000; // 24 hours: a generous upper bound, not an expected session length.
-const MAX_USER_AGENT_LENGTH = 200;
 const MAX_COLOR_ID_LENGTH = 40;
 const COLOR_ID_PATTERN = /^[a-z-]+$/;
 const VIEWPORT_MIN = 0;
@@ -21,6 +20,12 @@ const AGE_MAX = 120;
 const HOME_MIN = 1;
 const HOME_MAX = 1000;
 
+export type DeviceKind = 'phone' | 'tablet' | 'desktop';
+export type BrowserFamily = 'chrome' | 'safari' | 'firefox' | 'edge' | 'other';
+
+const DEVICE_KINDS: ReadonlySet<string> = new Set<DeviceKind>(['phone', 'tablet', 'desktop']);
+const BROWSER_FAMILIES: ReadonlySet<string> = new Set<BrowserFamily>(['chrome', 'safari', 'firefox', 'edge', 'other']);
+
 export interface SessionStart {
   ageYears: number | null;
   homeMeters: number | null;
@@ -29,7 +34,8 @@ export interface SessionStart {
   inputKind: 'wheel' | 'touch' | 'keyboard' | null;
   viewportW: number | null;
   viewportH: number | null;
-  userAgent: string | null;
+  deviceKind: DeviceKind | null;
+  browserFamily: BrowserFamily | null;
 }
 
 export interface SessionEnd {
@@ -82,9 +88,12 @@ function parseViewport(value: unknown): number | null {
   return parseIntInRange(value, VIEWPORT_MIN, VIEWPORT_MAX);
 }
 
-function parseUserAgent(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  return value.slice(0, MAX_USER_AGENT_LENGTH);
+function parseDeviceKind(value: unknown): DeviceKind | null {
+  return typeof value === 'string' && DEVICE_KINDS.has(value) ? (value as DeviceKind) : null;
+}
+
+function parseBrowserFamily(value: unknown): BrowserFamily | null {
+  return typeof value === 'string' && BROWSER_FAMILIES.has(value) ? (value as BrowserFamily) : null;
 }
 
 export function parseSessionStart(body: unknown): SessionStart | null {
@@ -99,7 +108,8 @@ export function parseSessionStart(body: unknown): SessionStart | null {
     inputKind: parseInputKind(record.inputKind),
     viewportW: parseViewport(record.viewportW),
     viewportH: parseViewport(record.viewportH),
-    userAgent: parseUserAgent(record.userAgent),
+    deviceKind: parseDeviceKind(record.deviceKind),
+    browserFamily: parseBrowserFamily(record.browserFamily),
   };
 }
 

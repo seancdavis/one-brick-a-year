@@ -15,6 +15,9 @@
 // A handle only ever acts on itself, never on `current`, so a handle that a
 // later start() has superseded can't stomp on the session that replaced it.
 
+export type DeviceKind = 'phone' | 'tablet' | 'desktop';
+export type BrowserFamily = 'chrome' | 'safari' | 'firefox' | 'edge' | 'other';
+
 export interface SessionStartFields {
   ageYears: number | null;
   homeMeters: number | null;
@@ -23,12 +26,41 @@ export interface SessionStartFields {
   inputKind: 'wheel' | 'touch' | 'keyboard' | null;
   viewportW: number | null;
   viewportH: number | null;
-  userAgent: string | null;
+  deviceKind: DeviceKind | null;
+  browserFamily: BrowserFamily | null;
 }
 
 interface SessionEndFields {
   yearsReached: number;
   finished: boolean;
+}
+
+// Viewport width at or above which a touch device reads as a tablet rather
+// than a phone (matches common tablet breakpoints, e.g. iPad mini portrait).
+const TABLET_MIN_WIDTH_PX = 768;
+
+// Derives a coarse device category — never the exact device — from the user
+// agent and viewport: an iPad, an Android UA without "Mobile" (Android's own
+// tablet signal), or any touch device wide enough reads as a tablet; any
+// other touch device is a phone; anything else is a desktop.
+export function deriveDeviceKind(userAgent: string, viewportW: number, hasTouch: boolean): DeviceKind {
+  const isIPad = /iPad/i.test(userAgent);
+  const isAndroidTablet = /Android/i.test(userAgent) && !/Mobile/i.test(userAgent);
+  if (isIPad || isAndroidTablet || (hasTouch && viewportW >= TABLET_MIN_WIDTH_PX)) return 'tablet';
+  if (hasTouch) return 'phone';
+  return 'desktop';
+}
+
+// Derives a coarse browser family by substring, checked in an order that
+// resolves the UA strings that claim more than one engine (Edge and Chrome
+// both say "Chrome"; mobile Chrome and Firefox on iOS both say "Safari").
+export function deriveBrowserFamily(userAgent: string): BrowserFamily {
+  const ua = userAgent.toLowerCase();
+  if (ua.includes('edg')) return 'edge';
+  if (ua.includes('chrome') || ua.includes('crios')) return 'chrome';
+  if (ua.includes('firefox') || ua.includes('fxios')) return 'firefox';
+  if (ua.includes('safari')) return 'safari';
+  return 'other';
 }
 
 const START_URL = '/api/sessions';

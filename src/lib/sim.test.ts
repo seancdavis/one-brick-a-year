@@ -90,3 +90,10 @@ describe('bricksFor', () => {
     expect(bricksFor(-1)).toBe(0);
   });
 });
+
+describe('heightM', () => {
+  it('uses the whole-brick count, not the fractional years, at 7.9 years', () => {
+    const s: SimState = { years: 7.9, scaleM: SCALE_MIN_M, zoom: null, done: false };
+    expect(heightM(s)).toBe(7 * BRICK_M);
+  });
+});

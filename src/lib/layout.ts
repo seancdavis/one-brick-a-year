@@ -29,8 +29,11 @@ export interface PlacedLandmarks {
 const LABEL_LINE_OFFSET_PX = 6;
 
 // ...but never closer than this to the previous (lower) label's baseline, so
-// two labels never overlap however close their landmarks are.
-export const LABEL_MIN_GAP_PX = 16;
+// two labels never overlap however close their landmarks are. Large enough
+// to clear a wrapped label's second line (src/render/stage.ts draws it
+// SECOND_LINE_HEIGHT_PX = 12 below the first) so a two-line label never
+// touches the label stacked above it.
+export const LABEL_MIN_GAP_PX = 30;
 
 // A landmark whose line sits within this many px of the ground line reads as
 // indistinguishable from the ground itself, so it's dropped instead of drawn

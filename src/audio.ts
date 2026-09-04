@@ -26,7 +26,7 @@ const FINISH_HOLD_S = 1.5;
 const FINISH_PEAK_GAIN = 0.22;
 
 export interface Audio {
-  enable(): void;
+  enable(): Promise<boolean>;
   disable(): void;
   tick(): void;
   hum(gain: number, hz: number): void;
@@ -117,8 +117,8 @@ export function createAudio(): Audio {
   }
 
   return {
-    enable() {
-      if (!Ctor) return;
+    async enable() {
+      if (!Ctor) return false;
       const wasEnabled = enabled;
 
       if (!ctx) {
@@ -137,24 +137,30 @@ export function createAudio(): Audio {
         master.gain.linearRampToValueAtTime(MASTER_GAIN, now + ENABLE_RAMP_S);
       }
 
-      if (!ctx || !master) return;
+      if (!ctx || !master) return false;
       const context = ctx;
       const destination = master;
-      enabled = true;
 
-      // Confirms sound is on the instant it's actually audible: right away
-      // if the context is already running, or as soon as resume() settles
-      // if it was suspended. Only on a genuine off->on transition, so the
-      // one-time "apply the stored preference" call on the first scroll
-      // (src/main.ts) doesn't chime a second time when the user already
-      // turned sound on via the HUD toggle.
-      if (context.state === 'suspended') {
-        void context.resume().then(() => {
-          if (enabled && !wasEnabled) playChime(context, destination);
-        });
-      } else if (!wasEnabled) {
-        playChime(context, destination);
+      try {
+        await context.resume();
+      } catch {
+        // Browsers can reject resume() (e.g. no user gesture yet, or the
+        // gesture didn't count) — that's a failure to enable, not a crash.
+        enabled = false;
+        return false;
       }
+
+      const running = context.state === 'running';
+      enabled = running;
+
+      // Confirms sound is on the instant it's actually audible, but only on
+      // a genuine off->on transition, so the one-time "apply the stored
+      // preference" call on the first scroll (src/main.ts) doesn't chime a
+      // second time when the user already turned sound on via the HUD
+      // toggle.
+      if (running && !wasEnabled) playChime(context, destination);
+
+      return running;
     },
 
     disable() {

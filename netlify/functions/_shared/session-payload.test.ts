@@ -12,7 +12,8 @@ describe('parseSessionStart', () => {
         inputKind: 'wheel',
         viewportW: 1024,
         viewportH: 768,
-        userAgent: 'Mozilla/5.0',
+        deviceKind: 'desktop',
+        browserFamily: 'chrome',
       }),
     ).toEqual({
       ageYears: 8,
@@ -22,7 +23,8 @@ describe('parseSessionStart', () => {
       inputKind: 'wheel',
       viewportW: 1024,
       viewportH: 768,
-      userAgent: 'Mozilla/5.0',
+      deviceKind: 'desktop',
+      browserFamily: 'chrome',
     });
   });
 
@@ -35,7 +37,8 @@ describe('parseSessionStart', () => {
       inputKind: null,
       viewportW: null,
       viewportH: null,
-      userAgent: null,
+      deviceKind: null,
+      browserFamily: null,
     });
   });
 
@@ -100,13 +103,23 @@ describe('parseSessionStart', () => {
     expect(parsed?.viewportH).toBe(v);
   });
 
-  it('truncates an over-long user agent to 200 chars', () => {
-    const long = 'a'.repeat(250);
-    expect(parseSessionStart({ userAgent: long })?.userAgent).toBe('a'.repeat(200));
+  it.each(['phone', 'tablet', 'desktop'] as const)('accepts an allowlisted deviceKind (%j)', (deviceKind) => {
+    expect(parseSessionStart({ deviceKind })?.deviceKind).toBe(deviceKind);
   });
 
-  it('drops a non-string user agent', () => {
-    expect(parseSessionStart({ userAgent: 123 })?.userAgent).toBeNull();
+  it.each(['watch', 'Desktop', '', 123, null])('drops a deviceKind outside the allowlist (%j)', (deviceKind) => {
+    expect(parseSessionStart({ deviceKind })?.deviceKind).toBeNull();
+  });
+
+  it.each(['chrome', 'safari', 'firefox', 'edge', 'other'] as const)(
+    'accepts an allowlisted browserFamily (%j)',
+    (browserFamily) => {
+      expect(parseSessionStart({ browserFamily })?.browserFamily).toBe(browserFamily);
+    },
+  );
+
+  it.each(['opera', 'Chrome', '', 123, null])('drops a browserFamily outside the allowlist (%j)', (browserFamily) => {
+    expect(parseSessionStart({ browserFamily })?.browserFamily).toBeNull();
   });
 });
 
