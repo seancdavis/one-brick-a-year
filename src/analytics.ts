@@ -11,7 +11,8 @@
 // request has even left the browser) — always has an id to send its beacon
 // with. There is no waiting on the create request: the two requests are
 // independent, and the server's upserts (sessions.mts) make either order
-// land correctly.
+// land correctly. If no id can be generated at all (see generateId()), no
+// session starts.
 
 export type DeviceKind = 'phone' | 'tablet' | 'desktop';
 export type BrowserFamily = 'chrome' | 'safari' | 'firefox' | 'edge' | 'other';
@@ -67,21 +68,28 @@ function endUrl(id: string): string {
   return `/api/sessions/${id}/end`;
 }
 
-function randomHex(length: number): string {
-  let out = '';
-  for (let i = 0; i < length; i++) out += Math.floor(Math.random() * 16).toString(16);
-  return out;
+// Builds a v4 UUID string from 16 random bytes: sets the version nibble to
+// 4 and the variant bits to 10, then formats as 8-4-4-4-12 hex groups.
+function uuidFromBytes(bytes: Uint8Array): string {
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 // crypto.randomUUID() is available in every browser this page targets, but
-// falls back to a random hex string in the same 8-4-4-4-12 shape (good
-// enough as an opaque row id; nothing security-sensitive depends on it) for
-// any environment where it isn't.
-function generateId(): string {
+// falls back to building a v4 UUID from crypto.getRandomValues() for any
+// environment where randomUUID isn't there. If neither is available, there
+// is no way to produce an id the server will accept as a session id, so
+// this returns null and the caller simply doesn't start a session.
+function generateId(): string | null {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  return `${randomHex(8)}-${randomHex(4)}-${randomHex(4)}-${randomHex(4)}-${randomHex(12)}`;
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    return uuidFromBytes(crypto.getRandomValues(new Uint8Array(16)));
+  }
+  return null;
 }
 
 interface SessionHandle {
@@ -97,9 +105,7 @@ function createSession(id: string, fields: SessionStartFields): void {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ id, ...fields }),
   }).catch(() => {
-    // Analytics is best-effort: a failed create just means the row never
-    // appears — the end beacon (already carrying this same id) still goes
-    // out independently, whenever end() is called.
+    // Best-effort; end() can still upsert an end-only row.
   });
 }
 
@@ -140,6 +146,7 @@ export function createAnalytics(): {
 
   function start(fields: SessionStartFields): void {
     const id = generateId();
+    if (id === null) return;
     current = { id, startedAt: performance.now(), ended: false };
     createSession(id, fields);
   }

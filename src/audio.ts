@@ -92,11 +92,14 @@ export function createAudio(): Audio {
   let humGain: GainNode | null = null;
   let enabled = false;
 
-  // Bumped by every enable() and disable() call and captured at call time;
-  // an in-flight enable() only applies the outcome of its own
-  // context.resume() if its generation is still the current one by the time
-  // that promise settles, so a disable() (or a newer enable()) that ran in
-  // the meantime always wins over a stale, superseded attempt.
+  // Bumped by every enable() that starts a fresh attempt and by every
+  // disable() call, and captured at call time; an in-flight enable() only
+  // applies the outcome of its own context.resume() if its generation is
+  // still the current one by the time that promise settles. A second
+  // enable() while one is already in flight just returns the same pending
+  // promise (see pendingEnable below), so it never bumps the generation
+  // itself — the only thing that can supersede an in-flight attempt is a
+  // disable(), which is why disable() always wins over it.
   let generation = 0;
 
   // Concurrent enable() calls (the scroll-input path and the raw
@@ -193,6 +196,13 @@ export function createAudio(): Audio {
 
     disable() {
       generation++;
+      // Discard any in-flight enable() rather than leaving it to resolve on
+      // its own: without this, a disable() followed quickly by a new
+      // enable() would hit the `if (pendingEnable) return pendingEnable`
+      // check above and hand back the very attempt disable() just
+      // superseded, instead of starting the fresh resume + gain restore
+      // the new enable() call is supposed to perform.
+      pendingEnable = null;
       enabled = false;
       if (!ctx || !master) return;
 

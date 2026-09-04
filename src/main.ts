@@ -161,22 +161,34 @@ let scroll: ScrollState = INITIAL_SCROLL;
 let hasScrolledOnce = false;
 let tickAccumulator = 0;
 
-// The kind of input (wheel, touch, or keyboard) that produced this session's
-// first scroll. First kind wins for the session, then is cleared by
-// resetForReplay() so the next session (after Restart or "Build it again")
-// gets its own accurate reading. Feeds analytics.start()'s `inputKind` field.
+// Whether an analytics session is currently open, tracked independently of
+// hasScrolledOnce (which only ever goes false->true once per build attempt,
+// via resetForReplay()). This flag goes false every time a session ends —
+// finish, Restart, or the page being hidden — so a qualifying scroll after
+// any of those (including one that follows returning from a hidden page,
+// with hasScrolledOnce already true) opens a fresh session.
+let sessionActive = false;
+
+// The kind of input (wheel, touch, or keyboard) that produced the current
+// analytics session's first scroll. Feeds analytics.start()'s `inputKind`
+// field; set fresh each time sessionActive flips from false to true, so a
+// session that starts after a hide records the kind that resumed it, not a
+// leftover from an earlier session in the same build attempt.
 let firstInputKind: ScrollKind | null = null;
 
 function nowSeconds(): number {
   return performance.now() / 1000;
 }
 
-// Ends the current analytics session (a no-op if none is running — see
-// src/analytics.ts's idempotency note), recording how far the stack got and
-// whether the build actually finished. `preferBeacon` should be set only
-// when the page itself is going away (pagehide, visibilitychange to
-// hidden) — everywhere else a normal fetch is fine.
+// Ends the current analytics session, recording how far the stack got and
+// whether the build actually finished — a no-op if no session is active,
+// so finish, Restart, and page-hide can all call this unconditionally.
+// `preferBeacon` should be set only when the page itself is going away
+// (pagehide, visibilitychange to hidden) — everywhere else a normal fetch
+// is fine.
 function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void {
+  if (!sessionActive) return;
+  sessionActive = false;
   analytics.end({ yearsReached: sim.years, finished }, opts);
 }
 
@@ -211,8 +223,10 @@ function restart(): void {
 // A session can end without any further app interaction — the tab is
 // closed or backgrounded mid-build. Both fire reliably across browsers
 // (pagehide covers Safari/iOS, where visibilitychange alone is less
-// dependable); analytics.end()'s idempotency means whichever fires first
-// wins and the other is a no-op.
+// dependable); endSession()'s sessionActive guard means whichever fires
+// first wins and the other is a no-op. Coming back to a still-open build and
+// scrolling again (see createScrollInput below) opens a new session, since
+// this always clears sessionActive.
 window.addEventListener('pagehide', () => endSession(false, { preferBeacon: true }));
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') endSession(false, { preferBeacon: true });
@@ -228,21 +242,14 @@ document.addEventListener('visibilitychange', () => {
 // the browser didn't count as a gesture) leaves hasArmedAudio false, so the
 // next pointerdown or keydown tries again.
 let hasArmedAudio = false;
-// Holds the in-flight enable() call, stored synchronously the moment it's
-// created, so a second armAudioOnce() within the same event (the scroll
-// listener and the raw pointerdown/keydown listener can both fire for one
-// gesture) reuses it instead of calling audio.enable() again.
-let armingAudio: Promise<boolean> | null = null;
+// A second armAudioOnce() within the same event (the scroll listener and
+// the raw pointerdown/keydown listener can both fire for one gesture) just
+// calls audio.enable() again — audio.ts's own pendingEnable dedupes that
+// into the same in-flight attempt, so concurrency is the audio module's
+// concern, not this one's.
 function armAudioOnce(): void {
   if (hasArmedAudio || !soundEnabled) return;
-  if (armingAudio === null) {
-    const attempt = audio.enable();
-    armingAudio = attempt;
-    void attempt.finally(() => {
-      if (armingAudio === attempt) armingAudio = null;
-    });
-  }
-  void armingAudio.then((ok) => {
+  void audio.enable().then((ok) => {
     if (ok) hasArmedAudio = true;
   });
 }
@@ -252,28 +259,42 @@ createScrollInput(window, (deltaPx, kind) => {
 
   // A scroll can reach this listener while the start screen is still up (its
   // own padding, its label text are excluded, but a gesture can still land
-  // just outside them) or after the sim is already done — neither is the
-  // user's first real scroll on the stack, so `kind` isn't recorded as
-  // firstInputKind unless this scroll actually qualifies below.
-  if (!hasScrolledOnce && !startScreen.isOpen() && !sim.done) {
-    const rate = yearsPerSecond(scroll.velocity, sim.years);
-    if (rate > 0) {
-      hasScrolledOnce = true;
-      firstInputKind = kind;
-      hud.hidePrompt();
-      armAudioOnce();
-      analytics.start({
-        ageYears: profile.ageYears,
-        homeMeters: profile.homeMeters,
-        colorId: profile.colorId,
-        soundOn: soundEnabled,
-        inputKind: firstInputKind,
-        viewportW: view.widthCss,
-        viewportH: view.heightCss,
-        deviceKind: deriveDeviceKind(navigator.userAgent, view.widthCss, hasTouch),
-        browserFamily: deriveBrowserFamily(navigator.userAgent),
-      });
-    }
+  // just outside them) or after the sim is already done — neither is a
+  // qualifying scroll for either the prompt or analytics.
+  if (startScreen.isOpen() || sim.done) return;
+
+  const rate = yearsPerSecond(scroll.velocity, sim.years);
+  if (rate <= 0) return;
+
+  // The prompt and the first audio arm happen once per build attempt
+  // (cleared by resetForReplay(), not by a page hide) — hiding the page
+  // mid-build and coming back doesn't bring the prompt back.
+  if (!hasScrolledOnce) {
+    hasScrolledOnce = true;
+    hud.hidePrompt();
+    armAudioOnce();
+  }
+
+  // Analytics is a separate concern from the prompt: a session can end
+  // (finish, Restart, or the page being hidden) independently of whether
+  // this is the build attempt's first scroll, so this qualifying scroll
+  // starts a fresh session whenever none is active, regardless of
+  // hasScrolledOnce. firstInputKind now describes this new session's own
+  // first scroll, not the build attempt's.
+  if (!sessionActive) {
+    sessionActive = true;
+    firstInputKind = kind;
+    analytics.start({
+      ageYears: profile.ageYears,
+      homeMeters: profile.homeMeters,
+      colorId: profile.colorId,
+      soundOn: soundEnabled,
+      inputKind: firstInputKind,
+      viewportW: view.widthCss,
+      viewportH: view.heightCss,
+      deviceKind: deriveDeviceKind(navigator.userAgent, view.widthCss, hasTouch),
+      browserFamily: deriveBrowserFamily(navigator.userAgent),
+    });
   }
 });
 

@@ -77,15 +77,20 @@ export default async (req: Request, context: Context): Promise<Response> => {
     // create to the server still creates the row outright; ON CONFLICT only
     // fills in the end fields when the row isn't already ended, so the
     // first end always wins over a later, redundant one (e.g. a duplicate
-    // pagehide beacon).
+    // pagehide beacon). When this INSERT is the one that creates the row,
+    // started_at is backdated by duration_ms rather than defaulting to
+    // now() — otherwise an end-before-create row would record a start time
+    // equal to its end time. started_at is never part of the UPDATE SET
+    // list, so a create that lands after this row already exists (via
+    // ON CONFLICT) can't overwrite the backdated value either.
     if (!isUuid(id)) return noBody(400);
 
     const end = parseSessionEnd(payload);
     if (end === null) return noBody(400);
 
     await db.sql`
-      INSERT INTO sessions (id, ended_at, duration_ms, years_reached, finished)
-      VALUES (${id}, now(), ${end.durationMs}, ${end.yearsReached}, ${end.finished})
+      INSERT INTO sessions (id, started_at, ended_at, duration_ms, years_reached, finished)
+      VALUES (${id}, now() - (${end.durationMs} * interval '1 millisecond'), now(), ${end.durationMs}, ${end.yearsReached}, ${end.finished})
       ON CONFLICT (id) DO UPDATE SET
         ended_at = COALESCE(sessions.ended_at, EXCLUDED.ended_at),
         duration_ms = CASE WHEN sessions.ended_at IS NULL THEN EXCLUDED.duration_ms ELSE sessions.duration_ms END,
@@ -98,6 +103,9 @@ export default async (req: Request, context: Context): Promise<Response> => {
   // POST /api/sessions — upserted so a create that arrives after its own end
   // (page hide raced ahead of the create's response) fills in the start
   // fields without clearing the end fields the other request already set.
+  // The UPDATE SET list below only ever touches profile fields — never
+  // started_at — so a late create can't clobber the started_at the end
+  // route may have already backdated.
   const start = parseSessionStart(payload);
   if (start === null) return noBody(400);
 
