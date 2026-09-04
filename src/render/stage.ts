@@ -7,7 +7,7 @@ import { fmtMeters, fmtYears } from '../lib/format';
 import type { PlacedLandmark, StageBox } from '../lib/layout';
 import type { IconId } from '../lib/landmarks';
 import { heightM, type SimState } from '../lib/sim';
-import { ICON_SIZE_PX, type Icon } from './icons';
+import { ICON_SIZE_PX } from './icons';
 
 export interface StageView {
   widthCss: number;
@@ -30,6 +30,9 @@ const TOP_FRACTION = 0.2;
 // line and the icon, both in px.
 const ICON_LABEL_GAP_PX = 6;
 const ICON_LINE_GAP_PX = 6;
+// Icons draw smaller on narrow screens so the icon and the label both still
+// fit beside the dashed line.
+const ICON_SIZE_NARROW_PX = 20;
 
 export function stageBox(view: StageView): StageBox {
   return {
@@ -50,7 +53,7 @@ export function drawStage(
   view: StageView,
   sim: SimState,
   placed: PlacedLandmark[],
-  icons: Record<IconId, Icon>,
+  icons: Record<IconId, Path2D>,
 ): void {
   const { widthCss: W, heightCss: H, dpr, narrow } = view;
   const { top, ground } = stageBox(view);
@@ -94,21 +97,19 @@ export function drawStage(
     const label = `${p.landmark.label} · ${fmtYears(p.landmark.years)}`;
     const baselineY = p.y + p.labelDy;
 
-    let lineEndX = labelX;
-    if (!narrow) {
-      const textWidth = ctx.measureText(label).width;
-      const iconLeftX = labelX - textWidth - ICON_LABEL_GAP_PX - ICON_SIZE_PX;
-      lineEndX = iconLeftX - ICON_LINE_GAP_PX;
+    const iconSize = narrow ? ICON_SIZE_NARROW_PX : ICON_SIZE_PX;
+    const textWidth = ctx.measureText(label).width;
+    const iconLeftX = labelX - textWidth - ICON_LABEL_GAP_PX - iconSize;
+    const lineEndX = iconLeftX - ICON_LINE_GAP_PX;
 
-      const icon = icons[p.landmark.icon];
-      ctx.save();
-      ctx.globalAlpha = p.passed ? 1 : 0.45;
-      ctx.fillStyle = INK;
-      ctx.translate(iconLeftX, baselineY - ICON_SIZE_PX / 2);
-      ctx.scale(ICON_SIZE_PX / 24, ICON_SIZE_PX / 24);
-      ctx.fill(icon.path, 'evenodd');
-      ctx.restore();
-    }
+    const icon = icons[p.landmark.icon];
+    ctx.save();
+    ctx.globalAlpha = p.passed ? 1 : 0.45;
+    ctx.fillStyle = INK;
+    ctx.translate(iconLeftX, baselineY - iconSize / 2);
+    ctx.scale(iconSize / 24, iconSize / 24);
+    ctx.fill(icon, 'evenodd');
+    ctx.restore();
 
     ctx.strokeStyle = p.passed ? 'rgba(42,36,32,.6)' : 'rgba(42,36,32,.22)';
     ctx.setLineDash([3, 4]);

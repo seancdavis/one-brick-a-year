@@ -1,7 +1,7 @@
 // Synthesized sound only — no audio files. Every method is a safe no-op
-// when the Web Audio API is unavailable. The AudioContext is created lazily
-// inside enable(), which src/main.ts only calls from the sound toggle's
-// click handler, so audio never starts without a user gesture.
+// when the Web Audio API is unavailable or before enable() has run. The
+// AudioContext is created lazily, inside enable(), and enable() must always
+// be called from a user gesture — browsers refuse to start audio otherwise.
 
 const MASTER_GAIN = 0.4;
 const DISABLE_RAMP_S = 0.08;
@@ -27,12 +27,10 @@ const FINISH_PEAK_GAIN = 0.22;
 export interface Audio {
   enable(): void;
   disable(): void;
-  isEnabled(): boolean;
   tick(): void;
   hum(gain: number, hz: number): void;
   chime(): void;
   finish(): void;
-  dispose(): void;
 }
 
 type AudioContextCtor = typeof AudioContext;
@@ -146,10 +144,6 @@ export function createAudio(): Audio {
       }, DISABLE_RAMP_S * 1000);
     },
 
-    isEnabled() {
-      return enabled;
-    },
-
     tick() {
       if (!enabled || !ctx || !master || !noiseBuffer) return;
       const now = ctx.currentTime;
@@ -199,32 +193,6 @@ export function createAudio(): Audio {
       for (const hz of FINISH_NOTES_HZ) {
         playNote(ctx, master, hz, now, FINISH_HOLD_S, FINISH_PEAK_GAIN);
       }
-    },
-
-    dispose() {
-      if (humOsc) {
-        try {
-          humOsc.stop();
-        } catch {
-          // Already stopped — nothing to clean up.
-        }
-        humOsc.disconnect();
-        humOsc = null;
-      }
-      if (humGain) {
-        humGain.disconnect();
-        humGain = null;
-      }
-      if (master) {
-        master.disconnect();
-        master = null;
-      }
-      if (ctx) {
-        void ctx.close();
-        ctx = null;
-      }
-      noiseBuffer = null;
-      enabled = false;
     },
   };
 }

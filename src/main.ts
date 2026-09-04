@@ -132,22 +132,16 @@ const endScreen = createEndScreen(app, () => resetForReplay());
 let sim = initialSim();
 let held = false;
 let hasHeldOnce = false;
-let prevYears = sim.years;
 let tickAccumulator = 0;
-let wasDone = false;
-let endScreenShown = false;
 
 // Shared by "Build it again" (end screen) and "Start over" (HUD, usable
 // mid-build too): back to a fresh, unstarted sim, with the prompt and card
 // queue reset to match.
 function resetForReplay(): void {
   endScreen.hide();
-  endScreenShown = false;
   beatCards.clear();
   sim = initialSim();
-  prevYears = sim.years;
   tickAccumulator = 0;
-  wasDone = false;
   hasHeldOnce = false;
   hud.showPrompt();
   needsRender = true;
@@ -204,15 +198,16 @@ function frame(timeMs: number): void {
   const dtSeconds = (timeMs - lastTimeMs) / 1000;
   lastTimeMs = timeMs;
 
+  const before = sim;
+
   // Ignore hold input while a modal screen (start or end) is up — the sim
   // itself already refuses to advance once done, but this also keeps the
   // idle-frame check below from thinking something is happening.
-  const effectiveHeld = held && !startScreen.isOpen() && !endScreenShown;
-  const before = sim;
-  sim = step(sim, dtSeconds, effectiveHeld, reducedMotionQuery.matches);
+  const effectiveHeld = held && !startScreen.isOpen() && !before.done;
+  sim = step(before, dtSeconds, effectiveHeld, reducedMotionQuery.matches);
 
-  // Ticks and hum track the current pace; both calls are safe no-ops
-  // whenever sound is off (audio.enable() was never called this session).
+  // Both calls are safe no-ops before enable() has run — the AudioContext is
+  // created lazily and enable() must be called from a user gesture.
   const rate = rateFor(sim.heldSeconds);
   if (effectiveHeld && !sim.done) {
     tickAccumulator += ticksPerSecond(rate) * dtSeconds;
@@ -226,19 +221,16 @@ function frame(timeMs: number): void {
     audio.hum(0, humFor(rate).hz);
   }
 
-  for (const beat of beatsCrossed(prevYears, sim.years)) {
+  for (const beat of beatsCrossed(before.years, sim.years)) {
     beatCards.show(beat);
     audio.chime();
   }
-  prevYears = sim.years;
 
-  if (sim.done && !wasDone) {
+  if (sim.done && !before.done) {
     beatCards.clear();
-    endScreenShown = true;
     endScreen.show(profile);
     audio.finish();
   }
-  wasDone = sim.done;
 
   // Idle frame: nothing held, no zoom tween running (in either the previous
   // or the new state), and years/done didn't change this step. Redrawing

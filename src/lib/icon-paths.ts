@@ -1,4 +1,8 @@
 // Raw SVG path data for each landmark icon, hand-authored in a 24×24 box.
+// This is the single source of truth for the icon catalog: IconId and
+// ICON_IDS are both derived from these keys, so adding or removing an icon
+// only ever means editing this object.
+//
 // Kept in src/lib/ (not src/render/) because the canvas path type Vitest's
 // Node environment lacks isn't available here: this file stays pure so it
 // can be unit tested, and src/render/icons.ts wraps these strings for canvas.
@@ -8,9 +12,8 @@
 // (or shares only a boundary edge with) an outer subpath, and the whole
 // icon is filled with the 'evenodd' rule in src/render/icons.ts — that
 // combination is what makes the hole read as empty space.
-import type { IconId } from './landmarks';
 
-export const ICON_PATHS: Record<IconId, string> = {
+export const ICON_PATHS = {
   // A small stack of three 2×4 bricks, studs on the top brick only.
   bricks:
     'M4,1H6.5V3H4ZM8,1H10.5V3H8ZM12,1H14.5V3H12ZM16,1H18.5V3H16Z' +
@@ -80,4 +83,7 @@ export const ICON_PATHS: Record<IconId, string> = {
     'M16,13A4,4 0 1 1 8,13A4,4 0 1 1 16,13Z' +
     'M20.5,13A8.5,5.5 0 1 1 3.5,13A8.5,5.5 0 1 1 20.5,13Z' +
     'M19,13A7,4.8 0 1 1 5,13A7,4.8 0 1 1 19,13Z',
-};
+} as const;
+
+export type IconId = keyof typeof ICON_PATHS;
+export const ICON_IDS = Object.keys(ICON_PATHS) as readonly IconId[];
