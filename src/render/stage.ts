@@ -34,9 +34,10 @@ const STACK_WIDTH_MIN_PX = 56;
 const STACK_WIDTH_MAX_PX = 88;
 const STACK_WIDTH_NARROW_PX = 40;
 
-// Gap the dashed leader spans, from the stack edge to the icon nearest it,
-// and the gap between that icon and its label text, both in px.
-const STACK_ICON_GAP_PX = 14;
+// Each side's label unit (icon + text) anchors at this fixed margin from
+// the viewport edge, not at a fixed gap from the stack — see
+// drawLandmarkLabels. Gap between the icon and its label text, in px.
+const LABEL_MARGIN_PX = 24;
 const ICON_LABEL_GAP_PX = 6;
 // Icons draw smaller on narrow screens so the icon and the label both still
 // fit beside the dashed line.
@@ -48,6 +49,16 @@ const FONT_NARROW_PX = 11;
 // pointing straight at it — no connector needed. Past this, draw a short
 // vertical stroke from the line to the label so the eye can follow it.
 const CONNECTOR_THRESHOLD_PX = 8;
+
+// If a label unit's near edge (the icon's edge closest to the stack) would
+// still land within this many px of the stack on one line, there isn't room
+// for the dashed leader — drop the years onto a second line instead so the
+// unit narrows and clears the stack edge.
+const NEAR_STACK_MIN_GAP_PX = 8;
+
+// Line height between a label's text and its second (years-only) line, when
+// the unit doesn't fit on one line.
+const SECOND_LINE_HEIGHT_PX = 12;
 
 // Below this height per brick, individual courses stop reading as bricks —
 // draw a solid textured column instead (see drawBrickTower).
@@ -77,51 +88,79 @@ function line(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number,
   ctx.stroke();
 }
 
-// One side's landmark lines, icons, and labels. Left labels are right-
-// aligned toward the stack with their icon nearest it; right labels mirror
-// that (left-aligned, icon nearest the stack). The dashed leader always
-// spans from the stack's edge on this side out to the icon; a vertical
-// connector bridges the gap when stacking has pushed the label away from
-// its true (lineY) height.
+// One side's landmark lines, icons, and labels. Each label unit (icon +
+// text) anchors at the outer viewport margin instead of a fixed gap from
+// the stack, so the longest label never runs off a narrow viewport's edge:
+// left labels are left-aligned at LABEL_MARGIN_PX with their icon
+// immediately to the right; right labels are right-aligned at
+// width - LABEL_MARGIN_PX with their icon immediately to the left. Either
+// way the icon ends up nearest the stack, and the dashed leader spans from
+// the stack's edge on this side out to that icon. A vertical connector
+// bridges the gap when stacking has pushed the label away from its true
+// (lineY) height. If the unit would still land within NEAR_STACK_MIN_GAP_PX
+// of the stack on one line, the years drop to a second line instead so the
+// unit narrows.
 function drawLandmarkLabels(
   ctx: CanvasRenderingContext2D,
   placed: PlacedLandmark[],
   side: 'left' | 'right',
   stackLeft: number,
   stackRight: number,
+  width: number,
   iconSize: number,
   icons: Record<IconId, Path2D>,
 ): void {
   const isLeft = side === 'left';
   const stackEdgeX = isLeft ? stackLeft : stackRight;
-  ctx.textAlign = isLeft ? 'right' : 'left';
+  const textAnchorX = isLeft ? LABEL_MARGIN_PX : width - LABEL_MARGIN_PX;
+  ctx.textAlign = isLeft ? 'left' : 'right';
 
   for (const p of placed) {
-    const label = `${p.landmark.label} · ${fmtYears(p.landmark.years)}`;
+    const labelText = p.landmark.label;
+    const yearsText = fmtYears(p.landmark.years);
+    const oneLineText = `${labelText} · ${yearsText}`;
 
-    const iconNearX = isLeft ? stackEdgeX - STACK_ICON_GAP_PX : stackEdgeX + STACK_ICON_GAP_PX;
-    const iconLeftX = isLeft ? iconNearX - iconSize : iconNearX;
-    const textAnchorX = isLeft ? iconLeftX - ICON_LABEL_GAP_PX : iconLeftX + iconSize + ICON_LABEL_GAP_PX;
+    const oneLineWidth = ctx.measureText(oneLineText).width;
+    const oneLineNearEdgeX = isLeft
+      ? textAnchorX + oneLineWidth + ICON_LABEL_GAP_PX + iconSize
+      : textAnchorX - oneLineWidth - ICON_LABEL_GAP_PX - iconSize;
+    const oneLineGap = isLeft ? stackEdgeX - oneLineNearEdgeX : oneLineNearEdgeX - stackEdgeX;
+    const twoLine = oneLineGap < NEAR_STACK_MIN_GAP_PX;
+
+    const textWidth = twoLine
+      ? Math.max(ctx.measureText(labelText).width, ctx.measureText(yearsText).width)
+      : oneLineWidth;
+
+    const iconLeftX = isLeft
+      ? textAnchorX + textWidth + ICON_LABEL_GAP_PX
+      : textAnchorX - textWidth - ICON_LABEL_GAP_PX - iconSize;
+    const nearEdgeX = isLeft ? iconLeftX + iconSize : iconLeftX;
+    const iconCenterY = twoLine ? p.labelY + SECOND_LINE_HEIGHT_PX / 2 : p.labelY;
 
     const icon = icons[p.landmark.icon];
     ctx.save();
     ctx.globalAlpha = p.passed ? 1 : 0.45;
     ctx.fillStyle = INK;
-    ctx.translate(iconLeftX, p.labelY - iconSize / 2);
+    ctx.translate(iconLeftX, iconCenterY - iconSize / 2);
     ctx.scale(iconSize / 24, iconSize / 24);
     ctx.fill(icon, 'evenodd');
     ctx.restore();
 
     ctx.strokeStyle = p.passed ? 'rgba(42,36,32,.6)' : 'rgba(42,36,32,.22)';
     ctx.setLineDash([3, 4]);
-    line(ctx, stackEdgeX, Math.round(p.lineY) + 0.5, iconNearX, Math.round(p.lineY) + 0.5);
+    line(ctx, stackEdgeX, Math.round(p.lineY) + 0.5, nearEdgeX, Math.round(p.lineY) + 0.5);
     if (Math.abs(p.lineY - p.labelY) > CONNECTOR_THRESHOLD_PX) {
-      line(ctx, iconNearX, Math.round(p.lineY) + 0.5, iconNearX, Math.round(p.labelY) + 0.5);
+      line(ctx, nearEdgeX, Math.round(p.lineY) + 0.5, nearEdgeX, Math.round(p.labelY) + 0.5);
     }
     ctx.setLineDash([]);
 
     ctx.fillStyle = p.passed ? INK : CAPTION;
-    ctx.fillText(label, textAnchorX, p.labelY);
+    if (twoLine) {
+      ctx.fillText(labelText, textAnchorX, p.labelY);
+      ctx.fillText(yearsText, textAnchorX, p.labelY + SECOND_LINE_HEIGHT_PX);
+    } else {
+      ctx.fillText(oneLineText, textAnchorX, p.labelY);
+    }
   }
 }
 
@@ -243,8 +282,8 @@ export function drawStage(
   ctx.font = `${narrow ? FONT_NARROW_PX : FONT_PX}px "IBM Plex Mono", monospace`;
   ctx.textBaseline = 'alphabetic';
   const iconSize = narrow ? ICON_SIZE_NARROW_PX : ICON_SIZE_PX;
-  drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, iconSize, icons);
-  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, iconSize, icons);
+  drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, icons);
+  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, icons);
 
   // The stack: always a whole number of bricks (src/lib/sim.ts's
   // bricksFor), so the top course lines up cleanly instead of stopping mid-
