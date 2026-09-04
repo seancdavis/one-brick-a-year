@@ -4,7 +4,7 @@ You are Sean's development partner on this project. Work collaboratively, make d
 
 ## What this is
 
-An interactive web page for an eight-year-old, and for sharing, that makes 4.6 billion years feel long. One LEGO brick for every year, stacked back in time, while she presses and holds. The camera zooms out as the stack passes things she knows (a door, her house, the Eiffel Tower, airplanes, the space station) until it wraps around the Earth. The feeling comes from cost: holding for about 75 seconds is the lesson. Every ratio on screen is real. Icons are labels, not to scale.
+An interactive web page for an eight-year-old, and for sharing, that makes 4.6 billion years feel long. One LEGO brick for every year, stacked back in time, while she scrolls. The camera zooms out as the stack passes things she knows (a door, her house, the Eiffel Tower, airplanes, the space station) until it wraps around the Earth. The feeling comes from cost: a vigorous, sustained scroll takes about a minute and a half to finish, and that's the lesson. Every ratio on screen is real. Icons are labels, not to scale.
 
 ## Project Documentation
 
@@ -41,7 +41,7 @@ npm run preview    # serve dist/
 - Every number that shapes the feel (brick height, pacing constants, zoom thresholds) lives in `src/lib/constants.ts` with a one-line comment saying what it does.
 - Facts (ages, heights) live in `src/lib/landmarks.ts` and `src/lib/beats.ts` with a source comment. Do not invent facts. If a number is uncertain, round and say "about".
 - Copy is written for an eight-year-old who can read: short sentences, concrete nouns, no jargon.
-- Accessibility baseline: keyboard hold (space or enter), visible focus states, `prefers-reduced-motion` respected, sound off by default and only started by a user gesture.
+- Accessibility baseline: keyboard scroll equivalents (arrow keys, space, page up/down), visible focus states, `prefers-reduced-motion` respected, sound off by default and only started by a user gesture.
 
 ## Skills Reference
 

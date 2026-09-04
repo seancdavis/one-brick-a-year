@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BRICK_M, RATE0, RATE_K, SCALE_MAX_M, SCALE_MIN_M, TOTAL_YEARS, ZOOM_FACTOR, ZOOM_TRIGGER } from './constants';
+import { BRICK_M, SCALE_MAX_M, SCALE_MIN_M, TOTAL_YEARS, ZOOM_FACTOR, ZOOM_TRIGGER } from './constants';
 
 describe('constants', () => {
   it('the camera scale range is ordered min below max', () => {
@@ -21,13 +21,5 @@ describe('constants', () => {
 
   it('TOTAL_YEARS is positive', () => {
     expect(TOTAL_YEARS).toBeGreaterThan(0);
-  });
-
-  it('RATE0 is a positive starting rate', () => {
-    expect(RATE0).toBeGreaterThan(0);
-  });
-
-  it('RATE_K is a positive growth constant', () => {
-    expect(RATE_K).toBeGreaterThan(0);
   });
 });

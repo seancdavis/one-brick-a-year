@@ -145,7 +145,7 @@ export function createAudio(): Audio {
       // Confirms sound is on the instant it's actually audible: right away
       // if the context is already running, or as soon as resume() settles
       // if it was suspended. Only on a genuine off->on transition, so the
-      // one-time "apply the stored preference" call on the first hold
+      // one-time "apply the stored preference" call on the first scroll
       // (src/main.ts) doesn't chime a second time when the user already
       // turned sound on via the HUD toggle.
       if (context.state === 'suspended') {

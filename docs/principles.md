@@ -15,7 +15,7 @@ DOM glue, kept out of the pure layer.
 
 ## Where the feel lives
 
-Every number that shapes the feel — brick height, the pace of the hold,
+Every number that shapes the feel — brick height, the pace of the scroll,
 zoom thresholds, sound thresholds — is a named constant with a one-line
 comment saying what it does, not a number inlined at its use site. Tune the
 feel by changing one number in one place.
@@ -49,8 +49,9 @@ refuse to start audio any other way.
 
 ## Accessibility baseline
 
-Holding works by pointer or by keyboard (Space or Enter), everywhere
-holding works. Every interactive control has a visible focus state.
+Scroll is the only build input: mouse wheel, trackpad, touch drag, or a
+keyboard equivalent (Arrow Up/Down, Space, Page Up/Down) anywhere the wheel
+and touch drag work. Every interactive control has a visible focus state.
 `prefers-reduced-motion: reduce` is honored: the zoom tween and other
 transitions become instant. Milestone cards are the live region
 (`aria-live="polite"`): they announce a beat without moving focus. The HUD

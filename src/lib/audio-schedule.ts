@@ -17,7 +17,7 @@ export const SOUND_STORAGE_KEY = 'oby:sound';
 export const SOUND_DEFAULT_ENABLED = false;
 
 // One tick per brick (so ticks match the rate 1:1) up to the cap, so a slow
-// hold ticks once per year and a fast one never turns into a buzz.
+// scroll ticks once per year and a fast one never turns into a buzz.
 export function ticksPerSecond(yearsPerSecond: number): number {
   if (yearsPerSecond <= 0) return 0;
   return Math.min(yearsPerSecond, TICK_CAP_PER_S);
@@ -27,7 +27,7 @@ export function ticksPerSecond(yearsPerSecond: number): number {
 // fine on their own — no hum. Above it, gain and pitch rise together with
 // log10 of how far the rate is past HUM_START_RATE, both capped at the
 // values they reach at HUM_MAX_RATE (which the rate races well past before
-// the hold finishes).
+// a sustained scroll finishes the stack).
 export function humFor(yearsPerSecond: number): { gain: number; hz: number } {
   if (yearsPerSecond <= HUM_START_RATE) {
     return { gain: 0, hz: HUM_MIN_HZ };

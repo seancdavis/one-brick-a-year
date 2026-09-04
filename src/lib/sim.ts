@@ -1,17 +1,7 @@
 // The stacking simulation: a pure state machine advanced one step at a time.
 // No DOM, no timers — src/main.ts drives this with real frame deltas.
 
-import {
-  BRICK_M,
-  RATE0,
-  RATE_K,
-  SCALE_MAX_M,
-  SCALE_MIN_M,
-  TOTAL_YEARS,
-  ZOOM_FACTOR,
-  ZOOM_MS,
-  ZOOM_TRIGGER,
-} from './constants';
+import { BRICK_M, SCALE_MAX_M, SCALE_MIN_M, TOTAL_YEARS, ZOOM_FACTOR, ZOOM_MS, ZOOM_TRIGGER } from './constants';
 
 // Longest dt accepted in one step, so a backgrounded tab regaining focus
 // doesn't leap the sim forward. Ports the prototype's `Math.min(dt, 0.05)`.
@@ -19,7 +9,6 @@ const MAX_DT_SECONDS = 0.05;
 
 export interface SimState {
   years: number;
-  heldSeconds: number;
   scaleM: number;
   zoom: { from: number; to: number; elapsedMs: number } | null;
   done: boolean;
@@ -28,17 +17,10 @@ export interface SimState {
 export function initialSim(): SimState {
   return {
     years: 0,
-    heldSeconds: 0,
     scaleM: SCALE_MIN_M,
     zoom: null,
     done: false,
   };
-}
-
-// Years per second at a given number of seconds held, per the prototype's
-// accelerating pace: rate = RATE0 * e^(RATE_K * heldSeconds).
-export function rateFor(heldSeconds: number): number {
-  return RATE0 * Math.exp(RATE_K * heldSeconds);
 }
 
 export function heightM(s: SimState): number {
@@ -57,17 +39,14 @@ function easeInOut(p: number): number {
   return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
 }
 
-export function step(s: SimState, dtSeconds: number, held: boolean, reducedMotion: boolean): SimState {
+export function step(s: SimState, dtSeconds: number, yearsPerSecond: number, reducedMotion: boolean): SimState {
   const dt = Math.min(dtSeconds, MAX_DT_SECONDS);
 
   let years = s.years;
-  let heldSeconds = s.heldSeconds;
   let done = s.done;
 
-  if (held && !done) {
-    heldSeconds += dt;
-    const rate = rateFor(heldSeconds);
-    years = Math.min(TOTAL_YEARS, years + rate * dt);
+  if (yearsPerSecond > 0 && !done) {
+    years = Math.min(TOTAL_YEARS, years + yearsPerSecond * dt);
     if (years >= TOTAL_YEARS) {
       done = true;
     }
@@ -101,5 +80,5 @@ export function step(s: SimState, dtSeconds: number, held: boolean, reducedMotio
     }
   }
 
-  return { years, heldSeconds, scaleM, zoom, done };
+  return { years, scaleM, zoom, done };
 }

@@ -16,9 +16,9 @@ export function createStartScreen(
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', 'start-screen-title');
-  // A tap on the overlay's own label text or padding must not reach the
-  // window hold listener and count as the user's first hold.
-  overlay.setAttribute('data-hold-ignore', '');
+  // A tap or drag on the overlay's own label text or padding must not reach
+  // the window scroll listener and count as the user's first scroll.
+  overlay.setAttribute('data-scroll-ignore', '');
 
   const form = document.createElement('form');
   form.className = 'start-form';
@@ -31,7 +31,7 @@ export function createStartScreen(
 
   const blurb = document.createElement('p');
   blurb.className = 'start-blurb';
-  blurb.textContent = 'One LEGO brick for every year, going back in time. Press and hold to build the stack.';
+  blurb.textContent = 'One LEGO brick for every year, going back in time. Scroll to build the stack.';
 
   const nameSpan = document.createElement('span');
   nameSpan.textContent = 'Your name';

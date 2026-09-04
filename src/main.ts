@@ -2,7 +2,7 @@ import './style.css';
 import { createAudio } from './audio';
 import { createBeatCards } from './beats';
 import { createEndScreen } from './end-screen';
-import { createHoldInput } from './input';
+import { createScrollInput, type ScrollKind } from './input';
 import { createHud } from './hud';
 import { createStartScreen } from './start-screen';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
@@ -17,7 +17,8 @@ import {
   STORAGE_KEY,
   type Personalization,
 } from './lib/personalize';
-import { heightM, initialSim, rateFor, step } from './lib/sim';
+import { INITIAL_SCROLL, decayVelocity, pushScroll, yearsPerSecond, type ScrollState } from './lib/scroll-state';
+import { heightM, initialSim, step } from './lib/sim';
 import { drawStage, stageBox, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
 
@@ -36,9 +37,10 @@ function getContext2D(el: HTMLCanvasElement): CanvasRenderingContext2D {
 const ctx = getContext2D(canvas);
 
 // Set whenever something the canvas or HUD draws might have changed, so an
-// otherwise-idle frame (not held, no zoom tween, nothing crossed) can skip
-// the redraw. The rAF loop itself keeps running either way — cheap to keep
-// alive, and simpler than pausing/resuming around every event source.
+// otherwise-idle frame (no active scroll, no zoom tween, nothing crossed)
+// can skip the redraw. The rAF loop itself keeps running either way —
+// cheap to keep alive, and simpler than pausing/resuming around every event
+// source.
 let needsRender = true;
 
 function readStoredProfile(): string | null {
@@ -139,9 +141,18 @@ const beatCards = createBeatCards(app);
 const endScreen = createEndScreen(app, () => resetForReplay());
 
 let sim = initialSim();
-let held = false;
-let hasHeldOnce = false;
+let scroll: ScrollState = INITIAL_SCROLL;
+let hasScrolledOnce = false;
 let tickAccumulator = 0;
+
+// The kind of input (wheel, touch, or keyboard) that produced this session's
+// first scroll. First kind wins for the whole session. Exposed for slice 4's
+// session analytics (an `input_kind` field); unused until then.
+let firstInputKind: ScrollKind | null = null;
+
+function nowSeconds(): number {
+  return performance.now() / 1000;
+}
 
 // Ends the current analytics session. A no-op until slice 4 (session
 // analytics) wires this to POST /api/sessions/:id/end.
@@ -154,7 +165,7 @@ function resetForReplay(): void {
   beatCards.clear();
   sim = initialSim();
   tickAccumulator = 0;
-  hasHeldOnce = false;
+  hasScrolledOnce = false;
   hud.showPrompt();
   needsRender = true;
 }
@@ -168,24 +179,56 @@ function restart(): void {
   startScreen.open(profile);
 }
 
-createHoldInput(window, (next) => {
-  held = next;
-  // A tap can reach this listener while the start screen is still up (its
-  // own padding, its label text) or after the sim is already done — neither
-  // is the user's first real hold on the stack.
-  if (held && !hasHeldOnce && !startScreen.isOpen() && !sim.done) {
-    hasHeldOnce = true;
-    hud.hidePrompt();
-    // Apply a stored on-preference at the first user gesture.
-    if (soundEnabled) {
-      audio.enable();
+// Creating (or resuming) the AudioContext must happen from an actual user
+// gesture — browsers refuse otherwise — and a wheel event isn't reliably
+// counted as one. armAudioOnce() is called both from the qualifying first
+// scroll below and from the raw pointerdown/keydown listeners further down,
+// so whichever kind of gesture the browser will accept ends up arming
+// audio; the guard makes every call after the first a no-op.
+let hasArmedAudio = false;
+function armAudioOnce(): void {
+  if (hasArmedAudio) return;
+  hasArmedAudio = true;
+  // Apply a stored on-preference at the first user gesture.
+  if (soundEnabled) {
+    audio.enable();
+  }
+}
+
+createScrollInput(window, (deltaPx, kind) => {
+  if (firstInputKind === null) firstInputKind = kind;
+  scroll = pushScroll(scroll, deltaPx, nowSeconds());
+
+  // A scroll can reach this listener while the start screen is still up (its
+  // own padding, its label text are excluded, but a gesture can still land
+  // just outside them) or after the sim is already done — neither is the
+  // user's first real scroll on the stack.
+  if (!hasScrolledOnce && !startScreen.isOpen() && !sim.done) {
+    const rate = yearsPerSecond(scroll.velocity, sim.years);
+    if (rate > 0) {
+      hasScrolledOnce = true;
+      hud.hidePrompt();
+      armAudioOnce();
     }
   }
 });
 
+// A plain pointerdown or keydown is a valid Web Audio user gesture in every
+// browser, unlike a wheel event — see armAudioOnce's comment. Skipped while
+// a modal screen is up so filling in the start screen's form (or reopening
+// it via Restart) doesn't arm sound before the user has actually engaged
+// with the stack.
+function armAudioFromGesture(): void {
+  if (startScreen.isOpen() || sim.done) return;
+  armAudioOnce();
+}
+window.addEventListener('pointerdown', armAudioFromGesture);
+window.addEventListener('keydown', armAudioFromGesture);
+
 // First visit: no URL params and nothing stored yet. Personalize before the
-// build can begin; the frame loop below ignores holds while this is open.
-// Escape is disabled here since there's no existing profile to fall back to.
+// build can begin; the frame loop below ignores scroll input while this is
+// open. Escape is disabled here since there's no existing profile to fall
+// back to.
 if (!hasUrlParams && storedRaw === null) {
   startScreen.open(profile, { dismissible: false });
 }
@@ -221,16 +264,20 @@ function frame(timeMs: number): void {
 
   const before = sim;
 
-  // Ignore hold input while a modal screen (start or end) is up — the sim
-  // itself already refuses to advance once done, but this also keeps the
-  // idle-frame check below from thinking something is happening.
-  const effectiveHeld = held && !startScreen.isOpen() && !before.done;
-  sim = step(before, dtSeconds, effectiveHeld, reducedMotionQuery.matches);
+  // Velocity keeps decaying every frame regardless of what's on screen, so
+  // it doesn't build up silently behind a modal and surge once it closes.
+  scroll = decayVelocity(scroll, timeMs / 1000);
+
+  // Ignore the resulting rate while a modal screen (start or end) is up —
+  // the sim itself already refuses to advance once done, but this also
+  // keeps the idle-frame check below from thinking something is happening.
+  const inputActive = !startScreen.isOpen() && !before.done;
+  const rate = inputActive ? yearsPerSecond(scroll.velocity, before.years) : 0;
+  sim = step(before, dtSeconds, rate, reducedMotionQuery.matches);
 
   // Both calls are safe no-ops before enable() has run — the AudioContext is
   // created lazily and enable() must be called from a user gesture.
-  const rate = rateFor(sim.heldSeconds);
-  if (effectiveHeld && !sim.done) {
+  if (inputActive && !sim.done) {
     tickAccumulator += ticksPerSecond(rate) * dtSeconds;
     while (tickAccumulator >= 1) {
       audio.tick();
@@ -253,14 +300,14 @@ function frame(timeMs: number): void {
     audio.finish();
   }
 
-  // Idle frame: nothing held, no zoom tween running (in either the previous
-  // or the new state), and years/done didn't change this step. Redrawing
-  // would produce pixel-identical output, so skip it — the rAF loop keeps
-  // going regardless, ready for the next input.
+  // Idle frame: no active scroll rate, no zoom tween running (in either the
+  // previous or the new state), and years/done didn't change this step.
+  // Redrawing would produce pixel-identical output, so skip it — the rAF
+  // loop keeps going regardless, ready for the next input.
   const simAdvancing = sim.years !== before.years || sim.done !== before.done;
   const zoomActive = sim.zoom !== null || before.zoom !== null;
 
-  if (needsRender || effectiveHeld || simAdvancing || zoomActive) {
+  if (needsRender || rate > 0 || simAdvancing || zoomActive) {
     const placed = placeLandmarks(landmarks, heightM(sim), sim.scaleM, stageBox(view));
     drawStage(ctx, view, sim, placed, ICONS);
     hud.update(sim);

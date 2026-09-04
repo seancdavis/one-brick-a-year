@@ -24,9 +24,9 @@ export function createEndScreen(
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', 'end-screen-big');
-  // A tap on the overlay's own label text or padding must not reach the
-  // window hold listener and count as the user's first hold.
-  overlay.setAttribute('data-hold-ignore', '');
+  // A tap or drag on the overlay's own label text or padding must not reach
+  // the window scroll listener and count as the user's first scroll.
+  overlay.setAttribute('data-scroll-ignore', '');
 
   const panel = document.createElement('div');
   panel.className = 'end-panel';

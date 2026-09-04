@@ -8,8 +8,9 @@ import {
   ticksPerSecond,
 } from './audio-schedule';
 
-// A spread of rates from released (0) up past well beyond the fastest the
-// sim ever reaches (rateFor climbs far past TOTAL_YEARS before a hold ends).
+// A spread of rates from stopped (0) up past well beyond the fastest the sim
+// ever reaches (yearsPerSecond climbs far past TOTAL_YEARS by the time a
+// sustained scroll finishes the stack).
 const RATES = [0, 1, 5, 11, 12, 12.5, 50, 500, 999, 1000, 1000.1, 1e4, 1e5, 1e6, 1e7, 1e8, 4.6e9, 1e10];
 
 describe('ticksPerSecond', () => {

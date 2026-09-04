@@ -1,6 +1,6 @@
-// The HUD: a big years-ago counter, the brick/height readout, the
-// press-and-hold prompt, and controls (the sound toggle, and "Restart",
-// which ends the session, resets the build, and reopens the start screen).
+// The HUD: a big years-ago counter, the brick/height readout, the scroll
+// prompt, and controls (the sound toggle, and "Restart", which ends the
+// session, resets the build, and reopens the start screen).
 // Ports the prototype's HUD markup and copy (docs/prototype/brick-stack.html).
 // DOM glue only.
 
@@ -52,11 +52,7 @@ export function createHud(
 
   const prompt = document.createElement('div');
   prompt.className = 'prompt';
-  prompt.append(
-    'Press and hold anywhere.',
-    document.createElement('br'),
-    'Every brick is one year, going back in time.',
-  );
+  prompt.append('Scroll to build.', document.createElement('br'), 'Every brick is one year, going back in time.');
 
   root.append(hud, prompt);
 
