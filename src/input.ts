@@ -1,55 +1,55 @@
-// Pointer + keyboard hold detection: press-and-hold anywhere, or hold Space/Enter.
-// DOM glue only — the resulting boolean drives src/lib/sim.ts, which stays pure.
+// Pointer + keyboard hold detection: press-and-hold anywhere, or hold Space
+// or Enter. DOM glue only — maps DOM events to src/lib/hold-state.ts's
+// HoldEvent shape and applies its pure reducer, which owns the actual hold
+// rules (see hold-state.test.ts).
 
-const HOLD_KEYS = new Set(['Space', 'Enter']);
+import { INITIAL_HOLD, reduceHold, type HoldEvent, type HoldState } from './lib/hold-state';
 
 // Interactive elements (HUD buttons, links, form controls) should keep their
-// own pointer behavior instead of starting a hold.
+// own pointer/keyboard behavior instead of starting or stealing a hold.
 function isInteractiveTarget(node: EventTarget | null): boolean {
   if (!(node instanceof Element)) return false;
   return node.closest('button, input, select, a') !== null;
 }
 
 export function createHoldInput(target: HTMLElement | Window, onChange: (held: boolean) => void): () => void {
+  let state: HoldState = INITIAL_HOLD;
   let held = false;
 
-  function setHeld(next: boolean) {
-    if (next === held) return;
-    held = next;
-    onChange(held);
+  function apply(event: HoldEvent, sourceEvent: Event): void {
+    const result = reduceHold(state, event);
+    state = result.state;
+    if (result.preventDefault) sourceEvent.preventDefault();
+    if (result.held !== held) {
+      held = result.held;
+      onChange(held);
+    }
   }
 
   function onPointerDown(e: Event) {
-    const pe = e as PointerEvent;
-    if (isInteractiveTarget(pe.target)) return;
-    setHeld(true);
+    apply({ type: 'pointerdown', onInteractive: isInteractiveTarget((e as PointerEvent).target) }, e);
   }
 
-  function onPointerUp() {
-    setHeld(false);
+  function onPointerUp(e: Event) {
+    apply({ type: 'pointerup', onInteractive: false }, e);
   }
 
-  function onPointerCancel() {
-    setHeld(false);
+  function onPointerCancel(e: Event) {
+    apply({ type: 'pointercancel', onInteractive: false }, e);
   }
 
   function onKeyDown(e: Event) {
     const ke = e as KeyboardEvent;
-    if (!HOLD_KEYS.has(ke.code)) return;
-    if (isInteractiveTarget(ke.target)) return;
-    ke.preventDefault();
-    setHeld(true);
+    apply({ type: 'keydown', code: ke.code, onInteractive: isInteractiveTarget(ke.target) }, e);
   }
 
   function onKeyUp(e: Event) {
     const ke = e as KeyboardEvent;
-    if (!HOLD_KEYS.has(ke.code)) return;
-    if (isInteractiveTarget(ke.target)) return;
-    setHeld(false);
+    apply({ type: 'keyup', code: ke.code, onInteractive: isInteractiveTarget(ke.target) }, e);
   }
 
-  function onBlur() {
-    setHeld(false);
+  function onBlur(e: Event) {
+    apply({ type: 'blur', onInteractive: false }, e);
   }
 
   target.addEventListener('pointerdown', onPointerDown);

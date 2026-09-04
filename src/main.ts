@@ -81,6 +81,14 @@ let landmarks = buildLandmarks(profile);
 // "Copy link" (src/end-screen.ts) copies the bare page URL only.
 if (hasUrlParams) {
   saveProfile(profile);
+  try {
+    // Strip the params from the address bar now that they're read and
+    // saved, so the child's name never lingers in the URL or history.
+    history.replaceState(null, '', location.pathname);
+  } catch {
+    // Some environments (e.g. a sandboxed iframe) block history mutation:
+    // the params just stay in the visible URL in that case.
+  }
 }
 
 const startScreen = createStartScreen(app, (nextProfile) => {
