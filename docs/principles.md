@@ -1,97 +1,56 @@
 # Principles
 
-How this codebase is built and why, as of the end of the `1-one-brick-a-year`
-branch (slices 1–8). Read this first; read an ADR in `docs/decisions/` only
-when a rule here seems arbitrary (none exist yet for this project).
+Durable rules for this codebase — not a history of how it was built.
 
-## Architecture
+## Pure logic lives in src/lib/
 
-Three layers, strictly separated:
+Anything that shapes the simulation, the landmark and beat data, formatting,
+or personalization parsing is pure: no DOM, no canvas, no timers, no
+storage. That's what makes the pacing math, the landmark table, and the
+personalization rules testable without a browser, and safe to reason about
+without worrying what order effects ran in. Every file there has a sibling
+test file. Rendering reads state and draws; it never mutates it. Everything
+else — input handling, the HUD, cards, screens, audio, storage, the URL — is
+DOM glue, kept out of the pure layer.
 
-- **`src/lib/`** — pure logic. No `document`, `window`, `HTMLElement`,
-  `CanvasRenderingContext2D`, `Path2D`, `AudioContext`, or `localStorage`.
-  Every file has a sibling `*.test.ts`. This is what makes the pacing,
-  landmark math, and personalization rules testable without a browser:
-  `constants.ts`, `format.ts`, `landmarks.ts`, `sim.ts`, `layout.ts`,
-  `beats.ts`, `personalize.ts`, `audio-schedule.ts`.
-- **`src/render/`** — reads state and draws. Never mutates it.
-  `stage.ts` (canvas: sky, ground, scale bar, stack, landmark lines and
-  labels) and `icons.ts` (one flat `Path2D` per landmark icon, 24×24 box).
-- **DOM glue**, one file per concern, at the top of `src/`: `input.ts`
-  (pointer/keyboard hold → boolean), `hud.ts`, `beats.ts` (milestone cards),
-  `start-screen.ts`, `end-screen.ts`, `audio.ts`. Each exposes a small
-  `createX(root, ...)` factory. `main.ts` is the only file that owns state
-  (`sim`, `profile`, `held`, ...) and wires everything together in one `rAF`
-  loop — it reads localStorage and the URL; nothing else does.
+## Where the feel lives
 
-No classes, no default exports (except `vite.config.ts`), no dependencies
-beyond `@netlify/vite-plugin` and the Vite/Vitest/TypeScript toolchain.
+Every number that shapes the feel — brick height, the pace of the hold,
+zoom thresholds, sound thresholds — is a named constant with a one-line
+comment saying what it does, not a number inlined at its use site. Tune the
+feel by changing one number in one place.
 
-## The constants that shape the feel
+## Facts have a source
 
-All in `src/lib/constants.ts`, each with a one-line comment:
+Every landmark and beat carries a one-line source comment: where the number
+came from. Nobody invents a fact. If a number is uncertain, it's rounded
+and hedged ("about", "roughly"). Icons are flat, single-color labels next
+to a landmark's line — never drawn to scale, and never a stand-in for the
+(real, to-scale) line itself.
 
-- `BRICK_M` (0.0096 m) — one stacked 2×4 LEGO brick, the page's whole unit.
-- `TOTAL_YEARS` (4.6e9) — the book's number; every landmark derives from it.
-- `RATE0` / `RATE_K` — the hold accelerates as
-  `rate = RATE0 * e^(RATE_K * heldSeconds)`, tuned so a full hold lands
-  between 60–90 s (see `sim.test.ts`).
-- `ZOOM_TRIGGER`, `ZOOM_FACTOR`, `ZOOM_MS` — the camera zooms out ×10 whenever
-  the stack passes 82% of the visible screen, tweened over 750 ms.
-- `SCALE_MIN_M` / `SCALE_MAX_M` — the camera's zoom range.
+## Privacy boundary
 
-Sound has its own constants in `src/lib/audio-schedule.ts` (`TICK_CAP_PER_S`,
-the `HUM_*` thresholds) — the same "one file, pure math, tested" pattern.
-
-## Facts policy
-
-Every landmark (`src/lib/landmarks.ts`) and beat (`src/lib/beats.ts`) carries
-a one-line source comment above its entry — where the number came from, and
-"roughly"/"about" when precision is unwarranted. Nobody invents a fact; if
-it's uncertain, it's rounded and hedged. Icons (`src/render/icons.ts`) are
-flat, single-color labels next to a landmark's line — never drawn to scale,
-and never a stand-in for the (real, to-scale) landmark line itself.
-
-## Personalization and privacy
-
-`src/lib/personalize.ts` is the one place that decides what a valid profile
-looks like (name, age, home height), with one precedence rule: URL params
-override stored `localStorage` values, which override defaults
-(`DEFAULT_PROFILE`). `src/main.ts` is the only code that touches
-`localStorage` (key `oby:profile`) or reads the URL. The child's name is
-never written back into a URL the page generates — "Copy link"
-(`src/end-screen.ts`) copies `location.origin + location.pathname` only,
-never `location.search` and never the name.
+A child's name lives in `localStorage` only. It may be read from URL
+params on load, but the page never writes it — or anything else personal —
+back into a URL it generates. URL params are stripped from the address bar
+immediately after being read, so nothing personal lingers in the browser
+history or gets shared if the page's URL is copied mid-session.
 
 ## Sound
 
-Off by default (`SOUND_DEFAULT_ENABLED = false` in `audio-schedule.ts`),
-synthesized only (no audio files), and only ever started by a user gesture:
-either the HUD's sound toggle, or — if the stored preference is already
-on — the first hold gesture, so a returning visitor doesn't have to tap the
-toggle twice (`src/main.ts`, the `createHoldInput` callback). Every method on
-the `Audio` interface (`src/audio.ts`) is a safe no-op before `enable()` has
-run, so call sites never need to guard on whether sound is active.
+Off by default. Synthesized only — no audio files. The audio context is
+created lazily, and starting it always requires a user gesture; browsers
+refuse to start audio any other way.
 
 ## Accessibility baseline
 
-- Keyboard hold: Space or Enter, in addition to pointer, everywhere holding
-  works (`src/input.ts`).
-- Visible focus: every interactive control (`.hud-button`, `.start-button`,
-  `.start-field input/select`, `.end-button`) has a `:focus-visible` outline
-  in `src/style.css`.
-- `prefers-reduced-motion: reduce` is honored in one place per concern: the
-  sim skips the zoom tween entirely (`src/lib/sim.ts`), and a single
-  `@media (prefers-reduced-motion: reduce)` block in `src/style.css` turns
-  off the remaining CSS transitions (the prompt fade, the beat card
-  transition). The start and end screens toggle via the `hidden` attribute,
-  which has no transition to guard.
-- Beat cards (`src/beats.ts`) and the HUD (`src/hud.ts`) use `aria-live` so
-  changing text is announced without moving focus; the end screen instead
-  moves focus to "Build it again" when it appears, since it needs deliberate
-  attention.
-- Idle frames (`src/main.ts`) skip `drawStage`/`hud.update` when nothing
-  changed, but the loop itself never stops, so input is always live.
+Holding works by pointer or by keyboard (Space or Enter), everywhere
+holding works. Every interactive control has a visible focus state.
+`prefers-reduced-motion: reduce` is honored: the zoom tween and other
+transitions become instant. Text that changes without user action
+(milestone cards, the HUD counter) is announced via `aria-live` rather
+than moving focus; a modal screen that needs deliberate attention moves
+focus to it instead.
 
 ## Run and test
 
@@ -99,6 +58,6 @@ run, so call sites never need to guard on whether sound is active.
 npm run dev        # Vite dev server
 npm run build      # typecheck, then vite build to dist/
 npm run typecheck  # tsc --noEmit
-npm test           # vitest run, src/lib/**/*.test.ts
+npm test           # vitest run
 npm run preview    # serve dist/
 ```
