@@ -69,6 +69,8 @@ canvas {
 }
 
 .hud-controls {
+  display: flex;
+  gap: 8px;
   margin-top: 10px;
   pointer-events: auto;
 }
@@ -87,6 +89,13 @@ canvas {
 }
 
 .hud-button:hover {
+  background: var(--ink);
+  color: var(--sky);
+}
+
+/* The sound toggle (src/hud.ts) uses aria-pressed to reflect its own state,
+   so it reads as "on" even without hover/focus. */
+.hud-button[aria-pressed='true'] {
   background: var(--ink);
   color: var(--sky);
 }

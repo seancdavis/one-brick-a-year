@@ -1,13 +1,15 @@
 import './style.css';
+import { createAudio } from './audio';
 import { createBeatCards } from './beats';
 import { createHoldInput } from './input';
 import { createHud } from './hud';
 import { createStartScreen } from './start-screen';
+import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
 import { beatsCrossed } from './lib/beats';
 import { buildLandmarks } from './lib/landmarks';
 import { placeLandmarks } from './lib/layout';
 import { parsePersonalization, serialize, STORAGE_KEY, type Personalization } from './lib/personalize';
-import { heightM, initialSim, step } from './lib/sim';
+import { heightM, initialSim, rateFor, step } from './lib/sim';
 import { drawStage, stageBox, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
 
@@ -42,6 +44,24 @@ function saveProfile(p: Personalization): void {
   }
 }
 
+function readStoredSound(): boolean {
+  try {
+    const raw = localStorage.getItem(SOUND_STORAGE_KEY);
+    return raw === null ? SOUND_DEFAULT_ENABLED : raw === 'true';
+  } catch {
+    return SOUND_DEFAULT_ENABLED;
+  }
+}
+
+function saveSound(enabled: boolean): void {
+  try {
+    localStorage.setItem(SOUND_STORAGE_KEY, String(enabled));
+  } catch {
+    // Private browsing / disabled storage: the sound preference just won't
+    // persist across visits.
+  }
+}
+
 const urlParams = new URLSearchParams(location.search);
 const storedRaw = readStoredProfile();
 const hasUrlParams = urlParams.has('name') || urlParams.has('age') || urlParams.has('home');
@@ -66,13 +86,35 @@ const startScreen = createStartScreen(app, (nextProfile) => {
   startScreen.close();
 });
 
-const hud = createHud(app, { onChange: () => startScreen.open(profile) });
+const audio = createAudio();
+let soundEnabled = readStoredSound();
+
+// The click that flips this is itself the user gesture enable()/disable()
+// need — sound is never started any other way. The stored preference only
+// seeds the toggle's starting look; audio.enable() is never called on load.
+const hud = createHud(app, {
+  onChange: () => startScreen.open(profile),
+  onSoundToggle: () => {
+    soundEnabled = !soundEnabled;
+    saveSound(soundEnabled);
+    if (soundEnabled) {
+      audio.enable();
+    } else {
+      audio.disable();
+    }
+    hud.setSound(soundEnabled);
+  },
+});
+hud.setSound(soundEnabled);
+
 const beatCards = createBeatCards(app);
 
 let sim = initialSim();
 let held = false;
 let hasHeldOnce = false;
 let prevYears = sim.years;
+let tickAccumulator = 0;
+let wasDone = false;
 
 createHoldInput(window, (next) => {
   held = next;
@@ -120,10 +162,31 @@ function frame(timeMs: number): void {
   const effectiveHeld = held && !startScreen.isOpen();
   sim = step(sim, dtSeconds, effectiveHeld, reducedMotionQuery.matches);
 
+  // Ticks and hum track the current pace; both calls are safe no-ops
+  // whenever sound is off (audio.enable() was never called this session).
+  const rate = rateFor(sim.heldSeconds);
+  if (effectiveHeld && !sim.done) {
+    tickAccumulator += ticksPerSecond(rate) * dtSeconds;
+    while (tickAccumulator >= 1) {
+      audio.tick();
+      tickAccumulator -= 1;
+    }
+    const hum = humFor(rate);
+    audio.hum(hum.gain, hum.hz);
+  } else {
+    audio.hum(0, humFor(rate).hz);
+  }
+
   for (const beat of beatsCrossed(prevYears, sim.years)) {
     beatCards.show(beat);
+    audio.chime();
   }
   prevYears = sim.years;
+
+  if (sim.done && !wasDone) {
+    audio.finish();
+  }
+  wasDone = sim.done;
 
   const placed = placeLandmarks(landmarks, heightM(sim), sim.scaleM, stageBox(view));
   drawStage(ctx, view, sim, placed, ICONS);
