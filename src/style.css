@@ -68,6 +68,70 @@ canvas {
   font-weight: 500;
 }
 
+/* Side headings (src/hud.ts): "How tall" (left, above the live height
+   readout) and "How long ago" (right, above the milestone column). Same
+   11px uppercase caption style as .row. On narrow screens both panels are
+   already pinned to the top corners (see .hud and .side-panel below), so no
+   separate narrow rule is needed to keep them "at the top of each side". */
+.side-heading {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cap);
+  margin-top: 14px;
+}
+
+.side-value {
+  font-size: 13px;
+  color: var(--ink);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Right-side panel (src/hud.ts): mirrors .hud's top-left position so "How
+   long ago" sits above the milestone (time event) column on the right. */
+.side-panel {
+  position: fixed;
+  top: 20px;
+  pointer-events: none;
+  text-shadow:
+    0 1px 2px rgba(243, 239, 230, 0.9),
+    0 0 8px rgba(243, 239, 230, 0.9);
+}
+
+.side-panel--right {
+  right: 24px;
+  text-align: right;
+}
+
+/* Color swatch row (src/color-picker.ts): shared by the start screen's 28px
+   version and the HUD's 18px compact version (--swatch-size set inline per
+   instance). */
+.color-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.color-picker--compact {
+  gap: 4px;
+  margin-top: 10px;
+  pointer-events: auto;
+}
+
+.color-swatch {
+  width: var(--swatch-size, 28px);
+  height: var(--swatch-size, 28px);
+  padding: 0;
+  border: 1px solid rgba(42, 36, 32, 0.25);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.color-swatch[aria-pressed='true'] {
+  border: 2px solid var(--ink);
+}
+
 .hud-controls {
   display: flex;
   gap: 8px;
@@ -125,8 +189,10 @@ canvas {
 }
 
 /* Milestone card (src/beats.ts). Sits above the prompt, right-of-center on
-   wide screens so it never overlaps the stack column (which sits at 30%
-   from the left, per src/render/stage.ts); full-width on narrow screens. */
+   wide screens so it never overlaps the centered stack column (per
+   src/render/stage.ts); full-width on narrow screens. Its own opaque
+   background keeps it readable over the right side's milestone labels while
+   it's briefly visible. */
 .beat-card {
   position: fixed;
   left: 62%;
@@ -271,7 +337,8 @@ canvas {
 .start-field select:focus-visible,
 .start-button:focus-visible,
 .hud-button:focus-visible,
-.end-button:focus-visible {
+.end-button:focus-visible,
+.color-swatch:focus-visible {
   outline: 2px solid var(--red);
   outline-offset: 2px;
 }

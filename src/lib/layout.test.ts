@@ -6,18 +6,39 @@ import { GROUND_HIDE_PX, LABEL_MIN_GAP_PX, placeLandmarks, type StageBox } from 
 const stage: StageBox = { top: 150, ground: 650 };
 const scaleM = 10;
 
-function mark(id: string, meters: number): Landmark {
-  return { id, meters, years: meters * 100, label: id, icon: 'bricks' };
+function mark(id: string, meters: number, kind: Landmark['kind'] = 'thing'): Landmark {
+  return { id, meters, years: meters * 100, label: id, icon: 'bricks', kind };
 }
 
 describe('placeLandmarks', () => {
-  it('stacks a cluster of nearby landmarks so no two labels are ever closer than LABEL_MIN_GAP_PX', () => {
+  it('places a thing on the left and a time event on the right', () => {
+    const landmarks = [mark('t', 5, 'thing'), mark('e', 8, 'time')];
+    const placed = placeLandmarks(landmarks, 0, scaleM, stage);
+
+    expect(placed.left.map((p) => p.landmark.id)).toEqual(['t']);
+    expect(placed.right.map((p) => p.landmark.id)).toEqual(['e']);
+  });
+
+  it('stacks each side independently: a thing and a time event at the same height do not push each other', () => {
+    const landmarks = [mark('t', 5, 'thing'), mark('e', 5, 'time')];
+    const placed = placeLandmarks(landmarks, 0, scaleM, stage);
+
+    expect(placed.left).toHaveLength(1);
+    expect(placed.right).toHaveLength(1);
+    // Same meters -> same lineY -> the same labelY on each side, since
+    // neither side has a same-side neighbor to push against.
+    expect(placed.left[0].lineY).toBe(placed.right[0].lineY);
+    expect(placed.left[0].labelY).toBe(placed.right[0].labelY);
+  });
+
+  it('stacks a cluster of nearby landmarks on one side so no two labels are ever closer than LABEL_MIN_GAP_PX', () => {
     // meters 0.1 apart -> lineY 5px apart, well inside a 30px cluster.
     const landmarks = [mark('a', 5.0), mark('b', 5.1), mark('c', 5.2), mark('d', 5.3), mark('e', 5.4)];
     const placed = placeLandmarks(landmarks, 0, scaleM, stage);
 
-    expect(placed).toHaveLength(5);
-    const labelYs = [...placed].sort((a, b) => a.labelY - b.labelY);
+    expect(placed.left).toHaveLength(5);
+    expect(placed.right).toHaveLength(0);
+    const labelYs = [...placed.left].sort((a, b) => a.labelY - b.labelY);
     for (let i = 1; i < labelYs.length; i++) {
       const gap = labelYs[i].labelY - labelYs[i - 1].labelY;
       expect(gap).toBeGreaterThanOrEqual(LABEL_MIN_GAP_PX);
@@ -29,7 +50,7 @@ describe('placeLandmarks', () => {
     const landmarks = [mark('near-ground', 0.2), mark('visible', 5)];
     const placed = placeLandmarks(landmarks, 0, scaleM, stage);
 
-    expect(placed.map((p) => p.landmark.id)).toEqual(['visible']);
+    expect(placed.left.map((p) => p.landmark.id)).toEqual(['visible']);
     expect(650 - 640).toBeLessThan(GROUND_HIDE_PX);
   });
 
@@ -38,25 +59,25 @@ describe('placeLandmarks', () => {
     const landmarks = [mark('too-high', 11), mark('visible', 5)];
     const placed = placeLandmarks(landmarks, 0, scaleM, stage);
 
-    expect(placed.map((p) => p.landmark.id)).toEqual(['visible']);
+    expect(placed.left.map((p) => p.landmark.id)).toEqual(['visible']);
   });
 
   it("flips passed as heightM crosses a landmark's meters", () => {
     const landmarks = [mark('mark', 5)];
 
     const before = placeLandmarks(landmarks, 4, scaleM, stage);
-    expect(before[0].passed).toBe(false);
+    expect(before.left[0].passed).toBe(false);
 
     const after = placeLandmarks(landmarks, 5, scaleM, stage);
-    expect(after[0].passed).toBe(true);
+    expect(after.left[0].passed).toBe(true);
   });
 
   it('decreases lineY as meters increases', () => {
     const landmarks = [mark('low', 1), mark('high', 5)];
     const placed = placeLandmarks(landmarks, 0, scaleM, stage);
 
-    const low = placed.find((p) => p.landmark.id === 'low');
-    const high = placed.find((p) => p.landmark.id === 'high');
+    const low = placed.left.find((p) => p.landmark.id === 'low');
+    const high = placed.left.find((p) => p.landmark.id === 'high');
     expect(low).toBeDefined();
     expect(high).toBeDefined();
     expect(high!.lineY).toBeLessThan(low!.lineY);

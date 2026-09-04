@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_COLOR_ID } from './lego-colors';
 import {
   DEFAULT_PROFILE,
   hasPersonalizationKeys,
@@ -14,21 +15,23 @@ describe('parsePersonalization', () => {
   });
 
   it('lets stored values override defaults', () => {
-    const stored = serialize({ name: 'Stored', ageYears: 10, homeMeters: 4 });
+    const stored = serialize({ name: 'Stored', ageYears: 10, homeMeters: 4, colorId: 'bright-blue' });
     expect(parsePersonalization(new URLSearchParams(), stored)).toEqual({
       name: 'Stored',
       ageYears: 10,
       homeMeters: 4,
+      colorId: 'bright-blue',
     });
   });
 
   it('lets URL params override stored values', () => {
-    const stored = serialize({ name: 'Stored', ageYears: 10, homeMeters: 4 });
+    const stored = serialize({ name: 'Stored', ageYears: 10, homeMeters: 4, colorId: 'bright-blue' });
     const params = new URLSearchParams('name=FromUrl&age=12');
     expect(parsePersonalization(params, stored)).toEqual({
       name: 'FromUrl',
       ageYears: 12,
       homeMeters: 4, // not present in the URL, falls back to stored
+      colorId: 'bright-blue', // not present in the URL, falls back to stored
     });
   });
 
@@ -55,13 +58,23 @@ describe('parsePersonalization', () => {
     }
   });
 
+  it('accepts a recognized color id from the URL', () => {
+    const params = new URLSearchParams({ color: 'dark-green' });
+    expect(parsePersonalization(params, null).colorId).toBe('dark-green');
+  });
+
+  it.each(['nope', '', 'Bright Red'])('falls back to the default color for an unrecognized id (%j)', (color) => {
+    const params = new URLSearchParams({ color });
+    expect(parsePersonalization(params, null).colorId).toBe(DEFAULT_COLOR_ID);
+  });
+
   it('rejects malformed stored JSON without throwing', () => {
     expect(parsePersonalization(new URLSearchParams(), 'not json')).toEqual(DEFAULT_PROFILE);
     expect(parsePersonalization(new URLSearchParams(), 'null')).toEqual(DEFAULT_PROFILE);
   });
 
-  it('round-trips through serialize', () => {
-    const profile: Personalization = { name: 'Ellie', ageYears: 9, homeMeters: 30 };
+  it('round-trips through serialize, including color', () => {
+    const profile: Personalization = { name: 'Ellie', ageYears: 9, homeMeters: 30, colorId: 'bright-purple' };
     expect(parsePersonalization(new URLSearchParams(), serialize(profile))).toEqual(profile);
   });
 });
@@ -109,5 +122,9 @@ describe('hasPersonalizationKeys', () => {
 
   it('is true when a recognized key is present', () => {
     expect(hasPersonalizationKeys(new URLSearchParams('home=4'))).toBe(true);
+  });
+
+  it('is true when only the color key is present', () => {
+    expect(hasPersonalizationKeys(new URLSearchParams('color=black'))).toBe(true);
   });
 });

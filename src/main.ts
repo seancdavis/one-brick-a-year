@@ -9,6 +9,7 @@ import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from
 import { beatsCrossed } from './lib/beats';
 import { buildLandmarks } from './lib/landmarks';
 import { placeLandmarks } from './lib/layout';
+import { colorById } from './lib/lego-colors';
 import {
   hasPersonalizationKeys,
   mergeParams,
@@ -115,6 +116,7 @@ const startScreen = createStartScreen(app, (nextProfile) => {
   // untouched, whether this came from the mandatory first-run screen or a
   // Restart.
   landmarks = buildLandmarks(profile);
+  hud.setColor(profile.colorId);
   startScreen.close();
   needsRender = true;
 });
@@ -123,6 +125,7 @@ const audio = createAudio();
 let soundEnabled = readStoredSound();
 
 const hud = createHud(app, {
+  colorId: profile.colorId,
   onSoundToggle: () => {
     soundEnabled = !soundEnabled;
     saveSound(soundEnabled);
@@ -134,6 +137,11 @@ const hud = createHud(app, {
     hud.setSound(soundEnabled);
   },
   onRestart: () => restart(),
+  onColorSelect: (colorId) => {
+    profile = { ...profile, colorId };
+    saveProfile(profile);
+    needsRender = true;
+  },
 });
 hud.setSound(soundEnabled);
 
@@ -309,7 +317,7 @@ function frame(timeMs: number): void {
 
   if (needsRender || rate > 0 || simAdvancing || zoomActive) {
     const placed = placeLandmarks(landmarks, heightM(sim), sim.scaleM, stageBox(view));
-    drawStage(ctx, view, sim, placed, ICONS);
+    drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId));
     hud.update(sim);
     needsRender = false;
   }

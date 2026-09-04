@@ -4,7 +4,10 @@
 // src/lib/personalize.ts, so there is exactly one place that decides what a
 // valid profile looks like.
 
+import { createColorPicker } from './color-picker';
 import { DEFAULT_PROFILE, HOME_OPTIONS, parsePersonalization, type Personalization } from './lib/personalize';
+
+const SWATCH_SIZE_PX = 28;
 
 export function createStartScreen(
   root: HTMLElement,
@@ -72,12 +75,22 @@ export function createStartScreen(
   homeField.className = 'start-field';
   homeField.append(homeSpan, homeSelect);
 
+  let selectedColorId = DEFAULT_PROFILE.colorId;
+  const colorSpan = document.createElement('span');
+  colorSpan.textContent = 'Brick color';
+  const colorPicker = createColorPicker(SWATCH_SIZE_PX, selectedColorId, (colorId) => {
+    selectedColorId = colorId;
+  });
+  const colorField = document.createElement('div');
+  colorField.className = 'start-field';
+  colorField.append(colorSpan, colorPicker.el);
+
   const submit = document.createElement('button');
   submit.type = 'submit';
   submit.className = 'start-button';
   submit.textContent = 'Start stacking';
 
-  form.append(title, blurb, nameField, ageField, homeField, submit);
+  form.append(title, blurb, nameField, ageField, homeField, colorField, submit);
   overlay.append(form);
   root.append(overlay);
 
@@ -93,6 +106,7 @@ export function createStartScreen(
     if (name) params.set('name', name);
     if (ageInput.value) params.set('age', ageInput.value);
     if (homeSelect.value) params.set('home', homeSelect.value);
+    params.set('color', selectedColorId);
     onStart(parsePersonalization(params, null));
   }
 
@@ -119,6 +133,8 @@ export function createStartScreen(
       nameInput.value = profile.name === DEFAULT_PROFILE.name ? '' : profile.name;
       ageInput.value = String(profile.ageYears);
       homeSelect.value = String(profile.homeMeters);
+      selectedColorId = profile.colorId;
+      colorPicker.setSelected(selectedColorId);
 
       isOpenFlag = true;
       overlay.hidden = false;

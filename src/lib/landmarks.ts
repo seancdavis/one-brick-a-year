@@ -2,12 +2,17 @@ import { BRICK_M } from './constants';
 import type { IconId } from './icon-paths';
 import type { Personalization } from './personalize';
 
+// A landmark is either a physical "thing" (drawn on the left, compared by
+// height) or a "time" event (drawn on the right, compared by how long ago)
+// — see src/lib/layout.ts, which sorts on this to build the two-sided
+// layout.
 export interface Landmark {
   id: string;
   meters: number;
   years: number;
   label: string;
   icon: IconId;
+  kind: 'thing' | 'time';
 }
 
 // Each landmark is authored in whichever unit is natural for it — a known
@@ -28,6 +33,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'life',
       label: 'your whole life',
       icon: 'bricks',
+      kind: 'time',
       ...fromYears(profile.ageYears),
     },
     {
@@ -35,6 +41,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'ruler',
       label: 'a school ruler',
       icon: 'ruler',
+      kind: 'thing',
       ...fromMeters(0.3),
     },
     {
@@ -42,6 +49,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'door',
       label: 'a door',
       icon: 'door',
+      kind: 'thing',
       ...fromMeters(2.0),
     },
     {
@@ -51,6 +59,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'home',
       label: 'your home',
       icon: 'home',
+      kind: 'thing',
       ...fromMeters(profile.homeMeters),
     },
     {
@@ -58,6 +67,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'writing',
       label: 'people start writing things down',
       icon: 'scroll',
+      kind: 'time',
       ...fromYears(5000),
     },
     {
@@ -65,6 +75,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'liberty',
       label: 'the Statue of Liberty',
       icon: 'statue',
+      kind: 'thing',
       ...fromMeters(93),
     },
     {
@@ -72,6 +83,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'eiffel',
       label: 'the Eiffel Tower',
       icon: 'tower',
+      kind: 'thing',
       ...fromMeters(330),
     },
     {
@@ -79,6 +91,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'burj',
       label: 'the tallest building on Earth',
       icon: 'skyscraper',
+      kind: 'thing',
       ...fromMeters(828),
     },
     {
@@ -87,6 +100,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'humans',
       label: 'the first people',
       icon: 'person',
+      kind: 'time',
       ...fromYears(300000),
     },
     {
@@ -94,6 +108,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'everest',
       label: 'Mount Everest',
       icon: 'mountain',
+      kind: 'thing',
       ...fromMeters(8849),
     },
     {
@@ -102,6 +117,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'planes',
       label: 'where airplanes fly',
       icon: 'plane',
+      kind: 'thing',
       ...fromMeters(11000),
     },
     {
@@ -109,6 +125,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'space',
       label: 'space begins',
       icon: 'rocket',
+      kind: 'thing',
       ...fromMeters(100000),
     },
     {
@@ -116,6 +133,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'iss',
       label: 'the space station',
       icon: 'station',
+      kind: 'thing',
       ...fromMeters(400000),
     },
     {
@@ -124,6 +142,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'asteroid',
       label: 'the asteroid hits the dinosaurs',
       icon: 'asteroid',
+      kind: 'time',
       ...fromYears(66e6),
     },
     {
@@ -132,6 +151,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'dinosaurs',
       label: 'the first dinosaurs',
       icon: 'dinosaur',
+      kind: 'time',
       ...fromYears(235e6),
     },
     {
@@ -140,6 +160,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'animals',
       label: 'the first animals',
       icon: 'trilobite',
+      kind: 'time',
       ...fromYears(600e6),
     },
     {
@@ -147,6 +168,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'earth-wide',
       label: 'as wide as the whole Earth',
       icon: 'earth',
+      kind: 'thing',
       ...fromMeters(12742000),
     },
     {
@@ -154,6 +176,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'oxygen',
       label: 'the air gets oxygen',
       icon: 'bubbles',
+      kind: 'time',
       ...fromYears(2.4e9),
     },
     {
@@ -161,6 +184,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'life-first',
       label: 'the first life',
       icon: 'cell',
+      kind: 'time',
       ...fromYears(3.7e9),
     },
     {
@@ -168,6 +192,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       id: 'around',
       label: 'all the way around the Earth',
       icon: 'ring',
+      kind: 'thing',
       ...fromMeters(40075000),
     },
   ];

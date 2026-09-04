@@ -1,16 +1,24 @@
-// Personalization: the child's name, age, and home height, used to build
-// the "your whole life" and "your home" landmarks and (later) the end
-// screen copy. Pure — no DOM, no localStorage reads/writes here. src/main.ts
-// owns reading/writing localStorage and the URL; this module only parses
-// and validates whatever strings it is handed.
+// Personalization: the child's name, age, home height, and brick color, used
+// to build the "your whole life" and "your home" landmarks, the brick tower
+// color, and (later) the end screen copy. Pure — no DOM, no localStorage
+// reads/writes here. src/main.ts owns reading/writing localStorage and the
+// URL; this module only parses and validates whatever strings it is handed.
+
+import { DEFAULT_COLOR_ID, LEGO_COLORS } from './lego-colors';
 
 export interface Personalization {
   name: string;
   ageYears: number;
   homeMeters: number;
+  colorId: string;
 }
 
-export const DEFAULT_PROFILE: Personalization = { name: 'you', ageYears: 8, homeMeters: 8 };
+export const DEFAULT_PROFILE: Personalization = {
+  name: 'you',
+  ageYears: 8,
+  homeMeters: 8,
+  colorId: DEFAULT_COLOR_ID,
+};
 
 // localStorage key src/main.ts reads/writes the serialized profile under.
 export const STORAGE_KEY = 'oby:profile';
@@ -49,6 +57,12 @@ function parseHome(raw: string | null | undefined): number | null {
   return n;
 }
 
+function parseColor(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  return LEGO_COLORS.some((c) => c.id === trimmed) ? trimmed : null;
+}
+
 // Stored JSON may hold numbers (what `serialize` writes) or, from an older
 // or hand-edited value, strings. Coerce either to a string before running
 // the same validation URL params go through, so there is one rule set.
@@ -80,6 +94,9 @@ function parseStored(stored: string | null): Partial<Personalization> {
   const homeMeters = parseHome(toValidatable(record.homeMeters));
   if (homeMeters !== null) result.homeMeters = homeMeters;
 
+  const colorId = parseColor(toValidatable(record.colorId));
+  if (colorId !== null) result.colorId = colorId;
+
   return result;
 }
 
@@ -91,25 +108,26 @@ export function parsePersonalization(params: URLSearchParams, stored: string | n
   const name = parseName(params.get('name')) ?? fromStored.name ?? DEFAULT_PROFILE.name;
   const ageYears = parseAge(params.get('age')) ?? fromStored.ageYears ?? DEFAULT_PROFILE.ageYears;
   const homeMeters = parseHome(params.get('home')) ?? fromStored.homeMeters ?? DEFAULT_PROFILE.homeMeters;
+  const colorId = parseColor(params.get('color')) ?? fromStored.colorId ?? DEFAULT_PROFILE.colorId;
 
-  return { name, ageYears, homeMeters };
+  return { name, ageYears, homeMeters, colorId };
 }
 
 export function serialize(p: Personalization): string {
   return JSON.stringify(p);
 }
 
-// The three URL keys this page recognizes for personalization. Anything
-// else on the query string or in the fragment (tracking params, a stray
-// "#about" anchor) is not a personalization source and gets dropped.
-export const PERSONALIZATION_KEYS = ['name', 'age', 'home'] as const;
+// The URL keys this page recognizes for personalization. Anything else on
+// the query string or in the fragment (tracking params, a stray "#about"
+// anchor) is not a personalization source and gets dropped.
+export const PERSONALIZATION_KEYS = ['name', 'age', 'home', 'color'] as const;
 
 export function hasPersonalizationKeys(params: URLSearchParams): boolean {
   return PERSONALIZATION_KEYS.some((key) => params.has(key));
 }
 
 // Combines the query string and the fragment into one set of params, kept
-// to the three recognized keys. A link can carry both at once (e.g. a
+// to the recognized keys. A link can carry both at once (e.g. a
 // query string added by a share target, plus a hand-written fragment) — the
 // fragment wins per field, since it's the form that never reaches a server
 // log.
