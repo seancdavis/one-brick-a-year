@@ -228,9 +228,21 @@ document.addEventListener('visibilitychange', () => {
 // the browser didn't count as a gesture) leaves hasArmedAudio false, so the
 // next pointerdown or keydown tries again.
 let hasArmedAudio = false;
+// Holds the in-flight enable() call, stored synchronously the moment it's
+// created, so a second armAudioOnce() within the same event (the scroll
+// listener and the raw pointerdown/keydown listener can both fire for one
+// gesture) reuses it instead of calling audio.enable() again.
+let armingAudio: Promise<boolean> | null = null;
 function armAudioOnce(): void {
   if (hasArmedAudio || !soundEnabled) return;
-  void audio.enable().then((ok) => {
+  if (armingAudio === null) {
+    const attempt = audio.enable();
+    armingAudio = attempt;
+    void attempt.finally(() => {
+      if (armingAudio === attempt) armingAudio = null;
+    });
+  }
+  void armingAudio.then((ok) => {
     if (ok) hasArmedAudio = true;
   });
 }

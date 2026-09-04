@@ -1,6 +1,5 @@
-// Canvas drawing for the stack, ground, and landmark lines. Ports the
-// prototype's `render()` function (docs/prototype/brick-stack.html). Reads
-// state and draws; never mutates it.
+// Canvas drawing for the stack, ground, and landmark lines. Reads state and
+// draws; never mutates it.
 
 import { BRICK_M } from '../lib/constants';
 import { fmtYears } from '../lib/format';

@@ -92,6 +92,19 @@ export function createAudio(): Audio {
   let humGain: GainNode | null = null;
   let enabled = false;
 
+  // Bumped by every enable() and disable() call and captured at call time;
+  // an in-flight enable() only applies the outcome of its own
+  // context.resume() if its generation is still the current one by the time
+  // that promise settles, so a disable() (or a newer enable()) that ran in
+  // the meantime always wins over a stale, superseded attempt.
+  let generation = 0;
+
+  // Concurrent enable() calls (the scroll-input path and the raw
+  // pointerdown/keydown listener can both fire for the same gesture) share
+  // this one in-flight promise, so only one resume() happens and the
+  // confirmation chime plays once. Cleared as soon as it settles.
+  let pendingEnable: Promise<boolean> | null = null;
+
   function ensureHum(context: AudioContext, destination: AudioNode): { osc: OscillatorNode; gain: GainNode } {
     if (humOsc && humGain) return { osc: humOsc, gain: humGain };
 
@@ -117,53 +130,69 @@ export function createAudio(): Audio {
   }
 
   return {
-    async enable() {
-      if (!Ctor) return false;
+    enable(): Promise<boolean> {
+      if (!Ctor) return Promise.resolve(false);
+      if (pendingEnable) return pendingEnable;
+
+      const myGeneration = ++generation;
       const wasEnabled = enabled;
 
-      if (!ctx) {
-        ctx = new Ctor();
-        master = ctx.createGain();
-        master.gain.value = MASTER_GAIN;
-        master.connect(ctx.destination);
-        noiseBuffer = buildNoiseBuffer(ctx);
-      } else if (master) {
-        // A prior disable() may have ramped this to 0 (and, once its own
-        // ramp finished, suspended the context) — cancel that and ramp back
-        // up to the audible level rather than leaving it silenced.
-        const now = ctx.currentTime;
-        master.gain.cancelScheduledValues(now);
-        master.gain.setValueAtTime(master.gain.value, now);
-        master.gain.linearRampToValueAtTime(MASTER_GAIN, now + ENABLE_RAMP_S);
-      }
+      const attempt = (async () => {
+        if (!ctx) {
+          ctx = new Ctor();
+          master = ctx.createGain();
+          master.gain.value = MASTER_GAIN;
+          master.connect(ctx.destination);
+          noiseBuffer = buildNoiseBuffer(ctx);
+        } else if (master) {
+          // A prior disable() may have ramped this to 0 (and, once its own
+          // ramp finished, suspended the context) — cancel that and ramp back
+          // up to the audible level rather than leaving it silenced.
+          const now = ctx.currentTime;
+          master.gain.cancelScheduledValues(now);
+          master.gain.setValueAtTime(master.gain.value, now);
+          master.gain.linearRampToValueAtTime(MASTER_GAIN, now + ENABLE_RAMP_S);
+        }
 
-      if (!ctx || !master) return false;
-      const context = ctx;
-      const destination = master;
+        if (!ctx || !master) return false;
+        const context = ctx;
+        const destination = master;
 
-      try {
-        await context.resume();
-      } catch {
-        // Browsers can reject resume() (e.g. no user gesture yet, or the
-        // gesture didn't count) — that's a failure to enable, not a crash.
-        enabled = false;
-        return false;
-      }
+        let running: boolean;
+        try {
+          await context.resume();
+          running = context.state === 'running';
+        } catch {
+          // Browsers can reject resume() (e.g. no user gesture yet, or the
+          // gesture didn't count) — that's a failure to enable, not a crash.
+          running = false;
+        }
 
-      const running = context.state === 'running';
-      enabled = running;
+        // Only apply this attempt's outcome if nothing — another enable(),
+        // or a disable() — has superseded it while resume() was in flight.
+        if (myGeneration === generation) {
+          enabled = running;
+          // Confirms sound is on the instant it's actually audible, but only
+          // on a genuine off->on transition, so the one-time "apply the
+          // stored preference" call on the first scroll (src/main.ts)
+          // doesn't chime a second time when the user already turned sound
+          // on via the HUD toggle.
+          if (running && !wasEnabled) playChime(context, destination);
+          return running;
+        }
+        return enabled;
+      })();
 
-      // Confirms sound is on the instant it's actually audible, but only on
-      // a genuine off->on transition, so the one-time "apply the stored
-      // preference" call on the first scroll (src/main.ts) doesn't chime a
-      // second time when the user already turned sound on via the HUD
-      // toggle.
-      if (running && !wasEnabled) playChime(context, destination);
+      pendingEnable = attempt;
+      void attempt.finally(() => {
+        if (pendingEnable === attempt) pendingEnable = null;
+      });
 
-      return running;
+      return attempt;
     },
 
     disable() {
+      generation++;
       enabled = false;
       if (!ctx || !master) return;
 
