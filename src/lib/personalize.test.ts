@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROFILE, parsePersonalization, serialize, type Personalization } from './personalize';
+import {
+  DEFAULT_PROFILE,
+  hasPersonalizationKeys,
+  mergeParams,
+  parsePersonalization,
+  serialize,
+  type Personalization,
+} from './personalize';
 
 describe('parsePersonalization', () => {
   it('applies defaults when nothing is provided', () => {
@@ -56,5 +63,51 @@ describe('parsePersonalization', () => {
   it('round-trips through serialize', () => {
     const profile: Personalization = { name: 'Ellie', ageYears: 9, homeMeters: 30 };
     expect(parsePersonalization(new URLSearchParams(), serialize(profile))).toEqual(profile);
+  });
+});
+
+describe('mergeParams', () => {
+  it('reads query values when the fragment has no personalization keys', () => {
+    // ?name=Ada&age=8#about
+    const query = new URLSearchParams('name=Ada&age=8');
+    const fragment = new URLSearchParams('about');
+    const merged = mergeParams(query, fragment);
+    expect(merged.get('name')).toBe('Ada');
+    expect(merged.get('age')).toBe('8');
+    expect(merged.has('home')).toBe(false);
+  });
+
+  it('combines a query key and a fragment key', () => {
+    // ?age=8#name=Ada
+    const query = new URLSearchParams('age=8');
+    const fragment = new URLSearchParams('name=Ada');
+    const merged = mergeParams(query, fragment);
+    expect(merged.get('name')).toBe('Ada');
+    expect(merged.get('age')).toBe('8');
+  });
+
+  it('lets the fragment win over the query for the same key', () => {
+    // ?name=Ada#name=Bea
+    const query = new URLSearchParams('name=Ada');
+    const fragment = new URLSearchParams('name=Bea');
+    const merged = mergeParams(query, fragment);
+    expect(merged.get('name')).toBe('Bea');
+  });
+
+  it('drops keys that are not recognized personalization keys', () => {
+    const query = new URLSearchParams('utm_source=newsletter&name=Ada');
+    const fragment = new URLSearchParams('foo=bar');
+    const merged = mergeParams(query, fragment);
+    expect(Array.from(merged.keys())).toEqual(['name']);
+  });
+});
+
+describe('hasPersonalizationKeys', () => {
+  it('is false for a plain anchor fragment', () => {
+    expect(hasPersonalizationKeys(new URLSearchParams('about'))).toBe(false);
+  });
+
+  it('is true when a recognized key is present', () => {
+    expect(hasPersonalizationKeys(new URLSearchParams('home=4'))).toBe(true);
   });
 });

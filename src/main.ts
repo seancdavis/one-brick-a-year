@@ -9,7 +9,14 @@ import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from
 import { beatsCrossed } from './lib/beats';
 import { buildLandmarks } from './lib/landmarks';
 import { placeLandmarks } from './lib/layout';
-import { parsePersonalization, serialize, STORAGE_KEY, type Personalization } from './lib/personalize';
+import {
+  hasPersonalizationKeys,
+  mergeParams,
+  parsePersonalization,
+  serialize,
+  STORAGE_KEY,
+  type Personalization,
+} from './lib/personalize';
 import { heightM, initialSim, rateFor, step } from './lib/sim';
 import { drawStage, stageBox, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
@@ -69,15 +76,18 @@ function saveSound(enabled: boolean): void {
   }
 }
 
-// A fragment (#name=Ada&age=8&home=8) never leaves the browser, so it never
-// reaches a server log the way a query string does — prefer it when both a
-// link author and the browser happen to have populated one.
-const rawParams = location.hash.length > 1 ? location.hash.slice(1) : location.search;
-const urlParams = new URLSearchParams(rawParams);
+// The fragment (#name=Ada&age=8&home=8) never leaves the browser, so it
+// never reaches a server log the way the query string does. Both can carry
+// values at once (e.g. a share target appends its own query string on top
+// of a hand-written fragment) — mergeParams keeps only the three recognized
+// keys and lets the fragment win per field over the query.
+const query = new URLSearchParams(location.search);
+const fragment = new URLSearchParams(location.hash.slice(1));
+const params = mergeParams(query, fragment);
 const storedRaw = readStoredProfile();
-const hasUrlParams = urlParams.has('name') || urlParams.has('age') || urlParams.has('home');
+const hasUrlParams = hasPersonalizationKeys(params);
 
-let profile = parsePersonalization(urlParams, storedRaw);
+let profile = parsePersonalization(params, storedRaw);
 let landmarks = buildLandmarks(profile);
 
 // URL params are applied and stored like any other source, but the page
@@ -87,8 +97,8 @@ if (hasUrlParams) {
   saveProfile(profile);
   try {
     // location.pathname carries neither a hash nor a query string, so this
-    // strips both forms at once, whichever one carried the params — the
-    // child's name never lingers in the URL or history.
+    // strips both forms at once — the child's name never lingers in the URL
+    // or history.
     history.replaceState(null, '', location.pathname);
   } catch {
     // Some environments (e.g. a sandboxed iframe) block history mutation:

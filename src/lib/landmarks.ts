@@ -31,29 +31,30 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       ...fromYears(profile.ageYears),
     },
     {
-      // A standard 30 cm school ruler.
+      // Everyday reference object, approximate: a standard 30 cm school ruler.
       id: 'ruler',
       label: 'a school ruler',
       icon: 'ruler',
       ...fromMeters(0.3),
     },
     {
-      // Standard interior door height about 2.03 m (80 in).
+      // Everyday reference object, approximate: standard interior door height about 2.03 m (80 in).
       id: 'door',
       label: 'a door',
       icon: 'door',
       ...fromMeters(2.0),
     },
     {
-      // Rules of thumb, one story about 4 m, two stories about 8 m, a
-      // ten-story apartment building about 30 m.
+      // Everyday reference object, approximate: rules of thumb, one story
+      // about 4 m, two stories about 8 m, a ten-story apartment building
+      // about 30 m.
       id: 'home',
       label: 'your home',
       icon: 'home',
       ...fromMeters(profile.homeMeters),
     },
     {
-      // Sumerian cuneiform, about 3200 BCE.
+      // Earliest cuneiform tablets, Uruk, about 3200 BCE (British Museum).
       id: 'writing',
       label: 'people start writing things down',
       icon: 'scroll',
@@ -96,7 +97,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       ...fromMeters(8849),
     },
     {
-      // Typical cruise altitude 33,000 to 38,000 ft, about 11 km.
+      // Typical commercial cruise altitude 33,000 to 42,000 ft (FAA Pilot's
+      // Handbook of Aeronautical Knowledge).
       id: 'planes',
       label: 'where airplanes fly',
       icon: 'plane',
@@ -125,7 +127,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       ...fromYears(66e6),
     },
     {
-      // Earliest dinosaurs in the Carnian, about 230 to 235 Ma.
+      // Earliest dinosaurs in the Carnian, about 230 to 235 Ma
+      // (Ischigualasto Formation; Nesbitt et al., Biology Letters 2013).
       id: 'dinosaurs',
       label: 'the first dinosaurs',
       icon: 'dinosaur',

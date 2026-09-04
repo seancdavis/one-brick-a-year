@@ -12,7 +12,7 @@ export interface Beat {
 export const BEATS: readonly Beat[] = [
   {
     id: 'writing',
-    // Sumerian cuneiform, about 3200 BCE.
+    // Earliest cuneiform tablets, Uruk, about 3200 BCE (British Museum).
     atYears: 5000,
     title: 'People start writing.',
     line: 'Every history book ever written is about the bricks under this one.',
@@ -35,7 +35,8 @@ export const BEATS: readonly Beat[] = [
   },
   {
     id: 'dinosaurs',
-    // Earliest dinosaurs in the Carnian, about 230 to 235 Ma.
+    // Earliest dinosaurs in the Carnian, about 230 to 235 Ma
+    // (Ischigualasto Formation; Nesbitt et al., Biology Letters 2013).
     atYears: 235e6,
     title: 'The first dinosaurs.',
     line: 'From here down to the asteroid is about 170 million bricks. A stack 1,600 kilometers tall.',

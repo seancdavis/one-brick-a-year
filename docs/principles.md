@@ -22,8 +22,9 @@ feel by changing one number in one place.
 
 ## Facts have a source
 
-Every landmark and beat carries a one-line source comment: where the number
-came from. Nobody invents a fact. If a number is uncertain, it's rounded
+Scientific and historical facts carry a named source in their comment;
+everyday reference objects (ruler, door, home) are marked approximate and
+carry none. Nobody invents a fact. If a number is uncertain, it's rounded
 and hedged ("about", "roughly"). Icons are flat, single-color labels next
 to a landmark's line — never drawn to scale, and never a stand-in for the
 (real, to-scale) line itself.

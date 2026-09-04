@@ -98,3 +98,26 @@ export function parsePersonalization(params: URLSearchParams, stored: string | n
 export function serialize(p: Personalization): string {
   return JSON.stringify(p);
 }
+
+// The three URL keys this page recognizes for personalization. Anything
+// else on the query string or in the fragment (tracking params, a stray
+// "#about" anchor) is not a personalization source and gets dropped.
+export const PERSONALIZATION_KEYS = ['name', 'age', 'home'] as const;
+
+export function hasPersonalizationKeys(params: URLSearchParams): boolean {
+  return PERSONALIZATION_KEYS.some((key) => params.has(key));
+}
+
+// Combines the query string and the fragment into one set of params, kept
+// to the three recognized keys. A link can carry both at once (e.g. a
+// query string added by a share target, plus a hand-written fragment) — the
+// fragment wins per field, since it's the form that never reaches a server
+// log.
+export function mergeParams(query: URLSearchParams, fragment: URLSearchParams): URLSearchParams {
+  const merged = new URLSearchParams();
+  for (const key of PERSONALIZATION_KEYS) {
+    const value = fragment.has(key) ? fragment.get(key) : query.get(key);
+    if (value !== null) merged.set(key, value);
+  }
+  return merged;
+}
