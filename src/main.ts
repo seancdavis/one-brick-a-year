@@ -1,6 +1,7 @@
 import './style.css';
 import { createAudio } from './audio';
 import { createBeatCards } from './beats';
+import { createEndScreen } from './end-screen';
 import { createHoldInput } from './input';
 import { createHud } from './hud';
 import { createStartScreen } from './start-screen';
@@ -26,6 +27,12 @@ function getContext2D(el: HTMLCanvasElement): CanvasRenderingContext2D {
 }
 
 const ctx = getContext2D(canvas);
+
+// Set whenever something the canvas or HUD draws might have changed, so an
+// otherwise-idle frame (not held, no zoom tween, nothing crossed) can skip
+// the redraw. The rAF loop itself keeps running either way — cheap to keep
+// alive, and simpler than pausing/resuming around every event source.
+let needsRender = true;
 
 function readStoredProfile(): string | null {
   try {
@@ -71,7 +78,7 @@ let landmarks = buildLandmarks(profile);
 
 // URL params are applied and stored like any other source, but the page
 // never writes the child's name (or anything else) back into the URL —
-// "Copy link" (end screen, slice 8) copies the bare page URL only.
+// "Copy link" (src/end-screen.ts) copies the bare page URL only.
 if (hasUrlParams) {
   saveProfile(profile);
 }
@@ -84,14 +91,17 @@ const startScreen = createStartScreen(app, (nextProfile) => {
   // mid-build "Change".
   landmarks = buildLandmarks(profile);
   startScreen.close();
+  needsRender = true;
 });
 
 const audio = createAudio();
 let soundEnabled = readStoredSound();
 
 // The click that flips this is itself the user gesture enable()/disable()
-// need — sound is never started any other way. The stored preference only
-// seeds the toggle's starting look; audio.enable() is never called on load.
+// need — sound is never started any other way from the toggle. The stored
+// preference only seeds the toggle's starting look; the other path into
+// audio.enable() is the first-hold arming fix below, which also runs from a
+// user gesture (a pointerdown or keydown).
 const hud = createHud(app, {
   onChange: () => startScreen.open(profile),
   onSoundToggle: () => {
@@ -104,10 +114,12 @@ const hud = createHud(app, {
     }
     hud.setSound(soundEnabled);
   },
+  onStartOver: () => resetForReplay(),
 });
 hud.setSound(soundEnabled);
 
 const beatCards = createBeatCards(app);
+const endScreen = createEndScreen(app, () => resetForReplay());
 
 let sim = initialSim();
 let held = false;
@@ -115,12 +127,36 @@ let hasHeldOnce = false;
 let prevYears = sim.years;
 let tickAccumulator = 0;
 let wasDone = false;
+let endScreenShown = false;
+
+// Shared by "Build it again" (end screen) and "Start over" (HUD, usable
+// mid-build too): back to a fresh, unstarted sim, with the prompt and card
+// queue reset to match.
+function resetForReplay(): void {
+  endScreen.hide();
+  endScreenShown = false;
+  beatCards.clear();
+  sim = initialSim();
+  prevYears = sim.years;
+  tickAccumulator = 0;
+  wasDone = false;
+  hasHeldOnce = false;
+  hud.showPrompt();
+  needsRender = true;
+}
 
 createHoldInput(window, (next) => {
   held = next;
   if (held && !hasHeldOnce) {
     hasHeldOnce = true;
     hud.hidePrompt();
+    // Returning visitor with sound already on: this first hold is the user
+    // gesture audio.enable() needs, so she hears sound without also having
+    // to tap the toggle. The toggle's own click handler still does its own
+    // enable()/disable() and keeps working exactly as before.
+    if (soundEnabled) {
+      audio.enable();
+    }
   }
 });
 
@@ -147,6 +183,7 @@ function resize(): void {
   view = { widthCss, heightCss, dpr, narrow: widthCss < NARROW_BREAKPOINT_PX };
   canvas.width = Math.round(widthCss * dpr);
   canvas.height = Math.round(heightCss * dpr);
+  needsRender = true;
 }
 
 window.addEventListener('resize', resize);
@@ -159,7 +196,11 @@ function frame(timeMs: number): void {
   const dtSeconds = (timeMs - lastTimeMs) / 1000;
   lastTimeMs = timeMs;
 
-  const effectiveHeld = held && !startScreen.isOpen();
+  // Ignore hold input while a modal screen (start or end) is up — the sim
+  // itself already refuses to advance once done, but this also keeps the
+  // idle-frame check below from thinking something is happening.
+  const effectiveHeld = held && !startScreen.isOpen() && !endScreenShown;
+  const before = sim;
   sim = step(sim, dtSeconds, effectiveHeld, reducedMotionQuery.matches);
 
   // Ticks and hum track the current pace; both calls are safe no-ops
@@ -184,13 +225,26 @@ function frame(timeMs: number): void {
   prevYears = sim.years;
 
   if (sim.done && !wasDone) {
+    beatCards.clear();
+    endScreenShown = true;
+    endScreen.show(profile);
     audio.finish();
   }
   wasDone = sim.done;
 
-  const placed = placeLandmarks(landmarks, heightM(sim), sim.scaleM, stageBox(view));
-  drawStage(ctx, view, sim, placed, ICONS);
-  hud.update(sim);
+  // Idle frame: nothing held, no zoom tween running (in either the previous
+  // or the new state), and years/done didn't change this step. Redrawing
+  // would produce pixel-identical output, so skip it — the rAF loop keeps
+  // going regardless, ready for the next input.
+  const simAdvancing = sim.years !== before.years || sim.done !== before.done;
+  const zoomActive = sim.zoom !== null || before.zoom !== null;
+
+  if (needsRender || effectiveHeld || simAdvancing || zoomActive) {
+    const placed = placeLandmarks(landmarks, heightM(sim), sim.scaleM, stageBox(view));
+    drawStage(ctx, view, sim, placed, ICONS);
+    hud.update(sim);
+    needsRender = false;
+  }
 
   requestAnimationFrame(frame);
 }

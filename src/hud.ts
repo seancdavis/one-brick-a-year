@@ -1,6 +1,6 @@
 // The HUD: a big years-ago counter, the brick/height readout, the
 // press-and-hold prompt, and controls ("Change", which reopens the start
-// screen, and the sound toggle; later slices add start-over here).
+// screen; the sound toggle; and "Start over", which resets the build).
 // Ports the prototype's HUD markup and copy (docs/prototype/brick-stack.html).
 // DOM glue only.
 
@@ -9,8 +9,13 @@ import { heightM, initialSim, type SimState } from './lib/sim';
 
 export function createHud(
   root: HTMLElement,
-  opts: { onChange: () => void; onSoundToggle: () => void },
-): { update(sim: SimState): void; hidePrompt(): void; setSound(enabled: boolean): void } {
+  opts: { onChange: () => void; onSoundToggle: () => void; onStartOver: () => void },
+): {
+  update(sim: SimState): void;
+  hidePrompt(): void;
+  showPrompt(): void;
+  setSound(enabled: boolean): void;
+} {
   const hud = document.createElement('div');
   hud.className = 'hud';
   hud.setAttribute('aria-live', 'off');
@@ -40,7 +45,13 @@ export function createHud(
   soundButton.textContent = 'Sound off';
   soundButton.addEventListener('click', opts.onSoundToggle);
 
-  controls.append(changeButton, soundButton);
+  const startOverButton = document.createElement('button');
+  startOverButton.type = 'button';
+  startOverButton.className = 'hud-button';
+  startOverButton.textContent = 'Start over';
+  startOverButton.addEventListener('click', opts.onStartOver);
+
+  controls.append(changeButton, soundButton, startOverButton);
 
   hud.append(years, row, controls);
 
@@ -66,6 +77,9 @@ export function createHud(
     update: paint,
     hidePrompt() {
       prompt.classList.add('off');
+    },
+    showPrompt() {
+      prompt.classList.remove('off');
     },
     setSound(enabled: boolean) {
       soundButton.setAttribute('aria-pressed', String(enabled));

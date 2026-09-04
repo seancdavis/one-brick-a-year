@@ -180,12 +180,6 @@ canvas {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .beat-card {
-    transition: none;
-  }
-}
-
 /* Start screen (src/start-screen.ts): full-screen overlay shown on first
    visit (no URL params, nothing stored) and reopened from the HUD's
    "Change" button. Shown/hidden via the `hidden` attribute — an instant
@@ -276,7 +270,91 @@ canvas {
 .start-field input:focus-visible,
 .start-field select:focus-visible,
 .start-button:focus-visible,
-.hud-button:focus-visible {
+.hud-button:focus-visible,
+.end-button:focus-visible {
   outline: 2px solid var(--red);
   outline-offset: 2px;
+}
+
+/* End screen (src/end-screen.ts): shown once the stack reaches TOTAL_YEARS.
+   Reference is the prototype's `.done` overlay — the backdrop lets pointer
+   events pass through to the HUD (so "Start over" stays reachable) and only
+   the panel itself is interactive. Shown/hidden via the `hidden` attribute —
+   an instant toggle, so there's no motion here to guard behind
+   prefers-reduced-motion, matching the start screen above. */
+.end-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.end-screen[hidden] {
+  display: none;
+}
+
+.end-panel {
+  pointer-events: auto;
+  max-width: 40ch;
+  background: rgba(243, 239, 230, 0.94);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 28px 30px 30px;
+  text-align: center;
+}
+
+.end-big {
+  font-family: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  font-weight: 300;
+  font-size: clamp(28px, 4vw, 38px);
+  line-height: 1.1;
+  letter-spacing: -0.005em;
+  margin: 0 0 14px;
+}
+
+.end-line {
+  font-size: 15px;
+  line-height: 1.65;
+  margin: 0 0 14px;
+}
+
+.end-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.end-button {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 11px 16px;
+  cursor: pointer;
+}
+
+.end-button:hover {
+  background: var(--ink);
+  color: var(--sky);
+}
+
+/* Reduced motion: every CSS transition in the page, made instant. (The sim's
+   zoom tween is already skipped in JS — src/lib/sim.ts — and the start and
+   end screens toggle via `hidden` with no transition, so neither needs an
+   entry here.) One block for the whole page, per CLAUDE.md's accessibility
+   baseline. */
+@media (prefers-reduced-motion: reduce) {
+  .prompt,
+  .beat-card {
+    transition: none;
+  }
 }
