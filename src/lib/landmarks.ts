@@ -1,12 +1,6 @@
 import { BRICK_M } from './constants';
-import { ICON_IDS, type IconId } from './icon-paths';
+import type { IconId } from './icon-paths';
 import type { Personalization } from './personalize';
-
-// The set of flat, single-color icons drawn beside each landmark's label.
-// icon-paths.ts is the source of truth; re-exported here so existing
-// imports (and tests) keep working.
-export { ICON_IDS };
-export type { IconId };
 
 export interface Landmark {
   id: string;
@@ -44,126 +38,130 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       ...fromMeters(0.3),
     },
     {
-      // A standard interior door is about 2 m tall.
+      // Standard interior door height about 2.03 m (80 in).
       id: 'door',
       label: 'a door',
       icon: 'door',
       ...fromMeters(2.0),
     },
     {
-      // Chosen at the start screen: one-story home 4 m, two-story home 8 m (default), or apartment building 30 m.
+      // Rules of thumb, one story about 4 m, two stories about 8 m, a
+      // ten-story apartment building about 30 m.
       id: 'home',
       label: 'your home',
       icon: 'home',
       ...fromMeters(profile.homeMeters),
     },
     {
-      // Writing systems (e.g. cuneiform) emerge around 3000 BCE, roughly 5,000 years ago.
+      // Sumerian cuneiform, about 3200 BCE.
       id: 'writing',
       label: 'people start writing things down',
       icon: 'scroll',
       ...fromYears(5000),
     },
     {
-      // The Statue of Liberty is 93 m tall, including its pedestal.
+      // 93 m ground to torch (US National Park Service).
       id: 'liberty',
       label: 'the Statue of Liberty',
       icon: 'statue',
       ...fromMeters(93),
     },
     {
-      // The Eiffel Tower is 330 m tall, including antennas.
+      // 330 m including antennas (SETE, 2022).
       id: 'eiffel',
       label: 'the Eiffel Tower',
       icon: 'tower',
       ...fromMeters(330),
     },
     {
-      // The Burj Khalifa, the tallest building on Earth, is 828 m tall.
+      // 828 m (Council on Tall Buildings and Urban Habitat).
       id: 'burj',
       label: 'the tallest building on Earth',
       icon: 'skyscraper',
       ...fromMeters(828),
     },
     {
-      // Homo sapiens emerge roughly 300,000 years ago.
+      // Homo sapiens fossils at Jebel Irhoud, Morocco, about 300,000 years
+      // (Hublin et al., Nature 2017).
       id: 'humans',
       label: 'the first people',
       icon: 'person',
       ...fromYears(300000),
     },
     {
-      // Mount Everest stands 8,849 m above sea level.
+      // 8,848.86 m (China–Nepal joint survey, 2020).
       id: 'everest',
       label: 'Mount Everest',
       icon: 'mountain',
       ...fromMeters(8849),
     },
     {
-      // Commercial airliners cruise around 11,000 m (36,000 ft).
+      // Typical cruise altitude 33,000 to 38,000 ft, about 11 km.
       id: 'planes',
       label: 'where airplanes fly',
       icon: 'plane',
       ...fromMeters(11000),
     },
     {
-      // The Kármán line, the common boundary of space, is 100,000 m (100 km) up.
+      // Kármán line, 100 km (FAI).
       id: 'space',
       label: 'space begins',
       icon: 'rocket',
       ...fromMeters(100000),
     },
     {
-      // The International Space Station orbits at roughly 400,000 m (400 km).
+      // ISS orbit about 400 to 420 km (NASA).
       id: 'iss',
       label: 'the space station',
       icon: 'station',
       ...fromMeters(400000),
     },
     {
-      // The Chicxulub asteroid impact, ending the age of the dinosaurs, was about 66 million years ago.
+      // Chicxulub impact at the K–Pg boundary, 66.0 Ma (Renne et al.,
+      // Science 2013); impactor about 10 km wide, crater about 180 km.
       id: 'asteroid',
       label: 'the asteroid hits the dinosaurs',
       icon: 'asteroid',
       ...fromYears(66e6),
     },
     {
-      // The first dinosaurs appear roughly 235 million years ago.
+      // Earliest dinosaurs in the Carnian, about 230 to 235 Ma.
       id: 'dinosaurs',
       label: 'the first dinosaurs',
       icon: 'dinosaur',
       ...fromYears(235e6),
     },
     {
-      // The first animals appear roughly 600 million years ago.
+      // Ediacaran biota about 575 Ma; sponge biomarkers to about 635 Ma
+      // (Love et al., Nature 2009).
       id: 'animals',
       label: 'the first animals',
       icon: 'trilobite',
       ...fromYears(600e6),
     },
     {
-      // The Earth's diameter is about 12,742,000 m (12,742 km).
+      // Mean diameter 12,742 km (NASA).
       id: 'earth-wide',
       label: 'as wide as the whole Earth',
       icon: 'earth',
       ...fromMeters(12742000),
     },
     {
-      // The Great Oxidation Event begins roughly 2.4 billion years ago.
+      // Great Oxidation Event about 2.4 Ga (Holland 2006).
       id: 'oxygen',
       label: 'the air gets oxygen',
       icon: 'bubbles',
       ...fromYears(2.4e9),
     },
     {
-      // The earliest evidence of life on Earth dates to roughly 3.7 billion years ago.
+      // Isua, Greenland stromatolites about 3.7 Ga (Nutman et al., Nature 2016).
       id: 'life-first',
       label: 'the first life',
       icon: 'cell',
       ...fromYears(3.7e9),
     },
     {
-      // The Earth's circumference is about 40,075,000 m (40,075 km).
+      // Equatorial circumference 40,075 km (WGS84).
       id: 'around',
       label: 'all the way around the Earth',
       icon: 'ring',

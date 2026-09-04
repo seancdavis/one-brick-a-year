@@ -3,8 +3,7 @@
 // authored in a 24×24 box; ICON_SIZE_PX is the on-screen size drawStage
 // scales them up to (see src/render/stage.ts).
 
-import type { IconId } from '../lib/landmarks';
-import { ICON_PATHS } from '../lib/icon-paths';
+import { ICON_PATHS, type IconId } from '../lib/icon-paths';
 
 export const ICONS: Record<IconId, Path2D> = Object.fromEntries(
   (Object.entries(ICON_PATHS) as [IconId, string][]).map(([id, path]) => [id, new Path2D(path)]),

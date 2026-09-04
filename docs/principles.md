@@ -51,10 +51,11 @@ refuse to start audio any other way.
 Holding works by pointer or by keyboard (Space or Enter), everywhere
 holding works. Every interactive control has a visible focus state.
 `prefers-reduced-motion: reduce` is honored: the zoom tween and other
-transitions become instant. Text that changes without user action
-(milestone cards, the HUD counter) is announced via `aria-live` rather
-than moving focus; a modal screen that needs deliberate attention moves
-focus to it instead.
+transitions become instant. Milestone cards are the live region
+(`aria-live="polite"`): they announce a beat without moving focus. The HUD
+counter is deliberately silent (`aria-live="off"`) — it changes every
+frame, and announcing it would be constant noise, not a milestone. A modal
+screen that needs deliberate attention moves focus to it instead.
 
 ## Run and test
 

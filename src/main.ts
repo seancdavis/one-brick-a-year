@@ -110,11 +110,6 @@ const startScreen = createStartScreen(app, (nextProfile) => {
 const audio = createAudio();
 let soundEnabled = readStoredSound();
 
-// The click that flips this is itself the user gesture enable()/disable()
-// need — sound is never started any other way from the toggle. The stored
-// preference only seeds the toggle's starting look; the other path into
-// audio.enable() is the first-hold arming fix below, which also runs from a
-// user gesture (a pointerdown or keydown).
 const hud = createHud(app, {
   onChange: () => startScreen.open(profile),
   onSoundToggle: () => {
@@ -160,10 +155,7 @@ createHoldInput(window, (next) => {
   if (held && !hasHeldOnce && !startScreen.isOpen() && !sim.done) {
     hasHeldOnce = true;
     hud.hidePrompt();
-    // Returning visitor with sound already on: this first hold is the user
-    // gesture audio.enable() needs, so she hears sound without also having
-    // to tap the toggle. The toggle's own click handler still does its own
-    // enable()/disable() and keeps working exactly as before.
+    // Apply a stored on-preference at the first user gesture.
     if (soundEnabled) {
       audio.enable();
     }

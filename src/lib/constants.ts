@@ -1,5 +1,5 @@
-export const BRICK_M = 0.0096; // meters per stacked 2×4 brick
-export const TOTAL_YEARS = 4.6e9; // the book's number; the page says 4.6 billion
+export const BRICK_M = 0.0096; // LEGO 2×4 brick height without studs is 9.6 mm (LEGO standard brick dimensions)
+export const TOTAL_YEARS = 4.6e9; // Earth's age; radiometric estimate 4.54 Gyr (Dalrymple 2001), rounded to 4.6 as in the source book
 export const RATE0 = 8; // years per second at the first instant of holding
 export const RATE_K = 0.25; // rate = RATE0 * e^(RATE_K * heldSeconds); reaches TOTAL at ~75 s
 export const ZOOM_TRIGGER = 0.82; // zoom out when the stack passes this fraction of the screen

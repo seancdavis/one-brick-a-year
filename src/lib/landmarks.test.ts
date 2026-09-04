@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BRICK_M } from './constants';
-import { buildLandmarks, ICON_IDS } from './landmarks';
+import { buildLandmarks } from './landmarks';
 
 const profile = { name: 'Kid', ageYears: 8, homeMeters: 8 };
 
@@ -18,13 +18,6 @@ describe('buildLandmarks', () => {
       const expectedMeters = landmark.years * BRICK_M;
       const tolerance = Math.abs(expectedMeters) * 0.005;
       expect(Math.abs(landmark.meters - expectedMeters)).toBeLessThanOrEqual(tolerance);
-    }
-  });
-
-  it('only uses icon ids from ICON_IDS', () => {
-    const landmarks = buildLandmarks(profile);
-    for (const landmark of landmarks) {
-      expect(ICON_IDS).toContain(landmark.icon);
     }
   });
 

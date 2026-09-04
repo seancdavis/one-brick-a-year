@@ -4,8 +4,8 @@
 
 import { BRICK_M } from '../lib/constants';
 import { fmtMeters, fmtYears } from '../lib/format';
+import type { IconId } from '../lib/icon-paths';
 import type { PlacedLandmark, StageBox } from '../lib/layout';
-import type { IconId } from '../lib/landmarks';
 import { heightM, type SimState } from '../lib/sim';
 import { ICON_SIZE_PX } from './icons';
 
