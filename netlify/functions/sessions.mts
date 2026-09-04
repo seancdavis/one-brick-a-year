@@ -1,10 +1,11 @@
 // The session analytics endpoint: creates a row on the first scroll and
-// closes it on finish, restart, or page hide. Public and write-only, so the
-// two things that keep it safe are payload validation (session-payload.ts)
-// and the size cap below — no auth, per the round 2 spec's scope.
+// closes it on finish, restart, or page hide. Public and unauthenticated by
+// design; safe by staying tiny and write-only, and by layering payload
+// validation (session-payload.ts), a body size cap, a per-IP rate limit,
+// a content-type check, and a same-origin check.
 
 import type { Config, Context } from '@netlify/functions';
-import { db } from './_shared/db';
+import { getDb } from './_shared/db';
 import { parseSessionEnd, parseSessionStart } from './_shared/session-payload';
 
 const MAX_BODY_BYTES = 4096; // 4 KB — a session payload is a handful of small fields; anything bigger is rejected outright.
@@ -57,6 +58,7 @@ export default async (req: Request, context: Context): Promise<Response> => {
     return noBody(400);
   }
 
+  const db = getDb();
   const id = context.params.id;
 
   if (id !== undefined) {

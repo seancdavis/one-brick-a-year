@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TOTAL_YEARS } from './constants';
 import { initialSim, step } from './sim';
 import {
+  IDLE_VELOCITY_PX_S,
   INITIAL_SCROLL,
   SCROLL_HALF_LIFE_S,
   decayVelocity,
@@ -69,6 +70,24 @@ describe('decayVelocity', () => {
     const pushed = pushScroll(INITIAL_SCROLL, 500, 0);
     const decayed = decayVelocity(pushed, SCROLL_HALF_LIFE_S);
     expect(decayed.velocity).toBeCloseTo(pushed.velocity / 2, 6);
+  });
+
+  it('snaps a velocity below IDLE_VELOCITY_PX_S to exactly 0', () => {
+    const state: ScrollState = { velocity: IDLE_VELOCITY_PX_S - 0.001, lastAt: 0 };
+    expect(decayVelocity(state, 0).velocity).toBe(0);
+  });
+
+  it('leaves a velocity at or above IDLE_VELOCITY_PX_S alone (no elapsed time)', () => {
+    const state: ScrollState = { velocity: IDLE_VELOCITY_PX_S + 5, lastAt: 0 };
+    expect(decayVelocity(state, 0).velocity).toBeGreaterThanOrEqual(IDLE_VELOCITY_PX_S);
+  });
+
+  it('eventually reaches exactly 0, not just near it, given enough time', () => {
+    let state: ScrollState = pushScroll(INITIAL_SCROLL, 500, 0);
+    for (let t = 1; t <= 20; t++) {
+      state = decayVelocity(state, t);
+    }
+    expect(state.velocity).toBe(0);
   });
 });
 

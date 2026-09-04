@@ -1,10 +1,7 @@
 // Which landmarks are in view, where their dashed lines land, and where
-// their labels stack when neighbors crowd together. Ports the placement math
-// inside the prototype's `render()` loop (docs/prototype/brick-stack.html),
-// reworked to use real label stacking instead of a pairwise collision
-// offset (slice 1) and a two-sided layout — things on the left, time events
-// on the right, each side stacking independently — per
-// docs/autopilot/2026-09-04-one-brick-a-year-round-2.md, slice 3.
+// their labels stack when neighbors crowd together. Two-sided: things stack
+// on the left, time events on the right, each side independently, so a
+// thing and a time event at the same height never push each other.
 
 import type { Landmark } from './landmarks';
 

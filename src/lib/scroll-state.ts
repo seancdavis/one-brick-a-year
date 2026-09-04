@@ -17,6 +17,12 @@ export const INITIAL_SCROLL: ScrollState = { velocity: 0, lastAt: 0 };
 // registers as a brief burst of speed instead of vanishing instantly.
 export const SCROLL_HALF_LIFE_S = 0.5;
 
+// Below this tracked speed, decay snaps velocity to exactly 0 instead of
+// approaching it asymptotically forever — otherwise a frame is never
+// truly idle (see decayVelocity), and callers that key a redraw off
+// `rate > 0` would redraw every frame indefinitely after the last scroll.
+export const IDLE_VELOCITY_PX_S = 2;
+
 // Years per second, per px per second of tracked velocity, at 0 years
 // (progressGain(0) === 1 below, so at years = 0 the rate is exactly
 // SCROLL_GAIN * velocity). Tuned together with progressGain against
@@ -30,18 +36,15 @@ export const SCROLL_GAIN = 0.0016;
 const PROGRESS_GAIN_K = 0.09;
 
 // Multiplies SCROLL_GAIN * velocity to produce the actual years-per-second
-// rate. Grows with years so the same physical scroll speed moves faster and
-// faster as the stack gets taller: the early stack shows individual bricks,
-// the late stack floods.
-//
-// A pure log10(1 + years) shape (the first thing tried here) turns out far
-// too slow: years spans about 9.7 orders of magnitude (0 to 4.6e9), and
-// covering that range in around a minute and a half needs the rate to grow
-// close to proportionally with years, not with its logarithm. So this grows
-// linearly in years instead — still smooth and strictly increasing, and
-// combined with a sustained scroll it makes years-per-second an
-// exponential ramp in time, which is what actually lands both ends of the
-// pacing target (see SCROLL_GAIN's comment and scroll-state.test.ts).
+// rate. Grows linearly with years — smooth and strictly increasing — so the
+// same physical scroll speed moves faster and faster as the stack gets
+// taller: the early stack shows individual bricks, the late stack floods.
+// Years spans about 9.7 orders of magnitude (0 to 4.6e9), and covering that
+// range in around a minute and a half needs the rate to grow close to
+// proportionally with years; combined with a sustained scroll this makes
+// years-per-second an exponential ramp in time, which is what lands both
+// ends of the pacing target (see SCROLL_GAIN's comment and
+// scroll-state.test.ts).
 export function progressGain(years: number): number {
   return 1 + PROGRESS_GAIN_K * years;
 }
@@ -56,7 +59,8 @@ function decayFactor(elapsedSeconds: number): number {
 // can land less often than frames, or stop altogether).
 export function decayVelocity(state: ScrollState, atSeconds: number): ScrollState {
   const elapsed = Math.max(0, atSeconds - state.lastAt);
-  return { velocity: state.velocity * decayFactor(elapsed), lastAt: atSeconds };
+  const decayed = state.velocity * decayFactor(elapsed);
+  return { velocity: decayed < IDLE_VELOCITY_PX_S ? 0 : decayed, lastAt: atSeconds };
 }
 
 // Folds one scroll event into the tracked velocity: decays the existing
