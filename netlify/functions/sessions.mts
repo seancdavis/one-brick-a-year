@@ -37,6 +37,16 @@ async function readBody(req: Request): Promise<{ tooLarge: true } | { tooLarge: 
 export default async (req: Request, context: Context): Promise<Response> => {
   if (req.method !== 'POST') return noBody(405);
 
+  const contentType = req.headers.get('content-type');
+  if (contentType === null || !contentType.toLowerCase().startsWith('application/json')) return noBody(415);
+
+  // Sec-Fetch-Site is set by the browser, not the caller, so a same-origin
+  // request always carries it as 'same-origin'; a cross-site request that
+  // sends it at all names itself as 'cross-site' or 'none'. Absent entirely
+  // (older browsers, non-browser clients) it's simply not checked.
+  const secFetchSite = req.headers.get('sec-fetch-site');
+  if (secFetchSite !== null && secFetchSite !== 'same-origin') return noBody(403);
+
   const body = await readBody(req);
   if (body.tooLarge) return noBody(413);
 
@@ -80,4 +90,7 @@ export default async (req: Request, context: Context): Promise<Response> => {
 export const config: Config = {
   path: ['/api/sessions', '/api/sessions/:id/end'],
   method: ['POST'],
+  // Per-IP cap so the public write endpoint can't be flooded.
+  // https://ntl.fyi/rate-limiting-code
+  rateLimit: { windowLimit: 30, windowSize: 60, aggregateBy: ['ip'] },
 };

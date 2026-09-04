@@ -168,9 +168,11 @@ function nowSeconds(): number {
 
 // Ends the current analytics session (a no-op if none is running — see
 // src/analytics.ts's idempotency note), recording how far the stack got and
-// whether the build actually finished.
-function endSession(finished: boolean): void {
-  analytics.end({ yearsReached: sim.years, finished });
+// whether the build actually finished. `preferBeacon` should be set only
+// when the page itself is going away (pagehide, visibilitychange to
+// hidden) — everywhere else a normal fetch is fine.
+function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void {
+  analytics.end({ yearsReached: sim.years, finished }, opts);
 }
 
 // Shared by "Build it again" (end screen) and Restart (HUD): back to a
@@ -184,6 +186,7 @@ function resetForReplay(): void {
   endScreen.hide();
   beatCards.clear();
   sim = initialSim();
+  scroll = { velocity: 0, lastAt: nowSeconds() };
   tickAccumulator = 0;
   hasScrolledOnce = false;
   firstInputKind = null;
@@ -205,9 +208,9 @@ function restart(): void {
 // (pagehide covers Safari/iOS, where visibilitychange alone is less
 // dependable); analytics.end()'s idempotency means whichever fires first
 // wins and the other is a no-op.
-window.addEventListener('pagehide', () => endSession(false));
+window.addEventListener('pagehide', () => endSession(false, { preferBeacon: true }));
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') endSession(false);
+  if (document.visibilityState === 'hidden') endSession(false, { preferBeacon: true });
 });
 
 // Creating (or resuming) the AudioContext must happen from an actual user
