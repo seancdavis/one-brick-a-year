@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { parseSessionEnd, parseSessionStart } from './session-payload';
+import { LEGO_COLORS } from '../../../src/lib/lego-colors';
+import { parseSessionEnd, parseSessionStart, SESSION_COLOR_IDS } from './session-payload';
+
+const VALID_ID = '11111111-1111-1111-1111-111111111111';
 
 describe('parseSessionStart', () => {
   it('parses a fully valid payload', () => {
     expect(
       parseSessionStart({
+        id: VALID_ID,
         ageYears: 8,
         homeMeters: 8,
         colorId: 'bright-red',
@@ -16,6 +20,7 @@ describe('parseSessionStart', () => {
         browserFamily: 'chrome',
       }),
     ).toEqual({
+      id: VALID_ID,
       ageYears: 8,
       homeMeters: 8,
       colorId: 'bright-red',
@@ -28,8 +33,9 @@ describe('parseSessionStart', () => {
     });
   });
 
-  it('fills every field with null when the body is empty', () => {
-    expect(parseSessionStart({})).toEqual({
+  it('fills every other field with null when only id is given', () => {
+    expect(parseSessionStart({ id: VALID_ID })).toEqual({
+      id: VALID_ID,
       ageYears: null,
       homeMeters: null,
       colorId: null,
@@ -46,80 +52,106 @@ describe('parseSessionStart', () => {
     expect(parseSessionStart(body)).toBeNull();
   });
 
+  it('rejects a payload with no id at all', () => {
+    expect(parseSessionStart({ ageYears: 8 })).toBeNull();
+  });
+
+  it.each(['not-a-uuid', '', 123, null, '11111111-1111-1111-1111-11111111111'])(
+    'rejects a malformed id (%j)',
+    (id) => {
+      expect(parseSessionStart({ id, ageYears: 8 })).toBeNull();
+    },
+  );
+
+  it('accepts an uppercase-hex id', () => {
+    const id = VALID_ID.toUpperCase();
+    expect(parseSessionStart({ id })?.id).toBe(id);
+  });
+
   it('rejects any body carrying a name key, however innocuous the value', () => {
-    expect(parseSessionStart({ name: 'Ada', ageYears: 8 })).toBeNull();
-    expect(parseSessionStart({ name: null })).toBeNull();
-    expect(parseSessionStart({ name: undefined })).toBeNull();
+    expect(parseSessionStart({ id: VALID_ID, name: 'Ada', ageYears: 8 })).toBeNull();
+    expect(parseSessionStart({ id: VALID_ID, name: null })).toBeNull();
+    expect(parseSessionStart({ id: VALID_ID, name: undefined })).toBeNull();
   });
 
   it.each([0, 121, 1.5, -1, 'abc', null])('drops an out-of-range or non-integer age (%j)', (age) => {
-    expect(parseSessionStart({ ageYears: age })?.ageYears).toBeNull();
+    expect(parseSessionStart({ id: VALID_ID, ageYears: age })?.ageYears).toBeNull();
   });
 
   it.each([1, 120])('accepts age at the boundary (%j)', (age) => {
-    expect(parseSessionStart({ ageYears: age })?.ageYears).toBe(age);
+    expect(parseSessionStart({ id: VALID_ID, ageYears: age })?.ageYears).toBe(age);
   });
 
   it.each([0, 1001, 'abc', null])('drops an out-of-range or non-numeric home height (%j)', (home) => {
-    expect(parseSessionStart({ homeMeters: home })?.homeMeters).toBeNull();
+    expect(parseSessionStart({ id: VALID_ID, homeMeters: home })?.homeMeters).toBeNull();
   });
 
   it('accepts a fractional home height within range', () => {
-    expect(parseSessionStart({ homeMeters: 8.5 })?.homeMeters).toBe(8.5);
+    expect(parseSessionStart({ id: VALID_ID, homeMeters: 8.5 })?.homeMeters).toBe(8.5);
   });
 
   it.each(['Bright-Red', 'bright red', 'bright_red', '', 'a'.repeat(41), 123])(
     'drops an invalid color id (%j)',
     (colorId) => {
-      expect(parseSessionStart({ colorId })?.colorId).toBeNull();
+      expect(parseSessionStart({ id: VALID_ID, colorId })?.colorId).toBeNull();
     },
   );
 
-  it('accepts a well-formed color id up to 40 chars', () => {
-    expect(parseSessionStart({ colorId: 'bright-yellowish-green' })?.colorId).toBe('bright-yellowish-green');
+  it('drops a well-formed but unlisted color id', () => {
+    expect(parseSessionStart({ id: VALID_ID, colorId: 'ada' })?.colorId).toBeNull();
+  });
+
+  it('accepts every color id in the SESSION_COLOR_IDS allowlist', () => {
+    for (const colorId of SESSION_COLOR_IDS) {
+      expect(parseSessionStart({ id: VALID_ID, colorId })?.colorId).toBe(colorId);
+    }
+  });
+
+  it('matches src/lib/lego-colors.ts LEGO_COLORS exactly', () => {
+    expect([...SESSION_COLOR_IDS].sort()).toEqual(LEGO_COLORS.map((c) => c.id).sort());
   });
 
   it.each(['on', 1, null])('drops a non-boolean soundOn (%j)', (soundOn) => {
-    expect(parseSessionStart({ soundOn })?.soundOn).toBeNull();
+    expect(parseSessionStart({ id: VALID_ID, soundOn })?.soundOn).toBeNull();
   });
 
   it.each(['mouse', 'trackpad', 123, null])('drops an unrecognized inputKind (%j)', (inputKind) => {
-    expect(parseSessionStart({ inputKind })?.inputKind).toBeNull();
+    expect(parseSessionStart({ id: VALID_ID, inputKind })?.inputKind).toBeNull();
   });
 
   it.each(['wheel', 'touch', 'keyboard'] as const)('accepts a recognized inputKind (%j)', (inputKind) => {
-    expect(parseSessionStart({ inputKind })?.inputKind).toBe(inputKind);
+    expect(parseSessionStart({ id: VALID_ID, inputKind })?.inputKind).toBe(inputKind);
   });
 
   it.each([-1, 10001, 800.5, 'abc'])('drops an out-of-range or non-integer viewport dimension (%j)', (v) => {
-    const parsed = parseSessionStart({ viewportW: v, viewportH: v });
+    const parsed = parseSessionStart({ id: VALID_ID, viewportW: v, viewportH: v });
     expect(parsed?.viewportW).toBeNull();
     expect(parsed?.viewportH).toBeNull();
   });
 
   it.each([0, 10000])('accepts a viewport dimension at the boundary (%j)', (v) => {
-    const parsed = parseSessionStart({ viewportW: v, viewportH: v });
+    const parsed = parseSessionStart({ id: VALID_ID, viewportW: v, viewportH: v });
     expect(parsed?.viewportW).toBe(v);
     expect(parsed?.viewportH).toBe(v);
   });
 
   it.each(['phone', 'tablet', 'desktop'] as const)('accepts an allowlisted deviceKind (%j)', (deviceKind) => {
-    expect(parseSessionStart({ deviceKind })?.deviceKind).toBe(deviceKind);
+    expect(parseSessionStart({ id: VALID_ID, deviceKind })?.deviceKind).toBe(deviceKind);
   });
 
   it.each(['watch', 'Desktop', '', 123, null])('drops a deviceKind outside the allowlist (%j)', (deviceKind) => {
-    expect(parseSessionStart({ deviceKind })?.deviceKind).toBeNull();
+    expect(parseSessionStart({ id: VALID_ID, deviceKind })?.deviceKind).toBeNull();
   });
 
   it.each(['chrome', 'safari', 'firefox', 'edge', 'other'] as const)(
     'accepts an allowlisted browserFamily (%j)',
     (browserFamily) => {
-      expect(parseSessionStart({ browserFamily })?.browserFamily).toBe(browserFamily);
+      expect(parseSessionStart({ id: VALID_ID, browserFamily })?.browserFamily).toBe(browserFamily);
     },
   );
 
   it.each(['opera', 'Chrome', '', 123, null])('drops a browserFamily outside the allowlist (%j)', (browserFamily) => {
-    expect(parseSessionStart({ browserFamily })?.browserFamily).toBeNull();
+    expect(parseSessionStart({ id: VALID_ID, browserFamily })?.browserFamily).toBeNull();
   });
 });
 

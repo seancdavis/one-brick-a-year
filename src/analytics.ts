@@ -5,15 +5,13 @@
 // netlify/functions/_shared/session-payload.ts's shapes: this file must
 // never import from netlify/, and never sends the child's name.
 //
-// start() and end() are not necessarily called in that order relative to
-// the network: start() fires a create request whose id can take a while to
-// come back, and end() can be called (finish, Restart, page hide) before it
-// does. So each start() makes a session "handle" — its own started-at time,
-// its own in-flight create request — and becomes the current handle; end()
-// marks whichever handle is current as ended and chains the end request
-// after that handle's own create request resolves, whenever that happens.
-// A handle only ever acts on itself, never on `current`, so a handle that a
-// later start() has superseded can't stomp on the session that replaced it.
+// The client owns the session id: start() generates it synchronously
+// (generateId(), below) before it does anything else, so end() — however
+// soon it's called (finish, Restart, page hide, possibly before the create
+// request has even left the browser) — always has an id to send its beacon
+// with. There is no waiting on the create request: the two requests are
+// independent, and the server's upserts (sessions.mts) make either order
+// land correctly.
 
 export type DeviceKind = 'phone' | 'tablet' | 'desktop';
 export type BrowserFamily = 'chrome' | 'safari' | 'firefox' | 'edge' | 'other';
@@ -69,29 +67,40 @@ function endUrl(id: string): string {
   return `/api/sessions/${id}/end`;
 }
 
+function randomHex(length: number): string {
+  let out = '';
+  for (let i = 0; i < length; i++) out += Math.floor(Math.random() * 16).toString(16);
+  return out;
+}
+
+// crypto.randomUUID() is available in every browser this page targets, but
+// falls back to a random hex string in the same 8-4-4-4-12 shape (good
+// enough as an opaque row id; nothing security-sensitive depends on it) for
+// any environment where it isn't.
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${randomHex(8)}-${randomHex(4)}-${randomHex(4)}-${randomHex(4)}-${randomHex(12)}`;
+}
+
 interface SessionHandle {
+  id: string;
   startedAt: number; // performance.now(), ms
-  idPromise: Promise<string | null>; // resolves to the created row's id, or null if the create failed
   ended: boolean; // guards end() against being applied twice to the same handle
 }
 
-async function createSession(fields: SessionStartFields): Promise<string | null> {
-  try {
-    const res = await fetch(START_URL, {
-      method: 'POST',
-      keepalive: true,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(fields),
-    });
-    if (!res.ok) return null;
-    const data: unknown = await res.json();
-    const id = data && typeof data === 'object' ? (data as { id?: unknown }).id : undefined;
-    return typeof id === 'string' ? id : null;
-  } catch {
-    // Analytics is best-effort: a failed create just means the eventual
-    // end() call for this handle has nothing to send.
-    return null;
-  }
+function createSession(id: string, fields: SessionStartFields): void {
+  fetch(START_URL, {
+    method: 'POST',
+    keepalive: true,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id, ...fields }),
+  }).catch(() => {
+    // Analytics is best-effort: a failed create just means the row never
+    // appears — the end beacon (already carrying this same id) still goes
+    // out independently, whenever end() is called.
+  });
 }
 
 function sendEnd(id: string, durationMs: number, fields: SessionEndFields, preferBeacon: boolean): void {
@@ -130,12 +139,9 @@ export function createAnalytics(): {
   let current: SessionHandle | null = null;
 
   function start(fields: SessionStartFields): void {
-    const handle: SessionHandle = {
-      startedAt: performance.now(),
-      idPromise: createSession(fields),
-      ended: false,
-    };
-    current = handle;
+    const id = generateId();
+    current = { id, startedAt: performance.now(), ended: false };
+    createSession(id, fields);
   }
 
   function end(fields: SessionEndFields, opts?: { preferBeacon?: boolean }): void {
@@ -147,13 +153,8 @@ export function createAnalytics(): {
     const durationMs = Math.max(0, Math.round(performance.now() - handle.startedAt));
     const preferBeacon = opts?.preferBeacon ?? false;
 
-    // Chains onto this handle's own create request, whether it already
-    // resolved or is still in flight — either way the end is sent the
-    // moment (and only once) an id becomes available.
-    void handle.idPromise.then((id) => {
-      if (id === null) return;
-      sendEnd(id, durationMs, fields, preferBeacon);
-    });
+    // The id is already known — no need to wait on the create request.
+    sendEnd(handle.id, durationMs, fields, preferBeacon);
   }
 
   return { start, end };

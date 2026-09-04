@@ -2,23 +2,50 @@
 // no DOM, no database — so it can be unit tested the same way src/lib/
 // modules are. Every field is optional and either dropped to null or
 // clamped into range rather than rejecting the whole payload, except for
-// two hard rejections: a non-object body, and any body carrying a `name`
-// key at all — sessions never store the child's name, so a payload that
-// even mentions one is refused outright rather than silently stripped.
+// three hard rejections: a non-object body, any body carrying a `name` key
+// at all (sessions never store the child's name, so a payload that even
+// mentions one is refused outright rather than silently stripped), and — for
+// the create payload only — a missing or malformed `id`, since the client
+// owns session ids (see src/analytics.ts) and the server never invents one.
 
 // Mirrors src/lib/constants.ts's TOTAL_YEARS. Duplicated (not imported)
 // because this module lives under netlify/ and must not depend on src/.
 const TOTAL_YEARS = 4.6e9;
 
 const MAX_DURATION_MS = 86_400_000; // 24 hours: a generous upper bound, not an expected session length.
-const MAX_COLOR_ID_LENGTH = 40;
-const COLOR_ID_PATTERN = /^[a-z-]+$/;
 const VIEWPORT_MIN = 0;
 const VIEWPORT_MAX = 10000;
 const AGE_MIN = 1;
 const AGE_MAX = 120;
 const HOME_MIN = 1;
 const HOME_MAX = 1000;
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
+// The allowlisted brick colors a session can report — kept in lockstep with
+// src/lib/lego-colors.ts's LEGO_COLORS ids (checked by session-payload.test.ts)
+// but duplicated as a literal list rather than imported, since this module
+// lives under netlify/ and must not depend on src/.
+export const SESSION_COLOR_IDS: readonly string[] = [
+  'bright-red',
+  'bright-blue',
+  'bright-yellow',
+  'dark-green',
+  'bright-orange',
+  'medium-azur',
+  'bright-purple',
+  'bright-yellowish-green',
+  'white',
+  'black',
+  'dark-stone-grey',
+  'reddish-brown',
+];
+
+const SESSION_COLOR_ID_SET: ReadonlySet<string> = new Set(SESSION_COLOR_IDS);
 
 export type DeviceKind = 'phone' | 'tablet' | 'desktop';
 export type BrowserFamily = 'chrome' | 'safari' | 'firefox' | 'edge' | 'other';
@@ -27,6 +54,7 @@ const DEVICE_KINDS: ReadonlySet<string> = new Set<DeviceKind>(['phone', 'tablet'
 const BROWSER_FAMILIES: ReadonlySet<string> = new Set<BrowserFamily>(['chrome', 'safari', 'firefox', 'edge', 'other']);
 
 export interface SessionStart {
+  id: string;
   ageYears: number | null;
   homeMeters: number | null;
   colorId: string | null;
@@ -72,8 +100,7 @@ function parseHome(value: unknown): number | null {
 }
 
 function parseColorId(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > MAX_COLOR_ID_LENGTH) return null;
-  return COLOR_ID_PATTERN.test(value) ? value : null;
+  return typeof value === 'string' && SESSION_COLOR_ID_SET.has(value) ? value : null;
 }
 
 function parseSoundOn(value: unknown): boolean | null {
@@ -100,7 +127,11 @@ export function parseSessionStart(body: unknown): SessionStart | null {
   const record = asRecord(body);
   if (record === null) return null;
 
+  const id = record.id;
+  if (!isUuid(id)) return null;
+
   return {
+    id,
     ageYears: parseAge(record.ageYears),
     homeMeters: parseHome(record.homeMeters),
     colorId: parseColorId(record.colorId),

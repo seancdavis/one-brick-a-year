@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { deriveBrowserFamily, deriveDeviceKind } from './analytics';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createAnalytics, deriveBrowserFamily, deriveDeviceKind } from './analytics';
 
 const IPAD_UA = 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Safari/604.1';
 const ANDROID_PHONE_UA = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Chrome/120.0';
@@ -61,5 +61,66 @@ describe('deriveBrowserFamily', () => {
 
   it('reads an unrecognized UA as other', () => {
     expect(deriveBrowserFamily('SomeOtherBrowser/1.0')).toBe('other');
+  });
+});
+
+const START_FIELDS = {
+  ageYears: 8,
+  homeMeters: 8,
+  colorId: 'bright-red',
+  soundOn: true,
+  inputKind: 'wheel' as const,
+  viewportW: 1024,
+  viewportH: 768,
+  deviceKind: 'desktop' as const,
+  browserFamily: 'chrome' as const,
+};
+
+describe('createAnalytics', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('issues both the create and the end request immediately, without end waiting on create to resolve', () => {
+    // The mocked create request never resolves — if end() were still chained
+    // onto it (the old idPromise.then() pattern this replaced), the end
+    // beacon below would never fire within this synchronous test.
+    const fetchMock = vi.fn((_url: string, _init?: RequestInit) => new Promise<Response>(() => {}));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const beaconMock = vi.fn((_url: string, _data?: BodyInit) => true);
+    vi.stubGlobal('navigator', { sendBeacon: beaconMock });
+
+    const analytics = createAnalytics();
+    analytics.start(START_FIELDS);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [createUrl, createInit] = fetchMock.mock.calls[0];
+    expect(createUrl).toBe('/api/sessions');
+    const createBody = JSON.parse(createInit!.body as string);
+    expect(typeof createBody.id).toBe('string');
+    expect(createBody.id.length).toBeGreaterThan(0);
+
+    analytics.end({ yearsReached: 100, finished: false }, { preferBeacon: true });
+
+    expect(beaconMock).toHaveBeenCalledTimes(1);
+    const [endUrl] = beaconMock.mock.calls[0];
+    expect(endUrl).toBe(`/api/sessions/${createBody.id}/end`);
+  });
+
+  it('is a no-op the second time end() is called for the same session', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, _init?: RequestInit) => new Promise<Response>(() => {})),
+    );
+    const beaconMock = vi.fn((_url: string, _data?: BodyInit) => true);
+    vi.stubGlobal('navigator', { sendBeacon: beaconMock });
+
+    const analytics = createAnalytics();
+    analytics.start(START_FIELDS);
+    analytics.end({ yearsReached: 100, finished: false }, { preferBeacon: true });
+    analytics.end({ yearsReached: 200, finished: true }, { preferBeacon: true });
+
+    expect(beaconMock).toHaveBeenCalledTimes(1);
   });
 });
