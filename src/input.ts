@@ -7,22 +7,28 @@ import { INITIAL_HOLD, reduceHold, type HoldEvent, type HoldState } from './lib/
 
 // Interactive elements (HUD buttons, links, form controls) should keep their
 // own pointer/keyboard behavior instead of starting or stealing a hold.
+// `[data-hold-ignore]` marks a whole region (the start and end screens) as
+// off-limits too, so tapping their padding or label text can't be mistaken
+// for the first hold.
 function isInteractiveTarget(node: EventTarget | null): boolean {
   if (!(node instanceof Element)) return false;
-  return node.closest('button, input, select, a') !== null;
+  return node.closest('button, input, select, a, [data-hold-ignore]') !== null;
+}
+
+function isHeld(state: HoldState): boolean {
+  return state.pointerDown || state.keys.length > 0;
 }
 
 export function createHoldInput(target: HTMLElement | Window, onChange: (held: boolean) => void): () => void {
   let state: HoldState = INITIAL_HOLD;
-  let held = false;
 
   function apply(event: HoldEvent, sourceEvent: Event): void {
+    const wasHeld = isHeld(state);
     const result = reduceHold(state, event);
     state = result.state;
     if (result.preventDefault) sourceEvent.preventDefault();
-    if (result.held !== held) {
-      held = result.held;
-      onChange(held);
+    if (result.held !== wasHeld) {
+      onChange(result.held);
     }
   }
 

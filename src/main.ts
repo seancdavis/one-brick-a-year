@@ -69,7 +69,11 @@ function saveSound(enabled: boolean): void {
   }
 }
 
-const urlParams = new URLSearchParams(location.search);
+// A fragment (#name=Ada&age=8&home=8) never leaves the browser, so it never
+// reaches a server log the way a query string does — prefer it when both a
+// link author and the browser happen to have populated one.
+const rawParams = location.hash.length > 1 ? location.hash.slice(1) : location.search;
+const urlParams = new URLSearchParams(rawParams);
 const storedRaw = readStoredProfile();
 const hasUrlParams = urlParams.has('name') || urlParams.has('age') || urlParams.has('home');
 
@@ -82,8 +86,9 @@ let landmarks = buildLandmarks(profile);
 if (hasUrlParams) {
   saveProfile(profile);
   try {
-    // Strip the params from the address bar now that they're read and
-    // saved, so the child's name never lingers in the URL or history.
+    // location.pathname carries neither a hash nor a query string, so this
+    // strips both forms at once, whichever one carried the params — the
+    // child's name never lingers in the URL or history.
     history.replaceState(null, '', location.pathname);
   } catch {
     // Some environments (e.g. a sandboxed iframe) block history mutation:
@@ -149,7 +154,10 @@ function resetForReplay(): void {
 
 createHoldInput(window, (next) => {
   held = next;
-  if (held && !hasHeldOnce) {
+  // A tap can reach this listener while the start screen is still up (its
+  // own padding, its label text) or after the sim is already done — neither
+  // is the user's first real hold on the stack.
+  if (held && !hasHeldOnce && !startScreen.isOpen() && !sim.done) {
     hasHeldOnce = true;
     hud.hidePrompt();
     // Returning visitor with sound already on: this first hold is the user

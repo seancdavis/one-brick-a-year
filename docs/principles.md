@@ -30,11 +30,15 @@ to a landmark's line — never drawn to scale, and never a stand-in for the
 
 ## Privacy boundary
 
-A child's name lives in `localStorage` only. It may be read from URL
-params on load, but the page never writes it — or anything else personal —
-back into a URL it generates. URL params are stripped from the address bar
-immediately after being read, so nothing personal lingers in the browser
-history or gets shared if the page's URL is copied mid-session.
+A child's name lives in `localStorage` only. Links that personalize should
+use the fragment form (`#name=Ada&age=8&home=8`) — a URL fragment is never
+sent to the server, so it never reaches a server log. The query form
+(`?name=Ada&age=8&home=8`) still works, but a query string does reach
+server logs before the page has a chance to strip it. Either way, the page
+reads and saves the values, then strips both the fragment and the query
+from the address bar, so nothing personal lingers in the browser history or
+gets shared if the page's URL is copied mid-session. The page never writes
+the name — or anything else personal — into a URL it generates.
 
 ## Sound
 
