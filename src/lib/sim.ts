@@ -45,6 +45,14 @@ export function heightM(s: SimState): number {
   return s.years * BRICK_M;
 }
 
+// The stack only ever renders whole bricks — years is continuous, but a
+// fractional brick looks uneven and misreports the height. Floors, and never
+// goes negative (years is never negative in practice, but callers might hand
+// this a raw, unclamped number).
+export function bricksFor(years: number): number {
+  return Math.max(0, Math.floor(years));
+}
+
 function easeInOut(p: number): number {
   return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
 }

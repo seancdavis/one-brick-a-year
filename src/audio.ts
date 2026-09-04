@@ -5,6 +5,7 @@
 
 const MASTER_GAIN = 0.4;
 const DISABLE_RAMP_S = 0.08;
+const ENABLE_RAMP_S = 0.08;
 
 const HUM_RAMP_S = 0.08;
 const HUM_LOWPASS_HZ = 600;
@@ -72,6 +73,15 @@ function playNote(ctx: AudioContext, destination: AudioNode, hz: number, startAt
   osc.stop(startAt + duration + 0.05);
 }
 
+// The two-note "sound is on" confirmation. Shared by chime() (a landmark was
+// just crossed) and enable() (the user just turned sound on) so there is
+// exactly one definition of what a chime sounds like.
+function playChime(ctx: AudioContext, destination: AudioNode): void {
+  const now = ctx.currentTime;
+  playNote(ctx, destination, CHIME_NOTES_HZ[0], now, CHIME_NOTE_S, CHIME_PEAK_GAIN);
+  playNote(ctx, destination, CHIME_NOTES_HZ[1], now + CHIME_GAP_S, CHIME_NOTE_S, CHIME_PEAK_GAIN);
+}
+
 export function createAudio(): Audio {
   const Ctor = getAudioContextCtor();
 
@@ -109,6 +119,7 @@ export function createAudio(): Audio {
   return {
     enable() {
       if (!Ctor) return;
+      const wasEnabled = enabled;
 
       if (!ctx) {
         ctx = new Ctor();
@@ -117,15 +128,33 @@ export function createAudio(): Audio {
         master.connect(ctx.destination);
         noiseBuffer = buildNoiseBuffer(ctx);
       } else if (master) {
+        // A prior disable() may have ramped this to 0 (and, once its own
+        // ramp finished, suspended the context) — cancel that and ramp back
+        // up to the audible level rather than leaving it silenced.
         const now = ctx.currentTime;
         master.gain.cancelScheduledValues(now);
-        master.gain.setValueAtTime(MASTER_GAIN, now);
+        master.gain.setValueAtTime(master.gain.value, now);
+        master.gain.linearRampToValueAtTime(MASTER_GAIN, now + ENABLE_RAMP_S);
       }
 
-      if (ctx.state === 'suspended') {
-        void ctx.resume();
-      }
+      if (!ctx || !master) return;
+      const context = ctx;
+      const destination = master;
       enabled = true;
+
+      // Confirms sound is on the instant it's actually audible: right away
+      // if the context is already running, or as soon as resume() settles
+      // if it was suspended. Only on a genuine off->on transition, so the
+      // one-time "apply the stored preference" call on the first hold
+      // (src/main.ts) doesn't chime a second time when the user already
+      // turned sound on via the HUD toggle.
+      if (context.state === 'suspended') {
+        void context.resume().then(() => {
+          if (enabled && !wasEnabled) playChime(context, destination);
+        });
+      } else if (!wasEnabled) {
+        playChime(context, destination);
+      }
     },
 
     disable() {
@@ -182,9 +211,7 @@ export function createAudio(): Audio {
 
     chime() {
       if (!enabled || !ctx || !master) return;
-      const now = ctx.currentTime;
-      playNote(ctx, master, CHIME_NOTES_HZ[0], now, CHIME_NOTE_S, CHIME_PEAK_GAIN);
-      playNote(ctx, master, CHIME_NOTES_HZ[1], now + CHIME_GAP_S, CHIME_NOTE_S, CHIME_PEAK_GAIN);
+      playChime(ctx, master);
     },
 
     finish() {

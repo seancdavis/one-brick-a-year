@@ -1,12 +1,13 @@
-// Canvas drawing for the stack, ground, scale bar, and landmark lines.
-// Ports the prototype's `render()` function (docs/prototype/brick-stack.html)
-// pixel-for-pixel. Reads state and draws; never mutates it.
+// Canvas drawing for the stack, ground, and landmark lines. Ports the
+// prototype's `render()` function (docs/prototype/brick-stack.html)
+// pixel-for-pixel, aside from the round 2 changes noted inline. Reads state
+// and draws; never mutates it.
 
 import { BRICK_M } from '../lib/constants';
-import { fmtMeters, fmtYears } from '../lib/format';
+import { fmtYears } from '../lib/format';
 import type { IconId } from '../lib/icon-paths';
 import type { PlacedLandmark, StageBox } from '../lib/layout';
-import { heightM, type SimState } from '../lib/sim';
+import { bricksFor, type SimState } from '../lib/sim';
 import { ICON_SIZE_PX } from './icons';
 
 export interface StageView {
@@ -21,7 +22,7 @@ const INK = '#2a2420';
 const CAPTION = '#7b736a';
 const RED = '#d5281b';
 
-// Below the ground line, where the HUD's scale bar and stack sit.
+// Below the ground line, where the stack sits.
 const GROUND_MARGIN_PX = 56;
 const TOP_MIN_PX = 150;
 const TOP_FRACTION = 0.2;
@@ -33,6 +34,11 @@ const ICON_LINE_GAP_PX = 6;
 // Icons draw smaller on narrow screens so the icon and the label both still
 // fit beside the dashed line.
 const ICON_SIZE_NARROW_PX = 20;
+
+// A label pushed less than this far from its own line reads as still
+// pointing straight at it — no connector needed. Past this, draw a short
+// vertical stroke from the line to the label so the eye can follow it.
+const CONNECTOR_THRESHOLD_PX = 8;
 
 export function stageBox(view: StageView): StageBox {
   return {
@@ -71,31 +77,12 @@ export function drawStage(
   ctx.lineWidth = 1;
   line(ctx, 0, ground + 0.5, W, ground + 0.5);
 
-  // Scale bar on the left: how tall this screen is right now. Desktop only.
-  if (!narrow) {
-    const bx = Math.round(W * 0.3) - 40;
-    ctx.strokeStyle = 'rgba(42,36,32,.5)';
-    line(ctx, bx + 0.5, ground, bx + 0.5, top);
-    line(ctx, bx - 4, top + 0.5, bx + 4, top + 0.5);
-    line(ctx, bx - 4, ground + 0.5, bx + 4, ground + 0.5);
-    ctx.save();
-    ctx.translate(bx - 10, (ground + top) / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillStyle = CAPTION;
-    ctx.font = '11px "IBM Plex Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`THIS SCREEN IS ${fmtMeters(sim.scaleM).toUpperCase()} TALL`, 0, 0);
-    ctx.restore();
-  }
-
   // Landmark lines, icons, and labels.
   ctx.font = '12px "IBM Plex Mono", monospace';
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'right';
   for (const p of placed) {
     const label = `${p.landmark.label} · ${fmtYears(p.landmark.years)}`;
-    const baselineY = p.y + p.labelDy;
 
     const iconSize = narrow ? ICON_SIZE_NARROW_PX : ICON_SIZE_PX;
     const textWidth = ctx.measureText(label).width;
@@ -106,22 +93,28 @@ export function drawStage(
     ctx.save();
     ctx.globalAlpha = p.passed ? 1 : 0.45;
     ctx.fillStyle = INK;
-    ctx.translate(iconLeftX, baselineY - iconSize / 2);
+    ctx.translate(iconLeftX, p.labelY - iconSize / 2);
     ctx.scale(iconSize / 24, iconSize / 24);
     ctx.fill(icon, 'evenodd');
     ctx.restore();
 
     ctx.strokeStyle = p.passed ? 'rgba(42,36,32,.6)' : 'rgba(42,36,32,.22)';
     ctx.setLineDash([3, 4]);
-    line(ctx, sx + sw + 10, Math.round(p.y) + 0.5, lineEndX, Math.round(p.y) + 0.5);
+    line(ctx, sx + sw + 10, Math.round(p.lineY) + 0.5, lineEndX, Math.round(p.lineY) + 0.5);
+    if (Math.abs(p.lineY - p.labelY) > CONNECTOR_THRESHOLD_PX) {
+      line(ctx, lineEndX, Math.round(p.lineY) + 0.5, lineEndX, Math.round(p.labelY) + 0.5);
+    }
     ctx.setLineDash([]);
 
     ctx.fillStyle = p.passed ? INK : CAPTION;
-    ctx.fillText(label, labelX, baselineY);
+    ctx.fillText(label, labelX, p.labelY);
   }
 
-  // The stack.
-  const h = heightM(sim);
+  // The stack: always a whole number of bricks (src/lib/sim.ts's
+  // bricksFor), so the top course lines up cleanly instead of stopping mid-
+  // brick.
+  const bricks = bricksFor(sim.years);
+  const h = bricks * BRICK_M;
   const sh = h * pxPerM;
   const y0 = ground - sh;
   ctx.fillStyle = RED;

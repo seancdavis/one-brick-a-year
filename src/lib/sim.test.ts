@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BRICK_M, SCALE_MAX_M, SCALE_MIN_M, TOTAL_YEARS, ZOOM_FACTOR, ZOOM_TRIGGER } from './constants';
-import { heightM, initialSim, step, type SimState } from './sim';
+import { bricksFor, heightM, initialSim, step, type SimState } from './sim';
 
 const DT = 1 / 60;
 
@@ -81,5 +81,13 @@ describe('step', () => {
     const next = step(primed, DT, false, false);
     expect(next.zoom).not.toBeNull();
     expect(next.zoom?.elapsedMs).toBeGreaterThan(0);
+  });
+});
+
+describe('bricksFor', () => {
+  it('floors to the nearest whole brick and never goes negative', () => {
+    expect(bricksFor(7.9)).toBe(7);
+    expect(bricksFor(0.2)).toBe(0);
+    expect(bricksFor(-1)).toBe(0);
   });
 });

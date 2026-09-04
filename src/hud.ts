@@ -1,15 +1,16 @@
 // The HUD: a big years-ago counter, the brick/height readout, the
-// press-and-hold prompt, and controls ("Change", which reopens the start
-// screen; the sound toggle; and "Start over", which resets the build).
+// press-and-hold prompt, and controls (the sound toggle, and "Restart",
+// which ends the session, resets the build, and reopens the start screen).
 // Ports the prototype's HUD markup and copy (docs/prototype/brick-stack.html).
 // DOM glue only.
 
+import { BRICK_M } from './lib/constants';
 import { fmtInt, fmtMeters } from './lib/format';
-import { heightM, initialSim, type SimState } from './lib/sim';
+import { bricksFor, initialSim, type SimState } from './lib/sim';
 
 export function createHud(
   root: HTMLElement,
-  opts: { onChange: () => void; onSoundToggle: () => void; onStartOver: () => void },
+  opts: { onSoundToggle: () => void; onRestart: () => void },
 ): {
   update(sim: SimState): void;
   hidePrompt(): void;
@@ -32,12 +33,6 @@ export function createHud(
   const controls = document.createElement('div');
   controls.className = 'hud-controls';
 
-  const changeButton = document.createElement('button');
-  changeButton.type = 'button';
-  changeButton.className = 'hud-button';
-  changeButton.textContent = 'Change';
-  changeButton.addEventListener('click', opts.onChange);
-
   const soundButton = document.createElement('button');
   soundButton.type = 'button';
   soundButton.className = 'hud-button';
@@ -45,13 +40,13 @@ export function createHud(
   soundButton.textContent = 'Sound off';
   soundButton.addEventListener('click', opts.onSoundToggle);
 
-  const startOverButton = document.createElement('button');
-  startOverButton.type = 'button';
-  startOverButton.className = 'hud-button';
-  startOverButton.textContent = 'Start over';
-  startOverButton.addEventListener('click', opts.onStartOver);
+  const restartButton = document.createElement('button');
+  restartButton.type = 'button';
+  restartButton.className = 'hud-button';
+  restartButton.textContent = 'Restart';
+  restartButton.addEventListener('click', opts.onRestart);
 
-  controls.append(changeButton, soundButton, startOverButton);
+  controls.append(soundButton, restartButton);
 
   hud.append(years, row, controls);
 
@@ -66,9 +61,10 @@ export function createHud(
   root.append(hud, prompt);
 
   function paint(sim: SimState): void {
-    years.textContent = fmtInt(sim.years);
-    bricks.textContent = fmtInt(sim.years);
-    height.textContent = fmtMeters(heightM(sim));
+    const wholeBricks = bricksFor(sim.years);
+    years.textContent = fmtInt(wholeBricks);
+    bricks.textContent = fmtInt(wholeBricks);
+    height.textContent = fmtMeters(wholeBricks * BRICK_M);
   }
 
   paint(initialSim());

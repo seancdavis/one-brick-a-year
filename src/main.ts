@@ -111,7 +111,7 @@ const startScreen = createStartScreen(app, (nextProfile) => {
   saveProfile(profile);
   // Rebuild landmarks only — the running sim (years, scale, zoom) is left
   // untouched, whether this came from the mandatory first-run screen or a
-  // mid-build "Change".
+  // Restart.
   landmarks = buildLandmarks(profile);
   startScreen.close();
   needsRender = true;
@@ -121,7 +121,6 @@ const audio = createAudio();
 let soundEnabled = readStoredSound();
 
 const hud = createHud(app, {
-  onChange: () => startScreen.open(profile),
   onSoundToggle: () => {
     soundEnabled = !soundEnabled;
     saveSound(soundEnabled);
@@ -132,7 +131,7 @@ const hud = createHud(app, {
     }
     hud.setSound(soundEnabled);
   },
-  onStartOver: () => resetForReplay(),
+  onRestart: () => restart(),
 });
 hud.setSound(soundEnabled);
 
@@ -144,9 +143,12 @@ let held = false;
 let hasHeldOnce = false;
 let tickAccumulator = 0;
 
-// Shared by "Build it again" (end screen) and "Start over" (HUD, usable
-// mid-build too): back to a fresh, unstarted sim, with the prompt and card
-// queue reset to match.
+// Ends the current analytics session. A no-op until slice 4 (session
+// analytics) wires this to POST /api/sessions/:id/end.
+function endSession(): void {}
+
+// Shared by "Build it again" (end screen) and Restart (HUD): back to a
+// fresh, unstarted sim, with the prompt and card queue reset to match.
 function resetForReplay(): void {
   endScreen.hide();
   beatCards.clear();
@@ -155,6 +157,15 @@ function resetForReplay(): void {
   hasHeldOnce = false;
   hud.showPrompt();
   needsRender = true;
+}
+
+// The HUD's Restart button: ends the session, resets the build, and reopens
+// the start screen with the current profile prefilled so the user can
+// change it.
+function restart(): void {
+  endSession();
+  resetForReplay();
+  startScreen.open(profile);
 }
 
 createHoldInput(window, (next) => {
@@ -181,8 +192,8 @@ if (!hasUrlParams && storedRaw === null) {
 
 const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 const MAX_DPR = 2;
-// Below this CSS width the stack and scale bar switch to the narrow layout,
-// matching the prototype's `W < 700` breakpoint.
+// Below this CSS width the stack and landmark icons switch to the narrow
+// layout, matching the prototype's `W < 700` breakpoint.
 const NARROW_BREAKPOINT_PX = 700;
 
 let view: StageView = { widthCss: 0, heightCss: 0, dpr: 1, narrow: false };

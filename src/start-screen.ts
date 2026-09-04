@@ -1,6 +1,6 @@
 // The start screen: a full-screen overlay collecting the child's name, age,
 // and home height before the build begins, and reopened from the HUD's
-// "Change" button. DOM glue only — validation is delegated to
+// "Restart" button. DOM glue only — validation is delegated to
 // src/lib/personalize.ts, so there is exactly one place that decides what a
 // valid profile looks like.
 

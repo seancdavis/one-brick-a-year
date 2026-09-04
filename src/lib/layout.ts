@@ -1,6 +1,8 @@
-// Which landmarks are in view, where their lines land, and whether their
-// labels need to dodge a neighbor. Ports the placement math inside the
-// prototype's `render()` loop (docs/prototype/brick-stack.html) verbatim.
+// Which landmarks are in view, where their dashed lines land, and where
+// their labels stack when neighbors crowd together. Ports the placement math
+// inside the prototype's `render()` loop (docs/prototype/brick-stack.html),
+// reworked to use real label stacking instead of a pairwise collision
+// offset — see docs/autopilot/2026-09-04-one-brick-a-year-round-2.md, slice 1.
 
 import type { Landmark } from './landmarks';
 
@@ -11,14 +13,22 @@ export interface StageBox {
 
 export interface PlacedLandmark {
   landmark: Landmark;
-  y: number;
-  labelDy: number;
+  lineY: number;
+  labelY: number;
   passed: boolean;
 }
 
-// Two landmark lines closer together than this (in px) would overlap labels,
-// so the second one's label is pushed below its line instead of above.
-const LABEL_COLLISION_PX = 18;
+// A label always starts this far above its own line...
+const LABEL_LINE_OFFSET_PX = 6;
+
+// ...but never closer than this to the previous (lower) label's baseline, so
+// two labels never overlap however close their landmarks are.
+export const LABEL_MIN_GAP_PX = 16;
+
+// A landmark whose line sits within this many px of the ground line reads as
+// indistinguishable from the ground itself, so it's dropped instead of drawn
+// crowded against it.
+export const GROUND_HIDE_PX = 24;
 
 export function placeLandmarks(
   landmarks: Landmark[],
@@ -29,22 +39,25 @@ export function placeLandmarks(
   const pxPerM = (stage.ground - stage.top) / scaleM;
   const placed: PlacedLandmark[] = [];
 
-  // Tracks the y of the previously placed (i.e. visible) landmark, walked in
-  // ascending meters order, so label offsets only dodge their nearest
-  // on-screen neighbor.
-  let lastY = -999;
+  // Ascending meters is descending y: the nearest landmarks sit low, near
+  // the ground, and the farthest sit high, near the top. Walking this order
+  // lets each label push up against the one just placed below it, so the
+  // stack builds bottom-to-top with no overlap.
+  const ordered = [...landmarks].sort((a, b) => a.meters - b.meters);
 
-  for (const landmark of landmarks) {
-    const y = stage.ground - landmark.meters * pxPerM;
-    if (y < stage.top - 30 || y > stage.ground - 1) continue;
+  let previousLabelY = Infinity;
 
-    const labelDy = Math.abs(y - lastY) < LABEL_COLLISION_PX ? 15 : -6;
-    lastY = y;
+  for (const landmark of ordered) {
+    const lineY = stage.ground - landmark.meters * pxPerM;
+    if (lineY < stage.top - 30 || lineY > stage.ground - GROUND_HIDE_PX) continue;
+
+    const labelY = Math.min(lineY - LABEL_LINE_OFFSET_PX, previousLabelY - LABEL_MIN_GAP_PX);
+    previousLabelY = labelY;
 
     placed.push({
       landmark,
-      y,
-      labelDy,
+      lineY,
+      labelY,
       passed: heightM >= landmark.meters,
     });
   }

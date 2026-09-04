@@ -182,7 +182,7 @@ canvas {
 
 /* Start screen (src/start-screen.ts): full-screen overlay shown on first
    visit (no URL params, nothing stored) and reopened from the HUD's
-   "Change" button. Shown/hidden via the `hidden` attribute — an instant
+   "Restart" button. Shown/hidden via the `hidden` attribute — an instant
    toggle, so there's no motion here to guard behind prefers-reduced-motion. */
 .start-screen {
   position: fixed;
