@@ -1,0 +1,52 @@
+import { describe, expect, it } from 'vitest';
+import { fmtInt, fmtMeters, fmtYears } from './format';
+
+describe('fmtYears', () => {
+  it('formats billions', () => {
+    expect(fmtYears(4.6e9)).toBe('4.6 billion years');
+  });
+
+  it('formats millions', () => {
+    expect(fmtYears(66e6)).toBe('66 million years');
+  });
+
+  it('formats thousands with a comma', () => {
+    expect(fmtYears(5000)).toBe('5,000 years');
+  });
+
+  it('formats small numbers plainly', () => {
+    expect(fmtYears(31)).toBe('31 years');
+  });
+});
+
+describe('fmtMeters', () => {
+  it('formats sub-meter values as centimeters', () => {
+    expect(fmtMeters(0.077)).toBe('7.7 cm');
+  });
+
+  it('formats small meter values with two decimals', () => {
+    expect(fmtMeters(2.0)).toBe('2.00 m');
+  });
+
+  it('formats larger meter values rounded', () => {
+    expect(fmtMeters(48)).toBe('48 m');
+  });
+
+  it('formats kilometers rounded', () => {
+    expect(fmtMeters(633600)).toBe('634 km');
+  });
+
+  it('formats large kilometers with a comma', () => {
+    expect(fmtMeters(44160000)).toBe('44,160 km');
+  });
+});
+
+describe('fmtInt', () => {
+  it('adds thousands separators', () => {
+    expect(fmtInt(1234567)).toBe('1,234,567');
+  });
+
+  it('rounds to the nearest integer', () => {
+    expect(fmtInt(4.6)).toBe('5');
+  });
+});

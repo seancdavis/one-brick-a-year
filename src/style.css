@@ -4,8 +4,357 @@
   box-sizing: border-box;
 }
 
+:root {
+  --sky: #f3efe6;
+  --ink: #2a2420;
+  --cap: #7b736a;
+  --red: #d5281b;
+}
+
 html,
 body {
   height: 100%;
   margin: 0;
+}
+
+body {
+  background: var(--sky);
+  color: var(--ink);
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.hud {
+  position: fixed;
+  left: 24px;
+  top: 20px;
+  pointer-events: none;
+  text-shadow:
+    0 1px 2px rgba(243, 239, 230, 0.9),
+    0 0 8px rgba(243, 239, 230, 0.9);
+}
+
+.big {
+  font-family: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  font-weight: 300;
+  font-size: clamp(56px, 8vw, 112px);
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+}
+
+.row {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cap);
+  margin-top: 10px;
+  line-height: 1.7;
+}
+
+.row b {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.hud-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  pointer-events: auto;
+}
+
+.hud-button {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.hud-button:hover {
+  background: var(--ink);
+  color: var(--sky);
+}
+
+/* The sound toggle (src/hud.ts) uses aria-pressed to reflect its own state,
+   so it reads as "on" even without hover/focus. */
+.hud-button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--sky);
+}
+
+.prompt {
+  position: fixed;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 90vw;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cap);
+  text-align: center;
+  line-height: 1.8;
+  pointer-events: none;
+  text-shadow:
+    0 1px 2px rgba(243, 239, 230, 0.9),
+    0 0 8px rgba(243, 239, 230, 0.9);
+  transition: opacity 0.5s;
+}
+
+.prompt.off {
+  opacity: 0;
+}
+
+/* Milestone card (src/beats.ts). Sits above the prompt, right-of-center on
+   wide screens so it never overlaps the stack column (which sits at 30%
+   from the left, per src/render/stage.ts); full-width on narrow screens. */
+.beat-card {
+  position: fixed;
+  left: 62%;
+  bottom: 92px;
+  transform: translate(-50%, 10px);
+  width: max-content;
+  max-width: 38ch; /* about 38 characters at this font size */
+  background: rgba(243, 239, 230, 0.94);
+  border: 1px solid var(--ink);
+  padding: 14px 18px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
+  z-index: 5;
+}
+
+.beat-card.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.beat-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cap);
+  margin: 0 0 6px;
+}
+
+.beat-line {
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+@media (max-width: 699px) {
+  .beat-card {
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: none;
+    transform: translateY(10px);
+    border-left: none;
+    border-right: none;
+  }
+
+  .beat-card.visible {
+    transform: translateY(0);
+  }
+}
+
+/* Start screen (src/start-screen.ts): full-screen overlay shown on first
+   visit (no URL params, nothing stored) and reopened from the HUD's
+   "Change" button. Shown/hidden via the `hidden` attribute — an instant
+   toggle, so there's no motion here to guard behind prefers-reduced-motion. */
+.start-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--sky);
+}
+
+.start-screen[hidden] {
+  display: none;
+}
+
+.start-form {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  border: 1px solid var(--ink);
+  padding: 32px 28px;
+  background: var(--sky);
+}
+
+.start-title {
+  font-family: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  font-weight: 300;
+  font-size: clamp(36px, 6vw, 56px);
+  line-height: 0.95;
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+.start-blurb {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--cap);
+  margin: 0;
+}
+
+.start-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cap);
+}
+
+.start-field input,
+.start-field select {
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink);
+  background: var(--sky);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 10px 12px;
+}
+
+.start-button {
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sky);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+
+.start-button:hover {
+  background: var(--red);
+  border-color: var(--red);
+}
+
+.start-field input:focus-visible,
+.start-field select:focus-visible,
+.start-button:focus-visible,
+.hud-button:focus-visible,
+.end-button:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+/* End screen (src/end-screen.ts): shown once the stack reaches TOTAL_YEARS.
+   Reference is the prototype's `.done` overlay — the backdrop lets pointer
+   events pass through to the HUD (so "Start over" stays reachable) and only
+   the panel itself is interactive. Shown/hidden via the `hidden` attribute —
+   an instant toggle, so there's no motion here to guard behind
+   prefers-reduced-motion, matching the start screen above. */
+.end-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.end-screen[hidden] {
+  display: none;
+}
+
+.end-panel {
+  pointer-events: auto;
+  max-width: 40ch;
+  background: rgba(243, 239, 230, 0.94);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 28px 30px 30px;
+  text-align: center;
+}
+
+.end-big {
+  font-family: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  font-weight: 300;
+  font-size: clamp(28px, 4vw, 38px);
+  line-height: 1.1;
+  letter-spacing: -0.005em;
+  margin: 0 0 14px;
+}
+
+.end-line {
+  font-size: 15px;
+  line-height: 1.65;
+  margin: 0 0 14px;
+}
+
+.end-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.end-button {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 11px 16px;
+  cursor: pointer;
+}
+
+.end-button:hover {
+  background: var(--ink);
+  color: var(--sky);
+}
+
+/* Reduced motion: every CSS transition in the page, made instant. (The sim's
+   zoom tween is already skipped in JS — src/lib/sim.ts — and the start and
+   end screens toggle via `hidden` with no transition, so neither needs an
+   entry here.) One block for the whole page, per CLAUDE.md's accessibility
+   baseline. */
+@media (prefers-reduced-motion: reduce) {
+  .prompt,
+  .beat-card {
+    transition: none;
+  }
 }
