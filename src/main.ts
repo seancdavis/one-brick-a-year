@@ -9,7 +9,8 @@ import { createStartScreen } from './start-screen';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
 import { beatsCrossed } from './lib/beats';
 import { pxPerMeter } from './lib/compaction';
-import { buildLandmarks } from './lib/landmarks';
+import { fmtYears } from './lib/format';
+import { buildLandmarks, type Landmark } from './lib/landmarks';
 import { placeLandmarks } from './lib/layout';
 import { colorById } from './lib/lego-colors';
 import {
@@ -91,8 +92,20 @@ const params = mergeParams(query, fragment);
 const storedRaw = readStoredProfile();
 const hasUrlParams = hasPersonalizationKeys(params);
 
+// The "time" landmarks (src/lib/landmarks.ts), ascending by years-ago, for
+// the HUD's "next up" teaser (src/hud.ts's setNext) — the first one not yet
+// passed by sim.years.
+function timeEventsFrom(list: Landmark[]): Landmark[] {
+  return list.filter((l) => l.kind === 'time').sort((a, b) => a.years - b.years);
+}
+
 let profile = parsePersonalization(params, storedRaw);
 let landmarks = buildLandmarks(profile);
+let timeEvents = timeEventsFrom(landmarks);
+// The most recently reported "next up" event's identity (id and years, since
+// a profile rebuild can change a landmark's years — e.g. age — without
+// changing its id), so setNext is only called when it actually changes.
+let lastNextKey: string | null = null;
 
 // URL params are applied and stored like any other source, but the page
 // never writes the child's name (or anything else) back into the URL —
@@ -117,6 +130,8 @@ const startScreen = createStartScreen(app, (nextProfile) => {
   // untouched, whether this came from the mandatory first-run screen or a
   // Restart.
   landmarks = buildLandmarks(profile);
+  timeEvents = timeEventsFrom(landmarks);
+  lastNextKey = null; // force the teaser to recheck against the rebuilt list
   hud.setColor(profile.colorId);
   startScreen.close();
   needsRender = true;
@@ -284,6 +299,7 @@ createScrollInput(window, (deltaPx, kind) => {
   if (!hasScrolledOnce) {
     hasScrolledOnce = true;
     hud.hidePrompt();
+    hud.showFooter();
     armAudioOnce();
   }
 
@@ -409,6 +425,16 @@ function frame(timeMs: number): void {
     endScreen.show(profile);
     audio.finish();
     endSession(true);
+  }
+
+  // The "next up" teaser: the first time landmark not yet passed. Cheap
+  // enough to check every frame regardless of needsRender — it only calls
+  // into the HUD when the identity (id + years) actually changes.
+  const nextEvent = timeEvents.find((t) => t.years > sim.years) ?? null;
+  const nextKey = nextEvent ? `${nextEvent.id}:${nextEvent.years}` : null;
+  if (nextKey !== lastNextKey) {
+    lastNextKey = nextKey;
+    hud.setNext(nextEvent ? `${nextEvent.label} · ${fmtYears(nextEvent.years)}` : null);
   }
 
   // Idle frame: years/done didn't change this step, and no compaction
