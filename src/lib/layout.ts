@@ -70,22 +70,20 @@ function placeSide(landmarks: Landmark[], heightM: number, pxPerM: number, stage
 export function placeLandmarks(
   landmarks: Landmark[],
   heightM: number,
-  scaleM: number,
+  pxPerMeter: number,
   stage: StageBox,
 ): PlacedLandmarks {
-  const pxPerM = (stage.ground - stage.top) / scaleM;
-
   return {
     left: placeSide(
       landmarks.filter((l) => l.kind === 'thing'),
       heightM,
-      pxPerM,
+      pxPerMeter,
       stage,
     ),
     right: placeSide(
       landmarks.filter((l) => l.kind === 'time'),
       heightM,
-      pxPerM,
+      pxPerMeter,
       stage,
     ),
   };

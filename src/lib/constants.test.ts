@@ -1,25 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { BRICK_M, SCALE_MAX_M, SCALE_MIN_M, TOTAL_YEARS, ZOOM_FACTOR, ZOOM_TRIGGER } from './constants';
+import { BRICK_M, SMOOTH_S, SMOOTH_SNAP_YEARS, TOTAL_YEARS } from './constants';
 
 describe('constants', () => {
-  it('the camera scale range is ordered min below max', () => {
-    expect(SCALE_MIN_M).toBeLessThan(SCALE_MAX_M);
-  });
-
-  it('ZOOM_TRIGGER is a fraction of the screen, between 0 and 1', () => {
-    expect(ZOOM_TRIGGER).toBeGreaterThan(0);
-    expect(ZOOM_TRIGGER).toBeLessThan(1);
-  });
-
-  it('ZOOM_FACTOR grows the visible scale', () => {
-    expect(ZOOM_FACTOR).toBeGreaterThan(1);
-  });
-
   it('BRICK_M is a positive height', () => {
     expect(BRICK_M).toBeGreaterThan(0);
   });
 
   it('TOTAL_YEARS is positive', () => {
     expect(TOTAL_YEARS).toBeGreaterThan(0);
+  });
+
+  it('SMOOTH_S is a positive time constant', () => {
+    expect(SMOOTH_S).toBeGreaterThan(0);
+  });
+
+  it('SMOOTH_SNAP_YEARS is a small positive threshold', () => {
+    expect(SMOOTH_SNAP_YEARS).toBeGreaterThan(0);
   });
 });

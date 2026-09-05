@@ -1,7 +1,7 @@
 // Canvas drawing for the stack, ground, and landmark lines. Reads state and
 // draws; never mutates it.
 
-import { BRICK_M } from '../lib/constants';
+import { BRICK_PX, drawnBricks, visualUnit } from '../lib/compaction';
 import { fmtYears } from '../lib/format';
 import type { IconId } from '../lib/icon-paths';
 import type { PlacedLandmark, PlacedLandmarks, StageBox } from '../lib/layout';
@@ -258,8 +258,7 @@ export function drawStage(
   color: LegoColor,
 ): void {
   const { widthCss: W, heightCss: H, dpr, narrow } = view;
-  const { top, ground } = stageBox(view);
-  const pxPerM = (ground - top) / sim.scaleM;
+  const { ground } = stageBox(view);
   const sw = narrow
     ? STACK_WIDTH_NARROW_PX
     : Math.max(STACK_WIDTH_MIN_PX, Math.min(STACK_WIDTH_MAX_PX, W * 0.06));
@@ -283,14 +282,18 @@ export function drawStage(
   drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, icons);
   drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, icons);
 
-  // The stack: always a whole number of bricks (src/lib/sim.ts's
-  // bricksFor), so the top course lines up cleanly instead of stopping mid-
-  // brick.
+  // The stack: always a whole number of drawn bricks (src/lib/compaction.ts's
+  // drawnBricks), so the top course lines up cleanly instead of stopping
+  // mid-brick. Each drawn brick is BRICK_PX tall at rest; mid-compaction (or
+  // mid-expansion) it draws at unit/visualUnit of that, which is what
+  // produces the squish — the count of drawn bricks stays fixed at the
+  // settled unit's count until the transition finishes and recomputes it.
   const bricks = bricksFor(sim.years);
-  const h = bricks * BRICK_M;
-  const sh = h * pxPerM;
+  const unit = sim.compaction.unit;
+  const drawn = drawnBricks(bricks, unit);
+  const pxPerBrick = BRICK_PX * (unit / visualUnit(sim.compaction));
+  const sh = drawn * pxPerBrick;
   const y0 = ground - sh;
-  const pxPerBrick = BRICK_M * pxPerM;
 
   if (sh > 0) drawGroundShadow(ctx, sx, sw, ground);
   drawBrickTower(ctx, sx, sw, y0, sh, ground, pxPerBrick, color);

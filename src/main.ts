@@ -8,6 +8,7 @@ import { createHud } from './hud';
 import { createStartScreen } from './start-screen';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
 import { beatsCrossed } from './lib/beats';
+import { pxPerMeter } from './lib/compaction';
 import { buildLandmarks } from './lib/landmarks';
 import { placeLandmarks } from './lib/layout';
 import { colorById } from './lib/lego-colors';
@@ -400,15 +401,15 @@ function frame(timeMs: number): void {
     endSession(true);
   }
 
-  // Idle frame: years/done didn't change this step, and no zoom tween is
-  // running (in either the previous or the new state). Redrawing would
-  // produce pixel-identical output, so skip it — the rAF loop keeps going
-  // regardless, ready for the next input.
+  // Idle frame: years/done didn't change this step, and no compaction
+  // transition is running (in either the previous or the new state).
+  // Redrawing would produce pixel-identical output, so skip it — the rAF
+  // loop keeps going regardless, ready for the next input.
   const simAdvancing = sim.years !== before.years || sim.done !== before.done;
-  const zoomActive = sim.zoom !== null || before.zoom !== null;
+  const compactionActive = sim.compaction.transition !== null || before.compaction.transition !== null;
 
-  if (needsRender || simAdvancing || zoomActive) {
-    const placed = placeLandmarks(landmarks, heightM(sim), sim.scaleM, stageBox(view));
+  if (needsRender || simAdvancing || compactionActive) {
+    const placed = placeLandmarks(landmarks, heightM(sim), pxPerMeter(sim.compaction), stageBox(view));
     drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId));
     hud.update(sim);
     needsRender = false;
