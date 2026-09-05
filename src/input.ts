@@ -1,8 +1,10 @@
 // Scroll input: mouse wheel, trackpad (also delivered as wheel events),
 // touch/pointer drag, and a handful of keys as an accessible equivalent.
-// DOM glue only — every gesture is reduced to a plain deltaPx and handed to
-// onScroll, which src/main.ts folds into src/lib/scroll-state.ts's pure
-// ScrollState. No hold, no click-to-build: scroll replaces everything.
+// DOM glue only — every gesture is reduced to a signed page-scroll delta
+// (positive = scrolling down, matching a wheel event's native deltaY sign)
+// and handed to onScroll, which src/main.ts folds into src/lib/sim.ts's
+// applyScroll. No hold, no click-to-build: scroll replaces everything, and
+// either direction works — down undoes, up builds.
 
 export type ScrollKind = 'wheel' | 'touch' | 'keyboard';
 
@@ -10,12 +12,20 @@ export type ScrollKind = 'wheel' | 'touch' | 'keyboard';
 // Line mode (1, some browsers/devices) and the rare page mode (2) need
 // converting to an approximate px figure first.
 const WHEEL_LINE_PX = 16;
-const WHEEL_PAGE_PX = 800;
+const WHEEL_PAGE_PX = 400;
 
 // Fixed step per keydown for the keyboard equivalent (repeats count, since
-// each repeat fires its own keydown).
+// each repeat fires its own keydown). Positive follows page-scroll-down
+// semantics (undoes); negative builds. ArrowDown/PageDown undo,
+// ArrowUp/PageUp/Space build.
 const KEY_STEP_PX = 40;
-const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'Space', 'PageDown', 'PageUp']);
+const KEY_DELTAS: Record<string, number> = {
+  ArrowDown: KEY_STEP_PX,
+  PageDown: KEY_STEP_PX,
+  ArrowUp: -KEY_STEP_PX,
+  PageUp: -KEY_STEP_PX,
+  Space: -KEY_STEP_PX,
+};
 
 // Interactive elements (HUD buttons, links, form controls) keep their own
 // pointer/keyboard behavior instead of being read as a scroll gesture.
@@ -40,11 +50,9 @@ export function createScrollInput(target: Window, onScroll: (deltaPx: number, ki
   function onWheel(e: Event): void {
     const we = e as WheelEvent;
     if (isInteractiveTarget(we.target)) return;
-    // Either direction builds — only speed matters, not which way the wheel
-    // or trackpad moved.
     we.preventDefault();
-    const deltaPx = Math.abs(normalizeWheelDeltaY(we));
-    if (deltaPx > 0) onScroll(deltaPx, 'wheel');
+    const deltaPx = normalizeWheelDeltaY(we);
+    if (deltaPx !== 0) onScroll(deltaPx, 'wheel');
   }
 
   function onPointerDown(e: Event): void {
@@ -58,9 +66,12 @@ export function createScrollInput(target: Window, onScroll: (deltaPx: number, ki
     if (dragPointerId === null) return;
     const pe = e as PointerEvent;
     if (pe.pointerId !== dragPointerId) return;
-    const deltaPx = Math.abs(pe.clientY - lastY);
+    // Finger moving up (clientY decreasing) reads as a positive page delta —
+    // the same page-scroll-down semantics a wheel event's deltaY carries —
+    // so dragging your finger up undoes, matching normal page-scroll feel.
+    const deltaPx = lastY - pe.clientY;
     lastY = pe.clientY;
-    if (deltaPx > 0) onScroll(deltaPx, 'touch');
+    if (deltaPx !== 0) onScroll(deltaPx, 'touch');
   }
 
   function onPointerEnd(e: Event): void {
@@ -71,10 +82,11 @@ export function createScrollInput(target: Window, onScroll: (deltaPx: number, ki
 
   function onKeyDown(e: Event): void {
     const ke = e as KeyboardEvent;
-    if (!SCROLL_KEYS.has(ke.code)) return;
+    const deltaPx = KEY_DELTAS[ke.code];
+    if (deltaPx === undefined) return;
     if (isInteractiveTarget(ke.target)) return;
     ke.preventDefault();
-    onScroll(KEY_STEP_PX, 'keyboard');
+    onScroll(deltaPx, 'keyboard');
   }
 
   // { passive: false } so preventDefault() above actually stops the page
