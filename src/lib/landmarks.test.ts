@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { BRICK_M } from './constants';
+import { DEFAULT_COLOR_ID } from './lego-colors';
 import { buildLandmarks } from './landmarks';
 
-const profile = { name: 'Kid', ageYears: 8, homeMeters: 8 };
+const profile = { name: 'Kid', ageYears: 8, homeMeters: 8, colorId: DEFAULT_COLOR_ID };
 
 describe('buildLandmarks', () => {
   it('sorts landmarks ascending by meters', () => {
@@ -21,8 +22,17 @@ describe('buildLandmarks', () => {
     }
   });
 
+  it('gives every landmark a kind, with both kinds present', () => {
+    const landmarks = buildLandmarks(profile);
+    for (const landmark of landmarks) {
+      expect(['thing', 'time']).toContain(landmark.kind);
+    }
+    expect(landmarks.some((l) => l.kind === 'thing')).toBe(true);
+    expect(landmarks.some((l) => l.kind === 'time')).toBe(true);
+  });
+
   it('reflects the profile for personal landmarks', () => {
-    const landmarks = buildLandmarks({ name: 'Kid', ageYears: 10, homeMeters: 4 });
+    const landmarks = buildLandmarks({ name: 'Kid', ageYears: 10, homeMeters: 4, colorId: DEFAULT_COLOR_ID });
     const life = landmarks.find((l) => l.id === 'life');
     const home = landmarks.find((l) => l.id === 'home');
     expect(life?.years).toBe(10);

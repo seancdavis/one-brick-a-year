@@ -3,8 +3,8 @@
 
 import type { Beat } from './lib/beats';
 
-// How long a card stays up. When beats arrive faster than that (a fast hold
-// crosses several at once), later cards in the queue use the shorter
+// How long a card stays up. When beats arrive faster than that (a fast
+// scroll crosses several at once), later cards in the queue use the shorter
 // minimum instead, so the queue catches back up to the stack.
 const SHOW_MS = 4500;
 const SHOW_MS_MIN = 2500;

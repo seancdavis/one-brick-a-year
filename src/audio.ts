@@ -5,6 +5,7 @@
 
 const MASTER_GAIN = 0.4;
 const DISABLE_RAMP_S = 0.08;
+const ENABLE_RAMP_S = 0.08;
 
 const HUM_RAMP_S = 0.08;
 const HUM_LOWPASS_HZ = 600;
@@ -25,7 +26,7 @@ const FINISH_HOLD_S = 1.5;
 const FINISH_PEAK_GAIN = 0.22;
 
 export interface Audio {
-  enable(): void;
+  enable(): Promise<boolean>;
   disable(): void;
   tick(): void;
   hum(gain: number, hz: number): void;
@@ -72,6 +73,15 @@ function playNote(ctx: AudioContext, destination: AudioNode, hz: number, startAt
   osc.stop(startAt + duration + 0.05);
 }
 
+// The two-note "sound is on" confirmation. Shared by chime() (a landmark was
+// just crossed) and enable() (the user just turned sound on) so there is
+// exactly one definition of what a chime sounds like.
+function playChime(ctx: AudioContext, destination: AudioNode): void {
+  const now = ctx.currentTime;
+  playNote(ctx, destination, CHIME_NOTES_HZ[0], now, CHIME_NOTE_S, CHIME_PEAK_GAIN);
+  playNote(ctx, destination, CHIME_NOTES_HZ[1], now + CHIME_GAP_S, CHIME_NOTE_S, CHIME_PEAK_GAIN);
+}
+
 export function createAudio(): Audio {
   const Ctor = getAudioContextCtor();
 
@@ -81,6 +91,22 @@ export function createAudio(): Audio {
   let humOsc: OscillatorNode | null = null;
   let humGain: GainNode | null = null;
   let enabled = false;
+
+  // Bumped by every enable() that starts a fresh attempt and by every
+  // disable() call, and captured at call time; an in-flight enable() only
+  // applies the outcome of its own context.resume() if its generation is
+  // still the current one by the time that promise settles. A second
+  // enable() while one is already in flight just returns the same pending
+  // promise (see pendingEnable below), so it never bumps the generation
+  // itself — the only thing that can supersede an in-flight attempt is a
+  // disable(), which is why disable() always wins over it.
+  let generation = 0;
+
+  // Concurrent enable() calls (the scroll-input path and the raw
+  // pointerdown/keydown listener can both fire for the same gesture) share
+  // this one in-flight promise, so only one resume() happens and the
+  // confirmation chime plays once. Cleared as soon as it settles.
+  let pendingEnable: Promise<boolean> | null = null;
 
   function ensureHum(context: AudioContext, destination: AudioNode): { osc: OscillatorNode; gain: GainNode } {
     if (humOsc && humGain) return { osc: humOsc, gain: humGain };
@@ -107,28 +133,76 @@ export function createAudio(): Audio {
   }
 
   return {
-    enable() {
-      if (!Ctor) return;
+    enable(): Promise<boolean> {
+      if (!Ctor) return Promise.resolve(false);
+      if (pendingEnable) return pendingEnable;
 
-      if (!ctx) {
-        ctx = new Ctor();
-        master = ctx.createGain();
-        master.gain.value = MASTER_GAIN;
-        master.connect(ctx.destination);
-        noiseBuffer = buildNoiseBuffer(ctx);
-      } else if (master) {
-        const now = ctx.currentTime;
-        master.gain.cancelScheduledValues(now);
-        master.gain.setValueAtTime(MASTER_GAIN, now);
-      }
+      const myGeneration = ++generation;
+      const wasEnabled = enabled;
 
-      if (ctx.state === 'suspended') {
-        void ctx.resume();
-      }
-      enabled = true;
+      const attempt = (async () => {
+        if (!ctx) {
+          ctx = new Ctor();
+          master = ctx.createGain();
+          master.gain.value = MASTER_GAIN;
+          master.connect(ctx.destination);
+          noiseBuffer = buildNoiseBuffer(ctx);
+        } else if (master) {
+          // A prior disable() may have ramped this to 0 (and, once its own
+          // ramp finished, suspended the context) — cancel that and ramp back
+          // up to the audible level rather than leaving it silenced.
+          const now = ctx.currentTime;
+          master.gain.cancelScheduledValues(now);
+          master.gain.setValueAtTime(master.gain.value, now);
+          master.gain.linearRampToValueAtTime(MASTER_GAIN, now + ENABLE_RAMP_S);
+        }
+
+        if (!ctx || !master) return false;
+        const context = ctx;
+        const destination = master;
+
+        let running: boolean;
+        try {
+          await context.resume();
+          running = context.state === 'running';
+        } catch {
+          // Browsers can reject resume() (e.g. no user gesture yet, or the
+          // gesture didn't count) — that's a failure to enable, not a crash.
+          running = false;
+        }
+
+        // Only apply this attempt's outcome if nothing — another enable(),
+        // or a disable() — has superseded it while resume() was in flight.
+        if (myGeneration === generation) {
+          enabled = running;
+          // Confirms sound is on the instant it's actually audible, but only
+          // on a genuine off->on transition, so the one-time "apply the
+          // stored preference" call on the first scroll (src/main.ts)
+          // doesn't chime a second time when the user already turned sound
+          // on via the HUD toggle.
+          if (running && !wasEnabled) playChime(context, destination);
+          return running;
+        }
+        return enabled;
+      })();
+
+      pendingEnable = attempt;
+      void attempt.finally(() => {
+        if (pendingEnable === attempt) pendingEnable = null;
+      });
+
+      return attempt;
     },
 
     disable() {
+      generation++;
+      // Discard any in-flight enable() rather than leaving it to resolve on
+      // its own: without this, a disable() followed quickly by a new
+      // enable() would hit the `if (pendingEnable) return pendingEnable`
+      // check above and hand back the very attempt disable() just
+      // superseded, instead of starting the fresh resume + gain restore
+      // the new enable() call is supposed to perform.
+      pendingEnable = null;
       enabled = false;
       if (!ctx || !master) return;
 
@@ -182,9 +256,7 @@ export function createAudio(): Audio {
 
     chime() {
       if (!enabled || !ctx || !master) return;
-      const now = ctx.currentTime;
-      playNote(ctx, master, CHIME_NOTES_HZ[0], now, CHIME_NOTE_S, CHIME_PEAK_GAIN);
-      playNote(ctx, master, CHIME_NOTES_HZ[1], now + CHIME_GAP_S, CHIME_NOTE_S, CHIME_PEAK_GAIN);
+      playChime(ctx, master);
     },
 
     finish() {

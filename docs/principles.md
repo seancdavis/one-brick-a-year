@@ -15,7 +15,7 @@ DOM glue, kept out of the pure layer.
 
 ## Where the feel lives
 
-Every number that shapes the feel — brick height, the pace of the hold,
+Every number that shapes the feel — brick height, the pace of the scroll,
 zoom thresholds, sound thresholds — is a named constant with a one-line
 comment saying what it does, not a number inlined at its use site. Tune the
 feel by changing one number in one place.
@@ -41,6 +41,14 @@ from the address bar, so nothing personal lingers in the browser history or
 gets shared if the page's URL is copied mid-session. The page never writes
 the name — or anything else personal — into a URL it generates.
 
+## Sessions
+
+Netlify Database gets one row per build session (`sessions` table, `netlify/database/migrations/`): when it started and ended, how long it ran, how far the stack got, whether it finished, and coarse context for reading the numbers later — age, home height, brick color, sound on/off, input kind, viewport size, device kind (`phone` / `tablet` / `desktop`), and browser family (`chrome` / `safari` / `firefox` / `edge` / `other`).
+
+The browser generates the session id (`src/analytics.ts`) and sends it with both requests. Create (`POST /api/sessions`) and end (`POST /api/sessions/:id/end`) are independent upserts, so either can arrive at the server first and the row still lands correctly (`netlify/functions/sessions.mts`). Ending a session when the page is hidden (backgrounded or closed mid-build) is followed by a new session on the next qualifying scroll if the page comes back — one row per stretch of engagement, not one row per tab.
+
+A row never contains the child's name or any other free-form client text: `netlify/functions/_shared/session-payload.ts` rejects any payload that even carries a `name` key, and allowlists device kind and browser family rather than storing whatever string the client sends. The write endpoint is public and unauthenticated by design — it stays safe by being tiny, write-only, rate-limited per IP, and by rejecting requests that aren't same-origin JSON — with no read endpoint yet. A deploy preview writes to its own database branch, so preview traffic never lands in the production table.
+
 ## Sound
 
 Off by default. Synthesized only — no audio files. The audio context is
@@ -49,8 +57,9 @@ refuse to start audio any other way.
 
 ## Accessibility baseline
 
-Holding works by pointer or by keyboard (Space or Enter), everywhere
-holding works. Every interactive control has a visible focus state.
+Scroll is the only build input: mouse wheel, trackpad, touch drag, or a
+keyboard equivalent (Arrow Up/Down, Space, Page Up/Down) anywhere the wheel
+and touch drag work. Every interactive control has a visible focus state.
 `prefers-reduced-motion: reduce` is honored: the zoom tween and other
 transitions become instant. Milestone cards are the live region
 (`aria-live="polite"`): they announce a beat without moving focus. The HUD
