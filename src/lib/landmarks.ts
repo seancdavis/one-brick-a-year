@@ -13,16 +13,31 @@ export type PaperColor = 'navy' | 'leaf' | 'mustard' | 'coral';
 // A landmark is either a physical "thing" (drawn on the left, compared by
 // height) or a "time" event (drawn on the right, compared by how long ago)
 // — see src/lib/layout.ts, which sorts on this to build the two-sided
-// layout.
-export interface Landmark {
+// layout. Only a "thing" carries tallerThanPhrase — src/lib/comparisons.ts's
+// tallerThan plugs the tallest passed thing's phrase into the footer's "how
+// tall?" comparison; a "time" event has no height to compare, so it has none.
+interface LandmarkBase {
   id: string;
   meters: number;
   years: number;
   label: string;
   icon: IconId;
-  kind: 'thing' | 'time';
   paper: PaperColor;
 }
+
+export interface ThingLandmark extends LandmarkBase {
+  kind: 'thing';
+  // Footer copy for "how tall?" once the stack has passed this thing, e.g.
+  // "taller than a door!" — every phrase ends in "!" for the exclamation the
+  // picture-book copy uses throughout.
+  tallerThanPhrase: string;
+}
+
+export interface TimeLandmark extends LandmarkBase {
+  kind: 'time';
+}
+
+export type Landmark = ThingLandmark | TimeLandmark;
 
 // Each landmark is authored in whichever unit is natural for it — a known
 // height in meters, or a known age in years — and the other field is
@@ -53,6 +68,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'ruler',
       kind: 'thing',
       paper: 'navy',
+      tallerThanPhrase: 'taller than a school ruler!',
       ...fromMeters(0.3),
     },
     {
@@ -62,6 +78,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'door',
       kind: 'thing',
       paper: 'leaf',
+      tallerThanPhrase: 'taller than a door!',
       ...fromMeters(2.0),
     },
     {
@@ -73,6 +90,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'home',
       kind: 'thing',
       paper: 'navy',
+      tallerThanPhrase: 'taller than your home!',
       ...fromMeters(profile.homeMeters),
     },
     {
@@ -91,6 +109,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'statue',
       kind: 'thing',
       paper: 'leaf',
+      tallerThanPhrase: 'taller than the Statue of Liberty!',
       ...fromMeters(93),
     },
     {
@@ -100,6 +119,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'tower',
       kind: 'thing',
       paper: 'navy',
+      tallerThanPhrase: 'taller than the Eiffel Tower!',
       ...fromMeters(330),
     },
     {
@@ -109,6 +129,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'skyscraper',
       kind: 'thing',
       paper: 'leaf',
+      tallerThanPhrase: 'taller than the tallest building on Earth!',
       ...fromMeters(828),
     },
     {
@@ -128,6 +149,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'mountain',
       kind: 'thing',
       paper: 'navy',
+      tallerThanPhrase: 'taller than Mount Everest!',
       ...fromMeters(8849),
     },
     {
@@ -138,6 +160,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'plane',
       kind: 'thing',
       paper: 'leaf',
+      tallerThanPhrase: 'higher than airplanes fly!',
       ...fromMeters(11000),
     },
     {
@@ -147,6 +170,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'rocket',
       kind: 'thing',
       paper: 'navy',
+      tallerThanPhrase: 'past the edge of space!',
       ...fromMeters(100000),
     },
     {
@@ -156,6 +180,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'station',
       kind: 'thing',
       paper: 'leaf',
+      tallerThanPhrase: 'higher than the space station!',
       ...fromMeters(400000),
     },
     {
@@ -195,6 +220,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'earth',
       kind: 'thing',
       paper: 'navy',
+      tallerThanPhrase: 'as tall as the Earth is wide!',
       ...fromMeters(12742000),
     },
     {
@@ -222,6 +248,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       icon: 'ring',
       kind: 'thing',
       paper: 'leaf',
+      tallerThanPhrase: 'longer than the way around the Earth!',
       ...fromMeters(40075000),
     },
   ];

@@ -26,20 +26,18 @@ by changing one number in one place.
 The picture-book look — cream paper, navy ink, coral and mustard accents,
 teal paper hills, square corners, and a flat "paper drop" (an offset copy in
 a warm shadow tint, never a blur) on anything that sits on the paper — is
-defined once, in `src/style.css`'s custom properties: that file is the
-canonical token file. `src/render/stage.ts` resolves the same shared custom
-properties once per resize (`readTokens`/`ensureTokens`) rather than keeping
-its own copies — paper, navy, coral, mustard, leaf, muted, shadow, hill,
-hill-deep, and the two fonts. Nothing is duplicated by hand. Two
-hand-lettered typefaces carry all the type: Fredoka for the big numbers and
-footer values, Patrick Hand for everything else.
+defined once. Shared colors and fonts are CSS custom properties in
+`src/style.css`, the canonical token file, and the canvas resolves them once
+per resize rather than keeping its own copies. Nothing is duplicated by
+hand. Two hand-lettered typefaces carry all the type: Fredoka for the big
+numbers and footer values, Patrick Hand for everything else.
 
 ## Compaction
 
-Every drawn brick is worth `unit` years (`src/lib/compaction.ts`), and the
-legend beside the tower's base always says so (`unitLabel(unit)`, shown
-whenever `unit > 1`) — nothing is ever drawn that the legend doesn't
-account for.
+Every drawn brick is worth `unit` years (`src/lib/compaction.ts`). The legend
+always describes the effective render unit actually on screen — nothing is
+ever drawn that the legend doesn't account for — and sits beside the tower's
+base on wide layouts, below it on narrow ones.
 
 ## Facts have a source
 

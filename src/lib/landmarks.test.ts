@@ -48,6 +48,36 @@ describe('buildLandmarks', () => {
     expect(home?.meters).toBe(4);
   });
 
+  it('gives every "thing" landmark its exact tallerThanPhrase, and no "time" landmark one', () => {
+    const landmarks = buildLandmarks(profile);
+    const expectedPhrases: Record<string, string> = {
+      ruler: 'taller than a school ruler!',
+      door: 'taller than a door!',
+      home: 'taller than your home!',
+      liberty: 'taller than the Statue of Liberty!',
+      eiffel: 'taller than the Eiffel Tower!',
+      burj: 'taller than the tallest building on Earth!',
+      everest: 'taller than Mount Everest!',
+      planes: 'higher than airplanes fly!',
+      space: 'past the edge of space!',
+      iss: 'higher than the space station!',
+      'earth-wide': 'as tall as the Earth is wide!',
+      around: 'longer than the way around the Earth!',
+    };
+
+    for (const landmark of landmarks) {
+      if (landmark.kind === 'thing') {
+        expect(landmark.tallerThanPhrase).toBe(expectedPhrases[landmark.id]);
+      } else {
+        expect('tallerThanPhrase' in landmark).toBe(false);
+      }
+    }
+    // Every "thing" id above was actually present and checked.
+    expect(landmarks.filter((l) => l.kind === 'thing').map((l) => l.id).sort()).toEqual(
+      Object.keys(expectedPhrases).sort(),
+    );
+  });
+
   it('includes every landmark from the table exactly once', () => {
     const landmarks = buildLandmarks(profile);
     const ids = landmarks.map((l) => l.id);

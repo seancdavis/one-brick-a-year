@@ -1,13 +1,13 @@
 // Canvas drawing for the picture-book scene: paper ground, sun, hills, the
 // brick tower, landmarks as cut-paper shapes, and the compaction legend.
-// Reads state and draws; never mutates it. Colors and the two typefaces are
-// resolved once per resize from src/style.css's custom properties (see
-// Tokens/ensureTokens below) — that file is the single source of truth for
-// them. Sizes and the "paper drop" technique (a flat offset copy in a warm
-// shadow tint, never a blur) come from docs/design/picture-book.dc.html and
-// are pinned as constants below.
+// Reads state and draws; never mutates it. Colors and the hand-lettered
+// typeface are resolved once per resize from src/style.css's custom
+// properties (see Tokens/ensureTokens below) — that file is the single
+// source of truth for them. Sizes and the "paper drop" technique (a flat
+// offset copy in a warm shadow tint, never a blur) come from
+// docs/design/picture-book.dc.html and are pinned as constants below.
 
-import { courseHeightPx, renderCourses, renderUnit, unitLabel } from '../lib/compaction';
+import { courseHeightPx, effectiveRenderUnit, renderCourses, unitLabel } from '../lib/compaction';
 import { fmtYears } from '../lib/format';
 import type { IconId } from '../lib/icon-paths';
 import type { PaperColor } from '../lib/landmarks';
@@ -31,10 +31,11 @@ interface Tokens {
   mustard: string;
   leaf: string;
   muted: string;
+  mutedIcon: string;
   shadow: string;
   hill: string;
   hillDeep: string;
-  fonts: { display: string; hand: string };
+  fonts: { hand: string };
 }
 
 function readTokens(): Tokens {
@@ -47,10 +48,11 @@ function readTokens(): Tokens {
     mustard: token('--mustard'),
     leaf: token('--leaf'),
     muted: token('--muted'),
+    mutedIcon: token('--muted-icon'),
     shadow: token('--paper-shadow'),
     hill: token('--hill'),
     hillDeep: token('--hill-deep'),
-    fonts: { display: token('--font-display'), hand: token('--font-hand') },
+    fonts: { hand: token('--font-hand') },
   };
 }
 
@@ -83,7 +85,6 @@ function paperColorHex(tokens: Tokens, color: PaperColor): string {
   }
 }
 
-const MUTED_ICON = '#c9c3b8';
 const PAPER_DROP_PX = 3;
 
 // Below the ground line, where the stack sits. The ground is the crest of
@@ -145,7 +146,6 @@ const LEADER_WIDTH_PX = 2;
 // leader is always visibly a line, never zero-length with the icon touching
 // the tower.
 const LEADER_MIN_PX = 24;
-const UPCOMING_ICON_ALPHA = 0.6;
 
 // Legend beside the tower's base: what one drawn brick is worth right now.
 // On narrow canvases there's no room beside the tower, so instead it's
@@ -362,11 +362,12 @@ function drawLandmarkLabels(
     const iconCenterY = twoLine ? p.labelY + SECOND_LINE_HEIGHT_PX / 2 : p.labelY;
 
     const labelColor = p.passed ? tokens.navy : tokens.muted;
-    const iconColor = p.passed ? paperColorHex(tokens, p.landmark.paper) : MUTED_ICON;
-    const iconAlpha = p.passed ? 1 : UPCOMING_ICON_ALPHA;
+    const iconColor = p.passed ? paperColorHex(tokens, p.landmark.paper) : tokens.mutedIcon;
 
     const icon = icons[p.landmark.icon];
-    drawPaperIcon(ctx, icon, iconLeftX, iconCenterY - iconSize / 2, iconSize, iconColor, iconAlpha, tokens.shadow);
+    // Full opacity in both states — an upcoming icon reads as muted purely
+    // from its flat --muted-icon color, not from being faded out.
+    drawPaperIcon(ctx, icon, iconLeftX, iconCenterY - iconSize / 2, iconSize, iconColor, 1, tokens.shadow);
 
     ctx.strokeStyle = labelColor;
     ctx.lineWidth = LEADER_WIDTH_PX;
@@ -505,15 +506,15 @@ export function drawStage(
   // whole stage), each courseHeightPx tall — see src/lib/compaction.ts.
   const bricks = bricksFor(sim.years);
   const drawn = renderCourses(bricks, sim.compaction);
-  const pxPerBrick = courseHeightPx(sim.compaction);
+  const pxPerBrick = courseHeightPx(bricks, sim.compaction);
   drawBrickTower(ctx, sx, sw, ground, drawn, pxPerBrick, color, tokens.shadow);
 
   // Legend: what one drawn brick is worth right now — describes the bricks
-  // renderUnit says are actually on screen, so it disappears the instant an
-  // expansion to unit 1 starts and appears only once a compaction to 10 has
-  // finished (unlike sim.compaction.unit, renderUnit already reflects a
-  // transition in flight).
-  const legendUnit = renderUnit(sim.compaction);
+  // effectiveRenderUnit says are actually on screen (the same unit
+  // renderCourses/courseHeightPx just drew with, so this can't diverge from
+  // the tower), so it disappears the instant an expansion to unit 1 starts
+  // and appears only once a compaction to 10 has finished.
+  const legendUnit = effectiveRenderUnit(sim.compaction, bricks);
   if (legendUnit > 1) {
     ctx.font = `${LEGEND_FONT_PX}px ${tokens.fonts.hand}`;
     ctx.textBaseline = 'alphabetic';

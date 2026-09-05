@@ -11,6 +11,10 @@
   --mustard: #f0c85a;
   --leaf: #6aa84f;
   --muted: #8a7d6a;
+  /* An upcoming landmark's icon (src/render/stage.ts): drawn at full opacity
+     in this flat, desaturated tone rather than a dimmed version of its
+     passed color. */
+  --muted-icon: #c9c3b8;
   /* The two-tone paper hills behind the tower (src/render/stage.ts). */
   --hill: #3f9e92;
   --hill-deep: #25756b;
@@ -471,12 +475,24 @@ select {
     font-size: 64px;
   }
 
-  .hud-teaser {
-    top: 96px;
+  /* Below 700px there isn't room for the teaser and the controls at their
+     own fixed positions (206px assumes a one-line teaser; a wrapped one
+     collides with the sun, which paints from 60px to 136px). Instead the two
+     share one right-aligned column, anchored below the sun, so the controls
+     flow beneath however tall the teaser actually rendered. */
+  .hud-side {
+    position: fixed;
+    right: 44px;
+    top: 148px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
   }
 
+  .hud-teaser,
   .hud-controls {
-    top: 152px;
+    position: static;
   }
 
   .hud-footer {

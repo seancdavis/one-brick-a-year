@@ -66,6 +66,13 @@ export function createHud(
 
   controls.append(tabs, colorPicker.el);
 
+  // Below 700px, the teaser and controls share one right-aligned column
+  // (see .hud-side in src/style.css) so the controls flow beneath the
+  // teaser's actual rendered height instead of a guessed fixed offset.
+  const side = document.createElement('div');
+  side.className = 'hud-side';
+  side.append(teaser, controls);
+
   const prompt = document.createElement('div');
   prompt.className = 'prompt';
   prompt.textContent = 'Scroll to build. Scroll back to undo.';
@@ -99,7 +106,7 @@ export function createHud(
 
   footer.append(leftCell, rightCell);
 
-  root.append(big, teaser, controls, footer, prompt);
+  root.append(big, side, footer, prompt);
 
   function paint(sim: SimState): void {
     const bricks = bricksFor(sim.years);

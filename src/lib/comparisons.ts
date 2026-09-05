@@ -3,22 +3,22 @@
 // (src/hud.ts's setComparisons). Pure — no DOM.
 
 import type { Beat } from './beats';
-import type { Landmark } from './landmarks';
+import type { Landmark, ThingLandmark } from './landmarks';
 
-// The tallest passed "thing" landmark, phrased "taller than {label}!" — every
-// thing's label already carries its own article ("the Eiffel Tower", "a
-// door", "your home"), so the phrase reads naturally without stripping or
-// adding one. Below the shortest thing (the ruler), nothing has been passed
-// yet.
+// The tallest passed "thing" landmark's own tallerThanPhrase (e.g. "taller
+// than the Eiffel Tower!", "higher than airplanes fly!", "past the edge of
+// space!" — not every thing's phrase actually starts with "taller than", so
+// this can't be built generically from the label). Below the shortest thing
+// (the ruler), nothing has been passed yet.
 export function tallerThan(heightM: number, landmarks: Landmark[]): string {
-  let tallest: Landmark | null = null;
+  let tallest: ThingLandmark | null = null;
   for (const landmark of landmarks) {
     if (landmark.kind !== 'thing' || landmark.meters > heightM) continue;
     if (!tallest || landmark.meters > tallest.meters) tallest = landmark;
   }
 
   if (!tallest) return 'not as tall as a door yet';
-  return `taller than ${tallest.label}!`;
+  return tallest.tallerThanPhrase;
 }
 
 // The most recent beat's beforePhrase, e.g. "before the first people". Below

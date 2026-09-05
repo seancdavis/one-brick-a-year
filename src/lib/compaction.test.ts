@@ -4,6 +4,7 @@ import {
   COMPACT_MS,
   courseHeightPx,
   drawnBricks,
+  effectiveRenderUnit,
   EXPAND_FRACTION,
   INITIAL_COMPACTION,
   MAX_DRAWN,
@@ -154,8 +155,8 @@ describe('renderCourses', () => {
     const end: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: COMPACT_MS } };
     expect(renderCourses(16, start)).toBe(16);
     expect(renderCourses(16, end)).toBe(16);
-    expect(courseHeightPx(start)).toBeCloseTo(3, 10);
-    expect(courseHeightPx(end)).toBeCloseTo(30, 10);
+    expect(courseHeightPx(16, start)).toBeCloseTo(3, 10);
+    expect(courseHeightPx(16, end)).toBeCloseTo(30, 10);
   });
 
   it('is never zero for bricks a state can actually reach: idle at or above its own unit, or mid-transition', () => {
@@ -176,7 +177,7 @@ describe('renderCourses', () => {
 describe('renderCourses x courseHeightPx (drawn height)', () => {
   it('is exactly continuous at both ends of a compaction and of an expansion, for bricks a multiple of the coarse unit', () => {
     const bricks = 20; // a multiple of the coarse unit (10) on both sides
-    const heightAt = (b: number, c: Compaction) => renderCourses(b, c) * courseHeightPx(c);
+    const heightAt = (b: number, c: Compaction) => renderCourses(b, c) * courseHeightPx(b, c);
 
     const idleFine: Compaction = { unit: 1, transition: null };
     const compactStart: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: 0 } };
@@ -193,13 +194,43 @@ describe('renderCourses x courseHeightPx (drawn height)', () => {
 
   it('for non-multiples, the jump at either end of either transition is less than one coarse brick (BRICK_PX)', () => {
     const bricks = 25; // not a multiple of the coarse unit (10)
-    const heightAt = (b: number, c: Compaction) => renderCourses(b, c) * courseHeightPx(c);
+    const heightAt = (b: number, c: Compaction) => renderCourses(b, c) * courseHeightPx(b, c);
     const idleCoarse: Compaction = { unit: 10, transition: null };
 
     const compactEnd: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: COMPACT_MS } };
     const expandStart: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: 0 } };
     expect(Math.abs(heightAt(bricks, compactEnd) - heightAt(bricks, idleCoarse))).toBeLessThan(BRICK_PX);
     expect(Math.abs(heightAt(bricks, expandStart) - heightAt(bricks, idleCoarse))).toBeLessThan(BRICK_PX);
+  });
+});
+
+describe('effectiveRenderUnit', () => {
+  it('never lets renderCourses floor to zero during a fast multi-level undo (a 1000 -> 100 expansion, bricks falling from 82 to 5)', () => {
+    const c: Compaction = { unit: 1000, transition: { from: 1000, to: 100, elapsedMs: 250 } };
+    for (let bricks = 82; bricks >= 5; bricks--) {
+      expect(renderCourses(bricks, c)).toBeGreaterThan(0);
+    }
+  });
+
+  it('a 100 -> 10 expansion with 9 bricks renders 9 courses (renderUnit alone would floor this to 0)', () => {
+    const c: Compaction = { unit: 100, transition: { from: 100, to: 10, elapsedMs: 250 } };
+    expect(renderUnit(c)).toBe(10);
+    expect(drawnBricks(9, renderUnit(c))).toBe(0); // the bug this guards against
+    expect(renderCourses(9, c)).toBe(9);
+  });
+
+  it('the legend unit matches the unit renderCourses actually drew with, in both cases above', () => {
+    const expanding: Compaction = { unit: 1000, transition: { from: 1000, to: 100, elapsedMs: 250 } };
+    const bricksA = 5;
+    const unitA = effectiveRenderUnit(expanding, bricksA);
+    expect(renderCourses(bricksA, expanding)).toBe(drawnBricks(bricksA, unitA));
+    expect(unitLabel(unitA)).toBe('each brick is one year');
+
+    const expandingOnce: Compaction = { unit: 100, transition: { from: 100, to: 10, elapsedMs: 250 } };
+    const bricksB = 9;
+    const unitB = effectiveRenderUnit(expandingOnce, bricksB);
+    expect(renderCourses(bricksB, expandingOnce)).toBe(drawnBricks(bricksB, unitB));
+    expect(unitLabel(unitB)).toBe('each brick is one year');
   });
 });
 
