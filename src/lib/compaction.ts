@@ -113,19 +113,15 @@ export function renderUnit(c: Compaction): number {
   return Math.min(c.transition.from, c.transition.to);
 }
 
-// How many drawn courses to render right now. Idle, that's just the normal
-// drawnBricks count. A compaction (to > from) draws every one of the fine
-// `from`-unit bricks, unchanged in count, and lets courseHeightPx (below)
-// shrink them together. An expansion (to < from) draws the coarse
-// `from`-unit bricks already on screen, exploded into their COMPACT_FACTOR
-// fine sub-bricks each, and lets courseHeightPx grow them back up — so the
-// count is never zero mid-transition just because the target unit's own
-// drawnBricks would floor to a small number.
+// How many drawn courses to render right now: idle, that's just the normal
+// drawnBricks count at `unit`; during ANY transition (compaction or
+// expansion) it's drawnBricks at renderUnit(c) — the finer (smaller) of
+// `from` and `to` — held fixed for the whole transition so the count never
+// jumps mid-flight and, critically, is never zero while bricks > 0: an
+// expansion can't floor to zero just because the coarse `from`-unit count
+// is small, since it's always counted in the finer unit's smaller bricks.
 export function renderCourses(bricks: number, c: Compaction): number {
-  if (!c.transition) return drawnBricks(bricks, c.unit);
-  const { from, to } = c.transition;
-  if (to > from) return drawnBricks(bricks, from);
-  return drawnBricks(bricks, from) * COMPACT_FACTOR;
+  return drawnBricks(bricks, renderUnit(c));
 }
 
 // The height of one drawn course right now, in css px: BRICK_PX at rest,
@@ -136,12 +132,6 @@ export function renderCourses(bricks: number, c: Compaction): number {
 // worth of height.
 export function courseHeightPx(c: Compaction): number {
   return (BRICK_PX * renderUnit(c)) / visualUnit(c);
-}
-
-// The whole tower's height in css px right now — what src/render/stage.ts
-// draws the stack at.
-export function towerHeightPx(bricks: number, c: Compaction): number {
-  return renderCourses(bricks, c) * courseHeightPx(c);
 }
 
 // Legend copy for what one drawn brick is worth right now — shown whenever

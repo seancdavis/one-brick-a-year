@@ -26,13 +26,13 @@ by changing one number in one place.
 The picture-book look — cream paper, navy ink, coral and mustard accents,
 teal paper hills, square corners, and a flat "paper drop" (an offset copy in
 a warm shadow tint, never a blur) on anything that sits on the paper — is
-defined in two places kept in sync by eye, since a canvas can't read CSS:
-`src/style.css`'s custom properties (`--paper`, `--navy`, `--coral`,
-`--mustard`, `--muted`, `--paper-shadow`, `--font-display`, `--font-hand`)
-for the DOM chrome, and matching constants at the top of
-`src/render/stage.ts` for the canvas-drawn scene. Two hand-lettered
-typefaces carry all the type: Fredoka for the big numbers and footer values,
-Patrick Hand for everything else.
+defined once, in `src/style.css`'s custom properties: that file is the
+canonical token file. `src/render/stage.ts` resolves the same shared custom
+properties once per resize (`readTokens`/`ensureTokens`) rather than keeping
+its own copies — paper, navy, coral, mustard, leaf, muted, shadow, hill,
+hill-deep, and the two fonts. Nothing is duplicated by hand. Two
+hand-lettered typefaces carry all the type: Fredoka for the big numbers and
+footer values, Patrick Hand for everything else.
 
 ## Compaction
 

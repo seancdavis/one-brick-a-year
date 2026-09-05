@@ -11,7 +11,6 @@ import {
   renderCourses,
   renderUnit,
   stepCompaction,
-  towerHeightPx,
   unitLabel,
   visualUnit,
   type Compaction,
@@ -150,11 +149,11 @@ describe('renderCourses', () => {
     expect(renderCourses(25, end)).toBe(25);
   });
 
-  it('a 16-brick expansion from 10 to 1 renders 10 courses growing from 3px to 30px each', () => {
+  it('a 16-brick expansion from 10 to 1 renders 16 courses growing from 3px to 30px each', () => {
     const start: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: 0 } };
     const end: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: COMPACT_MS } };
-    expect(renderCourses(16, start)).toBe(10);
-    expect(renderCourses(16, end)).toBe(10);
+    expect(renderCourses(16, start)).toBe(16);
+    expect(renderCourses(16, end)).toBe(16);
     expect(courseHeightPx(start)).toBeCloseTo(3, 10);
     expect(courseHeightPx(end)).toBeCloseTo(30, 10);
   });
@@ -166,31 +165,41 @@ describe('renderCourses', () => {
     expect(renderCourses(16, { unit: 10, transition: { from: 10, to: 1, elapsedMs: 0 } })).toBeGreaterThan(0);
     expect(renderCourses(16, { unit: 10, transition: { from: 10, to: 1, elapsedMs: COMPACT_MS } })).toBeGreaterThan(0);
   });
+
+  it('never drops to zero as bricks decrease during an active 10 -> 1 expansion (e.g. 12 down to 9)', () => {
+    const c: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: 100 } };
+    expect(renderCourses(12, c)).toBeGreaterThan(0);
+    expect(renderCourses(9, c)).toBeGreaterThan(0);
+  });
 });
 
-describe('towerHeightPx', () => {
+describe('renderCourses x courseHeightPx (drawn height)', () => {
   it('is exactly continuous at both ends of a compaction and of an expansion, for bricks a multiple of the coarse unit', () => {
     const bricks = 20; // a multiple of the coarse unit (10) on both sides
+    const heightAt = (b: number, c: Compaction) => renderCourses(b, c) * courseHeightPx(c);
 
     const idleFine: Compaction = { unit: 1, transition: null };
     const compactStart: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: 0 } };
     const compactEnd: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: COMPACT_MS } };
     const idleCoarse: Compaction = { unit: 10, transition: null };
-    expect(towerHeightPx(bricks, compactStart)).toBeCloseTo(towerHeightPx(bricks, idleFine), 8);
-    expect(towerHeightPx(bricks, compactEnd)).toBeCloseTo(towerHeightPx(bricks, idleCoarse), 8);
+    expect(heightAt(bricks, compactStart)).toBeCloseTo(heightAt(bricks, idleFine), 8);
+    expect(heightAt(bricks, compactEnd)).toBeCloseTo(heightAt(bricks, idleCoarse), 8);
 
     const expandStart: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: 0 } };
     const expandEnd: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: COMPACT_MS } };
-    expect(towerHeightPx(bricks, expandStart)).toBeCloseTo(towerHeightPx(bricks, idleCoarse), 8);
-    expect(towerHeightPx(bricks, expandEnd)).toBeCloseTo(towerHeightPx(bricks, idleFine), 8);
+    expect(heightAt(bricks, expandStart)).toBeCloseTo(heightAt(bricks, idleCoarse), 8);
+    expect(heightAt(bricks, expandEnd)).toBeCloseTo(heightAt(bricks, idleFine), 8);
   });
 
-  it('for non-multiples, the jump at a compaction snap is less than one coarse brick (BRICK_PX)', () => {
+  it('for non-multiples, the jump at either end of either transition is less than one coarse brick (BRICK_PX)', () => {
     const bricks = 25; // not a multiple of the coarse unit (10)
-    const compactEnd: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: COMPACT_MS } };
+    const heightAt = (b: number, c: Compaction) => renderCourses(b, c) * courseHeightPx(c);
     const idleCoarse: Compaction = { unit: 10, transition: null };
-    const jump = Math.abs(towerHeightPx(bricks, compactEnd) - towerHeightPx(bricks, idleCoarse));
-    expect(jump).toBeLessThan(BRICK_PX);
+
+    const compactEnd: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: COMPACT_MS } };
+    const expandStart: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: 0 } };
+    expect(Math.abs(heightAt(bricks, compactEnd) - heightAt(bricks, idleCoarse))).toBeLessThan(BRICK_PX);
+    expect(Math.abs(heightAt(bricks, expandStart) - heightAt(bricks, idleCoarse))).toBeLessThan(BRICK_PX);
   });
 });
 

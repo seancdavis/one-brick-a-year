@@ -11,6 +11,9 @@
   --mustard: #f0c85a;
   --leaf: #6aa84f;
   --muted: #8a7d6a;
+  /* The two-tone paper hills behind the tower (src/render/stage.ts). */
+  --hill: #3f9e92;
+  --hill-deep: #25756b;
   /* The cut-paper drop: a flat offset copy in a warm shadow tint, never a
      blur. Two strengths — the stronger one for things sitting on the paper
      (cards, tabs, chips), the softer one for the footer's top edge. */

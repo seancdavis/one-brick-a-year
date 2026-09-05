@@ -32,6 +32,8 @@ interface Tokens {
   leaf: string;
   muted: string;
   shadow: string;
+  hill: string;
+  hillDeep: string;
   fonts: { display: string; hand: string };
 }
 
@@ -46,6 +48,8 @@ function readTokens(): Tokens {
     leaf: token('--leaf'),
     muted: token('--muted'),
     shadow: token('--paper-shadow'),
+    hill: token('--hill'),
+    hillDeep: token('--hill-deep'),
     fonts: { display: token('--font-display'), hand: token('--font-hand') },
   };
 }
@@ -102,9 +106,8 @@ const SUN_TOP_PX = 60;
 // upper hill's crest sits exactly at the ground line so the stack reads as
 // standing on it; the lower, wider hill sits behind and below, drawn on
 // top so only the upper hill's crest band shows above it — the two-tone
-// "layered hills" look the artboard uses.
-const HILL_UPPER_COLOR = '#3f9e92';
-const HILL_LOWER_COLOR = '#25756b';
+// "layered hills" look the artboard uses. Colors come from tokens.hill /
+// tokens.hillDeep (src/style.css's --hill / --hill-deep).
 const HILL_UPPER_RY_PX = 120;
 const HILL_LOWER_RY_PX = 100;
 const HILL_UPPER_RX_RATIO = 0.58;
@@ -138,19 +141,23 @@ const ICON_LABEL_GAP_PX = 8;
 const CONNECTOR_THRESHOLD_PX = 8;
 const SECOND_LINE_HEIGHT_PX = 16;
 const LEADER_WIDTH_PX = 2;
+// Reserved between the icon's near edge and the stack edge so the dashed
+// leader is always visibly a line, never zero-length with the icon touching
+// the tower.
+const LEADER_MIN_PX = 24;
 const UPCOMING_ICON_ALPHA = 0.6;
 
 // Legend beside the tower's base: what one drawn brick is worth right now.
-// On narrow canvases there's no room beside the tower, so it moves under
-// the HUD's big number instead (src/hud.ts's .hud-big, left: 44px) —
-// centered within a box roughly as wide as that number reads at its
-// narrow font size.
+// On narrow canvases there's no room beside the tower, so instead it's
+// centered horizontally on the tower, just below the ground line on the
+// hill, in the paper color for contrast against the hill's teal, and
+// wrapped to at most two lines so it stays within the viewport.
 const LEGEND_FONT_PX = 16;
 const LEGEND_GAP_PX = 12;
 const LEGEND_BASELINE_OFFSET_PX = 8;
-const LEGEND_NARROW_LEFT_PX = 44;
-const LEGEND_NARROW_WIDTH_PX = 200;
-const LEGEND_NARROW_TOP_PX = 150;
+const LEGEND_NARROW_GROUND_GAP_PX = 28;
+const LEGEND_NARROW_LINE_HEIGHT_PX = 20;
+const LEGEND_NARROW_SIDE_MARGIN_PX = 24;
 
 // Fiber texture: a cached offscreen canvas of low-alpha speckle noise,
 // regenerated only when the CSS viewport size changes (never per frame).
@@ -286,18 +293,40 @@ function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
   return end > 0 ? text.slice(0, end).trimEnd() + ELLIPSIS : ELLIPSIS;
 }
 
+// Greedily wraps text onto a second line once it no longer fits maxWidth,
+// measured with the canvas's current font — used for the narrow legend,
+// which sits centered over the hill rather than in a fixed side column and
+// so needs to wrap instead of ellipsizing. Only ever splits into two lines:
+// the legend copy is short enough that a second word boundary always
+// exists once the first line is full.
+function wrapToTwoLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  if (ctx.measureText(text).width <= maxWidth) return [text];
+
+  const words = text.split(' ');
+  let line1 = words[0];
+  let split = 1;
+  for (; split < words.length; split++) {
+    const candidate = `${line1} ${words[split]}`;
+    if (ctx.measureText(candidate).width > maxWidth) break;
+    line1 = candidate;
+  }
+  const line2 = words.slice(split).join(' ');
+  return line2 ? [line1, line2] : [line1];
+}
+
 // One side's landmark lines, icons, and labels. Each side gets a fixed,
 // explicit text width — from the outer viewport margin to where the icon
-// column sits (iconSize plus a gap short of the stack edge) — so the
-// longest label can never run off a narrow viewport's edge or crowd the
-// stack: left labels are left-aligned at LABEL_MARGIN_PX, right labels
-// right-aligned at width - LABEL_MARGIN_PX, and the icon column (and the
-// dashed leader reaching it from the stack) sits at the same x for every
-// landmark on that side. A label that fits `${label} · ${years}` within
-// that width draws on one line; otherwise the years drop to their own
-// second line, and if the label alone still doesn't fit, it's ellipsized
-// (years never are). A vertical connector bridges the gap when stacking has
-// pushed the label away from its true (lineY) height.
+// column sits (iconSize plus a gap, plus LEADER_MIN_PX reserved short of the
+// stack edge so the dashed leader is never zero-length) — so the longest
+// label can never run off a narrow viewport's edge or crowd the stack: left
+// labels are left-aligned at LABEL_MARGIN_PX, right labels right-aligned at
+// width - LABEL_MARGIN_PX, and the icon column (and the dashed leader
+// reaching it from the stack) sits at the same x for every landmark on that
+// side. A label that fits `${label} · ${years}` within that width draws on
+// one line; otherwise the years drop to their own second line, and if the
+// label alone still doesn't fit, it's ellipsized (years never are). A
+// vertical connector bridges the gap when stacking has pushed the label
+// away from its true (lineY) height.
 function drawLandmarkLabels(
   ctx: CanvasRenderingContext2D,
   placed: PlacedLandmark[],
@@ -313,7 +342,7 @@ function drawLandmarkLabels(
   const stackEdgeX = isLeft ? stackLeft : stackRight;
   const textAnchorX = isLeft ? LABEL_MARGIN_PX : width - LABEL_MARGIN_PX;
   const sideRoomPx = isLeft ? stackLeft - LABEL_MARGIN_PX : width - LABEL_MARGIN_PX - stackRight;
-  const availableWidth = Math.max(0, sideRoomPx - ICON_LABEL_GAP_PX - iconSize);
+  const availableWidth = Math.max(0, sideRoomPx - ICON_LABEL_GAP_PX - iconSize - LEADER_MIN_PX);
   const iconLeftX = isLeft
     ? textAnchorX + availableWidth + ICON_LABEL_GAP_PX
     : textAnchorX - availableWidth - ICON_LABEL_GAP_PX - iconSize;
@@ -451,14 +480,14 @@ export function drawStage(
 
   drawPaperCircle(ctx, W - SUN_RIGHT_PX - SUN_RADIUS_PX, SUN_TOP_PX + SUN_RADIUS_PX, SUN_RADIUS_PX, tokens.mustard, tokens.shadow);
 
-  drawPaperHill(ctx, W / 2, ground, W * HILL_UPPER_RX_RATIO, HILL_UPPER_RY_PX, HILL_UPPER_COLOR, tokens.shadow);
+  drawPaperHill(ctx, W / 2, ground, W * HILL_UPPER_RX_RATIO, HILL_UPPER_RY_PX, tokens.hill, tokens.shadow);
   drawPaperHill(
     ctx,
     W / 2,
     ground + HILL_LOWER_OFFSET_PX,
     W * HILL_LOWER_RX_RATIO,
     HILL_LOWER_RY_PX,
-    HILL_LOWER_COLOR,
+    tokens.hillDeep,
     tokens.shadow,
   );
 
@@ -488,12 +517,18 @@ export function drawStage(
   if (legendUnit > 1) {
     ctx.font = `${LEGEND_FONT_PX}px ${tokens.fonts.hand}`;
     ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = tokens.muted;
     if (narrow) {
       ctx.textAlign = 'center';
-      ctx.fillText(unitLabel(legendUnit), LEGEND_NARROW_LEFT_PX + LEGEND_NARROW_WIDTH_PX / 2, LEGEND_NARROW_TOP_PX);
+      ctx.fillStyle = tokens.paper;
+      const maxWidth = W - LEGEND_NARROW_SIDE_MARGIN_PX * 2;
+      const lines = wrapToTwoLines(ctx, unitLabel(legendUnit), maxWidth);
+      const firstBaselineY = ground + LEGEND_NARROW_GROUND_GAP_PX;
+      lines.forEach((lineText, i) => {
+        ctx.fillText(lineText, W / 2, firstBaselineY + i * LEGEND_NARROW_LINE_HEIGHT_PX);
+      });
     } else {
       ctx.textAlign = 'left';
+      ctx.fillStyle = tokens.muted;
       ctx.fillText(unitLabel(legendUnit), sx + sw + LEGEND_GAP_PX, ground - LEGEND_BASELINE_OFFSET_PX);
     }
   }
