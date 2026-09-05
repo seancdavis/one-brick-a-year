@@ -15,15 +15,12 @@ export function createHud(
   opts: { colorId: string; onSoundToggle: () => void; onRestart: () => void; onColorSelect: (colorId: string) => void },
 ): {
   update(sim: SimState): void;
-  hidePrompt(): void;
-  showPrompt(): void;
-  showFooter(): void;
+  setHasScrolled(hasScrolled: boolean): void;
   setSound(enabled: boolean): void;
   setColor(colorId: string): void;
   setComparisons(c: { tall: string; ago: string }): void;
   setNext(text: string | null): void;
 } {
-  // Top-left: the big years-ago number.
   const big = document.createElement('div');
   big.className = 'hud-big';
   const yearsEl = document.createElement('div');
@@ -33,7 +30,6 @@ export function createHud(
   agoLabel.textContent = 'years ago!';
   big.append(yearsEl, agoLabel);
 
-  // Top-right, under the sun: a teaser for the next unpassed time event.
   const teaser = document.createElement('div');
   teaser.className = 'hud-teaser';
   teaser.hidden = true;
@@ -44,7 +40,6 @@ export function createHud(
   teaserValue.className = 'hud-teaser-value';
   teaser.append(teaserLabel, teaserValue);
 
-  // Controls, tucked under the teaser: two paper tabs, then the color chips.
   const controls = document.createElement('div');
   controls.className = 'hud-controls';
 
@@ -71,13 +66,10 @@ export function createHud(
 
   controls.append(tabs, colorPicker.el);
 
-  // The prompt: shown until the first scroll, sitting low and centered.
   const prompt = document.createElement('div');
   prompt.className = 'prompt';
   prompt.textContent = 'Scroll to build. Scroll back to undo.';
 
-  // The footer: a mustard strip holding the two readouts, hidden until the
-  // first scroll.
   const footer = document.createElement('div');
   footer.className = 'hud-footer';
 
@@ -120,18 +112,12 @@ export function createHud(
 
   return {
     update: paint,
-    hidePrompt() {
-      prompt.classList.add('off');
-    },
-    showPrompt() {
-      prompt.classList.remove('off');
-      // The prompt and the footer are two faces of the same "have we
-      // scrolled yet" state — showing one always means hiding the other, so
-      // a replay (which only calls showPrompt()) resets both.
-      footer.classList.remove('visible');
-    },
-    showFooter() {
-      footer.classList.add('visible');
+    // The prompt and the footer are two faces of the same "have we scrolled
+    // yet" state, so one call toggles both: hasScrolled true hides the
+    // prompt and shows the footer, false (a replay) puts them back.
+    setHasScrolled(hasScrolled: boolean) {
+      prompt.classList.toggle('off', hasScrolled);
+      footer.classList.toggle('visible', hasScrolled);
     },
     setSound(enabled: boolean) {
       soundButton.setAttribute('aria-pressed', String(enabled));

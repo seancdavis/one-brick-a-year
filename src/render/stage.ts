@@ -1,14 +1,16 @@
 // Canvas drawing for the picture-book scene: paper ground, sun, hills, the
 // brick tower, landmarks as cut-paper shapes, and the compaction legend.
-// Reads state and draws; never mutates it. Colors, sizes, and the "paper
-// drop" technique (a flat offset copy in a warm shadow tint, never a blur)
-// come from docs/design/picture-book.dc.html and are pinned as constants
-// below, not hard-coded inline, so they can be spotted and reused.
+// Reads state and draws; never mutates it. Colors and the two typefaces are
+// resolved once per resize from src/style.css's custom properties (see
+// Tokens/ensureTokens below) — that file is the single source of truth for
+// them. Sizes and the "paper drop" technique (a flat offset copy in a warm
+// shadow tint, never a blur) come from docs/design/picture-book.dc.html and
+// are pinned as constants below.
 
 import { courseHeightPx, renderCourses, renderUnit, unitLabel } from '../lib/compaction';
 import { fmtYears } from '../lib/format';
 import type { IconId } from '../lib/icon-paths';
-import { PAPER_COLORS } from '../lib/landmarks';
+import type { PaperColor } from '../lib/landmarks';
 import type { PlacedLandmark, PlacedLandmarks, StageBox } from '../lib/layout';
 import { shade, type LegoColor } from '../lib/lego-colors';
 import { bricksFor, type SimState } from '../lib/sim';
@@ -20,18 +22,65 @@ export interface StageView {
   narrow: boolean;
 }
 
-// Design tokens (docs/autopilot/2026-09-05-picture-book.md's "Design
-// tokens" section, matched against docs/design/picture-book.dc.html).
-const PAPER = '#f6ecd9';
-const NAVY = '#24395c';
-const MUTED = '#8a7d6a';
+// The picture-book palette and typefaces, resolved from src/style.css's
+// custom properties.
+interface Tokens {
+  paper: string;
+  navy: string;
+  coral: string;
+  mustard: string;
+  leaf: string;
+  muted: string;
+  shadow: string;
+  fonts: { display: string; hand: string };
+}
+
+function readTokens(): Tokens {
+  const root = getComputedStyle(document.documentElement);
+  const token = (name: string) => root.getPropertyValue(name).trim();
+  return {
+    paper: token('--paper'),
+    navy: token('--navy'),
+    coral: token('--coral'),
+    mustard: token('--mustard'),
+    leaf: token('--leaf'),
+    muted: token('--muted'),
+    shadow: token('--paper-shadow'),
+    fonts: { display: token('--font-display'), hand: token('--font-hand') },
+  };
+}
+
+// Cached like ensureNoiseCanvas below: re-read only when the CSS viewport
+// size changes, not on every frame.
+let tokensCache: Tokens | null = null;
+let tokensW = 0;
+let tokensH = 0;
+
+function ensureTokens(widthCss: number, heightCss: number): Tokens {
+  if (tokensCache && tokensW === widthCss && tokensH === heightCss) return tokensCache;
+  tokensCache = readTokens();
+  tokensW = widthCss;
+  tokensH = heightCss;
+  return tokensCache;
+}
+
+// src/lib/landmarks.ts keeps only the four color names; this is where a
+// name becomes an actual drawable color.
+function paperColorHex(tokens: Tokens, color: PaperColor): string {
+  switch (color) {
+    case 'navy':
+      return tokens.navy;
+    case 'leaf':
+      return tokens.leaf;
+    case 'mustard':
+      return tokens.mustard;
+    case 'coral':
+      return tokens.coral;
+  }
+}
+
 const MUTED_ICON = '#c9c3b8';
-// The cut-paper drop: every shape that "sits" on the paper draws twice —
-// once offset PAPER_DROP_PX down in this warm, flat tint, then again at its
-// real position in its real color. Never a blur.
-const PAPER_SHADOW = 'rgba(90,61,30,0.2)';
 const PAPER_DROP_PX = 3;
-const FONT_STACK = `'Patrick Hand', 'Comic Sans MS', 'Chalkboard SE', cursive`;
 
 // Below the ground line, where the stack sits. The ground is the crest of
 // the upper paper hill (see drawPaperHill) — 90px leaves room for both
@@ -47,7 +96,6 @@ const TOP_FRACTION = 0.2;
 const SUN_RADIUS_PX = 38;
 const SUN_RIGHT_PX = 90;
 const SUN_TOP_PX = 60;
-const SUN_COLOR = '#f0c85a';
 
 // Ground: two overlapping paper hills, drawn as half-ellipses (a flat
 // bottom edge below the visible canvas, an elliptical crest on top). The
@@ -75,13 +123,12 @@ const BRICK_TOP_LIGHTEN = 0.25;
 const STUD_WIDTH_PX = 12;
 const STUD_HEIGHT_PX = 9;
 const STUD_BOTTOM_INSET_PX = 2;
+const STUD_CORNER_RADIUS_PX = 3;
 const STUD_LIGHTEN = 0.3;
 const STUD_BOTTOM_DARKEN = -0.15;
 
-// Landmark cut-paper icons and labels. Each label unit (icon + text)
-// anchors at the outer viewport margin instead of a fixed gap from the
-// stack (see drawLandmarkLabels), matching the layout kept from before this
-// slice.
+// Landmark cut-paper icons and labels — see drawLandmarkLabels for how
+// these lay out a side.
 const ICON_PX = 36;
 const ICON_PX_NARROW = 28;
 const LABEL_FONT_PX = 20;
@@ -91,8 +138,6 @@ const ICON_LABEL_GAP_PX = 8;
 const CONNECTOR_THRESHOLD_PX = 8;
 const SECOND_LINE_HEIGHT_PX = 16;
 const LEADER_WIDTH_PX = 2;
-const PASSED_LABEL_COLOR = NAVY;
-const UPCOMING_LABEL_COLOR = MUTED;
 const UPCOMING_ICON_ALPHA = 0.6;
 
 // Legend beside the tower's base: what one drawn brick is worth right now.
@@ -101,7 +146,6 @@ const UPCOMING_ICON_ALPHA = 0.6;
 // centered within a box roughly as wide as that number reads at its
 // narrow font size.
 const LEGEND_FONT_PX = 16;
-const LEGEND_COLOR = MUTED;
 const LEGEND_GAP_PX = 12;
 const LEGEND_BASELINE_OFFSET_PX = 8;
 const LEGEND_NARROW_LEFT_PX = 44;
@@ -160,8 +204,8 @@ function line(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number,
   ctx.stroke();
 }
 
-function drawPaperCircle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string): void {
-  ctx.fillStyle = PAPER_SHADOW;
+function drawPaperCircle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string, shadow: string): void {
+  ctx.fillStyle = shadow;
   ctx.beginPath();
   ctx.arc(cx, cy + PAPER_DROP_PX, r, 0, Math.PI * 2);
   ctx.fill();
@@ -182,8 +226,16 @@ function tracePaperHill(ctx: CanvasRenderingContext2D, cx: number, crestY: numbe
   ctx.closePath();
 }
 
-function drawPaperHill(ctx: CanvasRenderingContext2D, cx: number, crestY: number, rx: number, ry: number, color: string): void {
-  ctx.fillStyle = PAPER_SHADOW;
+function drawPaperHill(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  crestY: number,
+  rx: number,
+  ry: number,
+  color: string,
+  shadow: string,
+): void {
+  ctx.fillStyle = shadow;
   tracePaperHill(ctx, cx, crestY + PAPER_DROP_PX, rx, ry);
   ctx.fill();
 
@@ -202,11 +254,12 @@ function drawPaperIcon(
   size: number,
   fillStyle: string,
   alpha: number,
+  shadow: string,
 ): void {
   const scale = size / 24;
 
   ctx.save();
-  ctx.fillStyle = PAPER_SHADOW;
+  ctx.fillStyle = shadow;
   ctx.translate(x, y + PAPER_DROP_PX);
   ctx.scale(scale, scale);
   ctx.fill(path, 'evenodd');
@@ -254,6 +307,7 @@ function drawLandmarkLabels(
   width: number,
   iconSize: number,
   icons: Record<IconId, Path2D>,
+  tokens: Tokens,
 ): void {
   const isLeft = side === 'left';
   const stackEdgeX = isLeft ? stackLeft : stackRight;
@@ -278,12 +332,12 @@ function drawLandmarkLabels(
       : oneLineText;
     const iconCenterY = twoLine ? p.labelY + SECOND_LINE_HEIGHT_PX / 2 : p.labelY;
 
-    const labelColor = p.passed ? PASSED_LABEL_COLOR : UPCOMING_LABEL_COLOR;
-    const iconColor = p.passed ? PAPER_COLORS[p.landmark.paper] : MUTED_ICON;
+    const labelColor = p.passed ? tokens.navy : tokens.muted;
+    const iconColor = p.passed ? paperColorHex(tokens, p.landmark.paper) : MUTED_ICON;
     const iconAlpha = p.passed ? 1 : UPCOMING_ICON_ALPHA;
 
     const icon = icons[p.landmark.icon];
-    drawPaperIcon(ctx, icon, iconLeftX, iconCenterY - iconSize / 2, iconSize, iconColor, iconAlpha);
+    drawPaperIcon(ctx, icon, iconLeftX, iconCenterY - iconSize / 2, iconSize, iconColor, iconAlpha, tokens.shadow);
 
     ctx.strokeStyle = labelColor;
     ctx.lineWidth = LEADER_WIDTH_PX;
@@ -302,12 +356,26 @@ function drawLandmarkLabels(
   }
 }
 
-// The tower: always a whole number of drawn bricks (src/lib/compaction.ts's
-// drawnBricks), each pxPerBrick tall at rest (BRICK_PX) or squished
-// mid-transition. Every course gets a lighter top inset and a darker bottom
-// inset (clamped so they never overlap on a heavily squished course); the
-// top course alone gets four studs, and the whole stack gets one paper drop
-// rather than per-course shadows.
+// A stud's outline: rounded top-left and top-right corners (it's a rounded
+// LEGO nub), square bottom so it sits flush on the brick below.
+function traceStudTop(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, radius: number): void {
+  const r = Math.min(radius, w / 2, h);
+  ctx.beginPath();
+  ctx.moveTo(x, y + h);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h);
+  ctx.closePath();
+}
+
+// The tower: `drawn` whole courses, each pxPerBrick tall (BRICK_PX at rest,
+// squished or grown mid-transition — see src/lib/compaction.ts's
+// renderCourses/courseHeightPx). Every course gets a lighter top inset and a
+// darker bottom inset, clamped so they never overlap on a heavily squished
+// course; the top course alone gets four studs, and the whole stack gets one
+// paper drop rather than per-course shadows.
 function drawBrickTower(
   ctx: CanvasRenderingContext2D,
   sx: number,
@@ -316,13 +384,14 @@ function drawBrickTower(
   drawn: number,
   pxPerBrick: number,
   color: LegoColor,
+  shadow: string,
 ): void {
   if (drawn <= 0) return;
 
   const sh = drawn * pxPerBrick;
   const y0 = ground - sh;
 
-  ctx.fillStyle = PAPER_SHADOW;
+  ctx.fillStyle = shadow;
   ctx.fillRect(sx, y0 + PAPER_DROP_PX, sw, sh);
 
   ctx.fillStyle = color.hex;
@@ -353,7 +422,8 @@ function drawBrickTower(
   for (let s = 0; s < 4; s++) {
     const studX = sx + s * cellW + (cellW - STUD_WIDTH_PX) / 2;
     ctx.fillStyle = studColor;
-    ctx.fillRect(studX, studTop, STUD_WIDTH_PX, STUD_HEIGHT_PX);
+    traceStudTop(ctx, studX, studTop, STUD_WIDTH_PX, STUD_HEIGHT_PX, STUD_CORNER_RADIUS_PX);
+    ctx.fill();
     ctx.fillStyle = studBottomEdge;
     ctx.fillRect(studX, studTop + STUD_HEIGHT_PX - STUD_BOTTOM_INSET_PX, STUD_WIDTH_PX, STUD_BOTTOM_INSET_PX);
   }
@@ -371,32 +441,35 @@ export function drawStage(
   const { ground } = stageBox(view);
   const sw = narrow ? BRICK_WIDTH_NARROW_PX : BRICK_WIDTH_PX;
   const sx = Math.round(W / 2 - sw / 2);
+  const tokens = ensureTokens(W, H);
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // Paper ground fill and its fiber texture.
-  ctx.fillStyle = PAPER;
+  ctx.fillStyle = tokens.paper;
   ctx.fillRect(0, 0, W, H);
   ctx.drawImage(ensureNoiseCanvas(W, H), 0, 0, W, H);
 
-  // Sun, top-right.
-  drawPaperCircle(ctx, W - SUN_RIGHT_PX - SUN_RADIUS_PX, SUN_TOP_PX + SUN_RADIUS_PX, SUN_RADIUS_PX, SUN_COLOR);
+  drawPaperCircle(ctx, W - SUN_RIGHT_PX - SUN_RADIUS_PX, SUN_TOP_PX + SUN_RADIUS_PX, SUN_RADIUS_PX, tokens.mustard, tokens.shadow);
 
-  // Ground: the upper hill's crest is the ground line the stack stands on;
-  // the lower, wider hill sits behind and below it, painted on top so most
-  // of the canvas reads as its darker fill with the upper hill showing only
-  // as a crest band.
-  drawPaperHill(ctx, W / 2, ground, W * HILL_UPPER_RX_RATIO, HILL_UPPER_RY_PX, HILL_UPPER_COLOR);
-  drawPaperHill(ctx, W / 2, ground + HILL_LOWER_OFFSET_PX, W * HILL_LOWER_RX_RATIO, HILL_LOWER_RY_PX, HILL_LOWER_COLOR);
+  drawPaperHill(ctx, W / 2, ground, W * HILL_UPPER_RX_RATIO, HILL_UPPER_RY_PX, HILL_UPPER_COLOR, tokens.shadow);
+  drawPaperHill(
+    ctx,
+    W / 2,
+    ground + HILL_LOWER_OFFSET_PX,
+    W * HILL_LOWER_RX_RATIO,
+    HILL_LOWER_RY_PX,
+    HILL_LOWER_COLOR,
+    tokens.shadow,
+  );
 
   // Landmark lines, icons, and labels: things (physical comparisons) on the
   // left, time events (history milestones) on the right, mirrored around
   // the centered stack.
-  ctx.font = `${narrow ? LABEL_FONT_NARROW_PX : LABEL_FONT_PX}px ${FONT_STACK}`;
+  ctx.font = `${narrow ? LABEL_FONT_NARROW_PX : LABEL_FONT_PX}px ${tokens.fonts.hand}`;
   ctx.textBaseline = 'alphabetic';
   const iconSize = narrow ? ICON_PX_NARROW : ICON_PX;
-  drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, icons);
-  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, icons);
+  drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, icons, tokens);
+  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, icons, tokens);
 
   // The stack: always the whole, visible courses renderCourses says to draw
   // (never zero while bricks > 0, never a single course growing to fill the
@@ -404,7 +477,7 @@ export function drawStage(
   const bricks = bricksFor(sim.years);
   const drawn = renderCourses(bricks, sim.compaction);
   const pxPerBrick = courseHeightPx(sim.compaction);
-  drawBrickTower(ctx, sx, sw, ground, drawn, pxPerBrick, color);
+  drawBrickTower(ctx, sx, sw, ground, drawn, pxPerBrick, color, tokens.shadow);
 
   // Legend: what one drawn brick is worth right now — describes the bricks
   // renderUnit says are actually on screen, so it disappears the instant an
@@ -413,9 +486,9 @@ export function drawStage(
   // transition in flight).
   const legendUnit = renderUnit(sim.compaction);
   if (legendUnit > 1) {
-    ctx.font = `${LEGEND_FONT_PX}px ${FONT_STACK}`;
+    ctx.font = `${LEGEND_FONT_PX}px ${tokens.fonts.hand}`;
     ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = LEGEND_COLOR;
+    ctx.fillStyle = tokens.muted;
     if (narrow) {
       ctx.textAlign = 'center';
       ctx.fillText(unitLabel(legendUnit), LEGEND_NARROW_LEFT_PX + LEGEND_NARROW_WIDTH_PX / 2, LEGEND_NARROW_TOP_PX);

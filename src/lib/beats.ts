@@ -38,7 +38,7 @@ export const BEATS: readonly Beat[] = [
     atYears: 66e6,
     title: 'The asteroid.',
     line: 'A rock six miles wide hits the Earth. The dinosaurs are gone. The hole it left is 110 miles across.',
-    beforePhrase: 'before the asteroid hit',
+    beforePhrase: 'before the dinosaurs died',
   },
   {
     id: 'dinosaurs',

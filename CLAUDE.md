@@ -12,7 +12,7 @@ An interactive web page for an eight-year-old, and for sharing, that makes 4.6 b
 - **Decisions:** `docs/decisions/` — ADRs explaining why each rule exists. Read when a rule seems arbitrary.
 - **Session logs:** `docs/sessions/` — outcomes of past grill sessions. Skim recent ones for context.
 - **Autopilot specs:** `docs/autopilot/` — settled specs for unattended runs.
-- **Prototype:** `docs/prototype/brick-stack.html` — the single-file prototype this grew from. The reference for pacing, camera behavior, and landmark math.
+- **Prototype:** `docs/prototype/brick-stack.html` — the single-file prototype this grew from. The reference for pacing and landmark math.
 
 When Sean wants to align on upcoming work, he uses `/grill-me`.
 
@@ -39,7 +39,8 @@ npm run preview    # serve dist/
 - Pure logic lives in `src/lib/` and never touches the DOM or canvas, so it can be unit tested. Every file in `src/lib/` has a sibling `*.test.ts`.
 - Rendering lives in `src/render/`. It reads state and draws. It never mutates state.
 - DOM glue (input, HUD, cards, audio, start screen) lives at the top of `src/`, one file per concern, wired together in `src/main.ts`.
-- Every number that shapes the feel (brick height, pacing constants, zoom thresholds) lives in `src/lib/constants.ts` with a one-line comment saying what it does.
+- Every number that shapes the feel (brick height, pacing constants, compaction thresholds) lives in `src/lib/constants.ts` or `src/lib/compaction.ts` with a one-line comment saying what it does.
+- Compaction rule: every drawn brick is worth `unit` years, and the legend beside the tower always says so (`unitLabel(unit)`, shown whenever the unit being drawn is greater than one) — nothing is ever drawn that the legend doesn't account for.
 - Facts (ages, heights) live in `src/lib/landmarks.ts` and `src/lib/beats.ts` with a source comment. Do not invent facts. If a number is uncertain, round and say "about".
 - Copy is written for an eight-year-old who can read: short sentences, concrete nouns, no jargon.
 - Accessibility baseline: keyboard scroll equivalents (arrow keys, space, page up/down), visible focus states, `prefers-reduced-motion` respected, sound off by default and only started by a user gesture.

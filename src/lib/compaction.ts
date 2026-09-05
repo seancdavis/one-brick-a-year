@@ -1,12 +1,12 @@
 // The compaction model: the tower is always drawn as whole, visible bricks,
 // but once the drawn stack would outgrow the stage, ten bricks compact into
 // one — `unit` (years per drawn brick) steps up by COMPACT_FACTOR — with a
-// visible squish (see visualUnit) instead of the camera zooming out.
-// Scrolling back expands them again, with hysteresis so the two thresholds
-// don't flicker at the boundary. Pure math only — src/lib/sim.ts calls
-// stepCompaction every frame; src/render/stage.ts and src/main.ts read
-// drawnBricks, visualUnit, and pxPerMeter to draw the stack and place
-// landmarks to scale with it.
+// visible squish (see visualUnit) rather than the whole scene shrinking to
+// fit. Scrolling back expands them again, with hysteresis so the two
+// thresholds don't flicker at the boundary. Pure math only — src/lib/sim.ts
+// calls stepCompaction every frame; src/render/stage.ts and src/main.ts
+// read renderCourses, courseHeightPx, renderUnit, and pxPerMeter to draw
+// the stack and place landmarks to scale with it.
 
 import { BRICK_M } from './constants';
 
@@ -47,12 +47,11 @@ function easeInOut(p: number): number {
   return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
 }
 
-// Advances one frame: finishes an in-flight transition (or starts a new one
-// when the drawn count has crossed a threshold), mirroring the shape of the
-// zoom step this replaced — a transition that starts this frame is also
-// advanced by dtMs this same frame, so it isn't stuck at elapsedMs 0 for a
-// whole extra frame. Under reduced motion a transition (whether just started
-// or already in flight) completes immediately.
+// Advances one frame: finishes an in-flight transition, or starts a new one
+// when the drawn count has crossed a threshold — a transition that starts
+// this frame is also advanced by dtMs this same frame, so it isn't stuck at
+// elapsedMs 0 for a whole extra frame. Under reduced motion a transition
+// (whether just started or already in flight) completes immediately.
 export function stepCompaction(c: Compaction, bricks: number, dtMs: number, reducedMotion: boolean): Compaction {
   let unit = c.unit;
   let transition = c.transition;

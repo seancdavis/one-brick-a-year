@@ -16,9 +16,10 @@ DOM glue, kept out of the pure layer.
 ## Where the feel lives
 
 Every number that shapes the feel — brick height, the pace of the scroll,
-zoom thresholds, sound thresholds — is a named constant with a one-line
-comment saying what it does, not a number inlined at its use site. Tune the
-feel by changing one number in one place.
+compaction thresholds, sound thresholds — is a named constant with a
+one-line comment saying what it does, not a number inlined at its use site,
+living in `src/lib/constants.ts` or `src/lib/compaction.ts`. Tune the feel
+by changing one number in one place.
 
 ## Look
 
@@ -83,7 +84,7 @@ and touch drag work. Scrolling one way builds the stack and the other way
 undoes it, both instantly and in direct proportion to scroll distance
 (`src/lib/scroll-coupling.ts`'s exact closed form) — no velocity tracking,
 ramp-up, or spin-down. Every interactive control has a visible focus state.
-`prefers-reduced-motion: reduce` is honored: the zoom tween and other
+`prefers-reduced-motion: reduce` is honored: the compaction squish and other
 transitions become instant. Milestone cards are the live region
 (`aria-live="polite"`): they announce a beat without moving focus. The HUD
 counter is deliberately silent (`aria-live="off"`) — it changes every

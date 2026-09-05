@@ -1,14 +1,15 @@
 /* Picture-book design tokens (docs/design/picture-book.dc.html,
-   docs/autopilot/2026-09-05-picture-book.md). Paper, ink, and the two accent
-   colors, plus the two hand-lettered typefaces. The canvas stage
-   (src/render/stage.ts) pins its own copies of these same values since it
-   can't read CSS custom properties; keep the two in sync by eye. */
+   docs/autopilot/2026-09-05-picture-book.md). Paper, ink, and the accent
+   colors, plus the two hand-lettered typefaces. This file is the single
+   source of truth: src/render/stage.ts resolves these same custom
+   properties with getComputedStyle rather than keeping its own copies. */
 :root {
   --paper: #f6ecd9;
   --cream: #fbf4e4;
   --navy: #24395c;
   --coral: #ea6b4f;
   --mustard: #f0c85a;
+  --leaf: #6aa84f;
   --muted: #8a7d6a;
   /* The cut-paper drop: a flat offset copy in a warm shadow tint, never a
      blur. Two strengths — the stronger one for things sitting on the paper
@@ -56,7 +57,6 @@ select {
   border-radius: 0;
 }
 
-/* Big years-ago number, top-left. */
 .hud-big {
   position: fixed;
   left: 44px;
@@ -111,7 +111,6 @@ select {
   color: var(--navy);
 }
 
-/* Controls: the sound/restart paper tabs, then the color chips beneath. */
 .hud-controls {
   position: fixed;
   right: 44px;
@@ -178,8 +177,6 @@ select {
   outline-offset: 1px;
 }
 
-/* Footer: a mustard paper strip carrying the two readouts. Hidden below the
-   viewport until the first scroll, then slid up. */
 .hud-footer {
   position: fixed;
   left: 0;
@@ -225,8 +222,6 @@ select {
   font-size: 18px;
 }
 
-/* The scroll prompt: shown until the first scroll, sitting low and centered,
-   just above the ground line. */
 .prompt {
   position: fixed;
   left: 50%;

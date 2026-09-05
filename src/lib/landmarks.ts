@@ -3,18 +3,12 @@ import type { IconId } from './icon-paths';
 import type { Personalization } from './personalize';
 
 // The picture-book palette a landmark's cut-paper icon is drawn in (see
-// src/render/stage.ts): things (kind 'thing') are navy or leaf, time events
-// (kind 'time') are mustard or coral. Neighbors on the same side (adjacent
-// once sorted by meters, same order src/lib/layout.ts stacks them in) use
-// different colors so the two flavors of each kind visibly alternate.
+// src/render/stage.ts, which maps each name to its resolved CSS token):
+// things (kind 'thing') are navy or leaf, time events (kind 'time') are
+// mustard or coral. Neighbors on the same side (adjacent once sorted by
+// meters, same order src/lib/layout.ts stacks them in) use different colors
+// so the two flavors of each kind visibly alternate.
 export type PaperColor = 'navy' | 'leaf' | 'mustard' | 'coral';
-
-export const PAPER_COLORS: Record<PaperColor, string> = {
-  navy: '#24395c',
-  leaf: '#6aa84f',
-  mustard: '#f0c85a',
-  coral: '#ea6b4f',
-};
 
 // A landmark is either a physical "thing" (drawn on the left, compared by
 // height) or a "time" event (drawn on the right, compared by how long ago)

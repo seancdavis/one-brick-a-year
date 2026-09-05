@@ -41,8 +41,8 @@ function getContext2D(el: HTMLCanvasElement): CanvasRenderingContext2D {
 const ctx = getContext2D(canvas);
 
 // Set whenever something the canvas or HUD draws might have changed, so an
-// otherwise-idle frame (no active scroll, no zoom tween, nothing crossed)
-// can skip the redraw. The rAF loop itself keeps running either way —
+// otherwise-idle frame (no active scroll, no compaction transition, nothing
+// crossed) can skip the redraw. The rAF loop itself keeps running either way —
 // cheap to keep alive, and simpler than pausing/resuming around every event
 // source.
 let needsRender = true;
@@ -127,7 +127,7 @@ if (hasUrlParams) {
 const startScreen = createStartScreen(app, (nextProfile) => {
   profile = nextProfile;
   saveProfile(profile);
-  // Rebuild landmarks only — the running sim (years, scale, zoom) is left
+  // Rebuild landmarks only — the running sim (years, compaction) is left
   // untouched, whether this came from the mandatory first-run screen or a
   // Restart.
   landmarks = buildLandmarks(profile);
@@ -241,7 +241,7 @@ function resetForReplay(): void {
   hasInteracted = false;
   hasScrolledOnce = false;
   firstInputKind = null;
-  hud.showPrompt();
+  hud.setHasScrolled(false);
   needsRender = true;
 }
 
@@ -307,8 +307,7 @@ createScrollInput(window, (deltaPx, kind) => {
   // the prompt back.
   if (!hasInteracted) {
     hasInteracted = true;
-    hud.hidePrompt();
-    hud.showFooter();
+    hud.setHasScrolled(true);
   }
 
   // Only a build scroll (negative page delta) qualifies for analytics or
