@@ -353,6 +353,16 @@ function resize(): void {
 window.addEventListener('resize', resize);
 resize();
 
+// Canvas labels are set in Patrick Hand (src/render/stage.ts); if that font
+// is still loading when the first frame paints, the browser falls back to
+// the generic cursive stack for that draw. document.fonts.ready resolves
+// once every requested font has finished loading (or failed), so this
+// forces one more redraw right after, which is enough to pick up the real
+// font even if it wasn't ready in time for the very first paint.
+void document.fonts.ready.then(() => {
+  needsRender = true;
+});
+
 let lastTimeMs: number | null = null;
 
 function frame(timeMs: number): void {

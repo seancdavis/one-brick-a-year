@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BRICK_M } from './constants';
 import { DEFAULT_COLOR_ID } from './lego-colors';
-import { buildLandmarks } from './landmarks';
+import { buildLandmarks, PAPER_COLORS } from './landmarks';
 
 const profile = { name: 'Kid', ageYears: 8, homeMeters: 8, colorId: DEFAULT_COLOR_ID };
 
@@ -29,6 +29,13 @@ describe('buildLandmarks', () => {
     }
     expect(landmarks.some((l) => l.kind === 'thing')).toBe(true);
     expect(landmarks.some((l) => l.kind === 'time')).toBe(true);
+  });
+
+  it('gives every landmark one of the four cut-paper colors', () => {
+    const landmarks = buildLandmarks(profile);
+    for (const landmark of landmarks) {
+      expect(Object.keys(PAPER_COLORS)).toContain(landmark.paper);
+    }
   });
 
   it('reflects the profile for personal landmarks', () => {

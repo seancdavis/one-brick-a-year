@@ -7,7 +7,7 @@ const stage: StageBox = { top: 150, ground: 650 };
 const pxPerMeter = 50;
 
 function mark(id: string, meters: number, kind: Landmark['kind'] = 'thing'): Landmark {
-  return { id, meters, years: meters * 100, label: id, icon: 'bricks', kind };
+  return { id, meters, years: meters * 100, label: id, icon: 'bricks', kind, paper: 'navy' };
 }
 
 describe('placeLandmarks', () => {
