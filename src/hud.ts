@@ -77,7 +77,7 @@ export function createHud(
 
   const prompt = document.createElement('div');
   prompt.className = 'prompt';
-  prompt.append('Scroll to build.', document.createElement('br'), 'Every brick is one year, going back in time.');
+  prompt.append('Scroll to build. Scroll back to undo.', document.createElement('br'), 'Every brick is one year.');
 
   root.append(hud, sidePanel, prompt);
 

@@ -18,9 +18,9 @@ export const SOUND_DEFAULT_ENABLED = false;
 
 // One tick per brick (so ticks match the rate 1:1) up to the cap, so a slow
 // scroll ticks once per year and a fast one never turns into a buzz.
-export function ticksPerSecond(yearsPerSecond: number): number {
-  if (yearsPerSecond <= 0) return 0;
-  return Math.min(yearsPerSecond, TICK_CAP_PER_S);
+export function ticksPerSecond(rate: number): number {
+  if (rate <= 0) return 0;
+  return Math.min(rate, TICK_CAP_PER_S);
 }
 
 // Below HUM_START_RATE the pace is slow enough that individual ticks read
@@ -28,13 +28,13 @@ export function ticksPerSecond(yearsPerSecond: number): number {
 // log10 of how far the rate is past HUM_START_RATE, both capped at the
 // values they reach at HUM_MAX_RATE (which the rate races well past before
 // a sustained scroll finishes the stack).
-export function humFor(yearsPerSecond: number): { gain: number; hz: number } {
-  if (yearsPerSecond <= HUM_START_RATE) {
+export function humFor(rate: number): { gain: number; hz: number } {
+  if (rate <= HUM_START_RATE) {
     return { gain: 0, hz: HUM_MIN_HZ };
   }
 
   const logRange = Math.log10(HUM_MAX_RATE / HUM_START_RATE);
-  const t = Math.min(1, Math.log10(yearsPerSecond / HUM_START_RATE) / logRange);
+  const t = Math.min(1, Math.log10(rate / HUM_START_RATE) / logRange);
 
   const gain = HUM_MAX_GAIN * t;
   const logHz = Math.log(HUM_MIN_HZ) + (Math.log(HUM_MAX_HZ) - Math.log(HUM_MIN_HZ)) * t;

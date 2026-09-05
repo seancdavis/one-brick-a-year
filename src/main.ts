@@ -19,8 +19,7 @@ import {
   STORAGE_KEY,
   type Personalization,
 } from './lib/personalize';
-import { INITIAL_SCROLL, decayVelocity, pushScroll, yearsPerSecond, type ScrollState } from './lib/scroll-state';
-import { heightM, initialSim, step } from './lib/sim';
+import { applyScroll, heightM, initialSim, step } from './lib/sim';
 import { drawStage, stageBox, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
 
@@ -157,7 +156,19 @@ const endScreen = createEndScreen(app, () => resetForReplay());
 const hasTouch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
 
 let sim = initialSim();
-let scroll: ScrollState = INITIAL_SCROLL;
+// The build attempt's high-water mark, used for beat dedup: only ever
+// rises, even while an undo pulls `sim.years` back down, so beats fire once
+// each on the way past and are never replayed by a later undo-then-rebuild.
+// Reset only on replay (resetForReplay()), so it spans every analytics
+// session within one build attempt.
+let peakYears = 0;
+// The current analytics session's own high-water mark, used for
+// `yearsReached` in that session's end() payload. Set to the sim's current
+// years whenever a session starts (see createScrollInput below) and raised
+// alongside peakYears while the session is active, so a session that starts
+// after returning from a hidden page doesn't inherit an earlier session's
+// peak.
+let sessionPeakYears = 0;
 let hasScrolledOnce = false;
 let tickAccumulator = 0;
 
@@ -176,10 +187,6 @@ let sessionActive = false;
 // leftover from an earlier session in the same build attempt.
 let firstInputKind: ScrollKind | null = null;
 
-function nowSeconds(): number {
-  return performance.now() / 1000;
-}
-
 // Ends the current analytics session, recording how far the stack got and
 // whether the build actually finished — a no-op if no session is active,
 // so finish, Restart, and page-hide can all call this unconditionally.
@@ -189,7 +196,7 @@ function nowSeconds(): number {
 function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void {
   if (!sessionActive) return;
   sessionActive = false;
-  analytics.end({ yearsReached: sim.years, finished }, opts);
+  analytics.end({ yearsReached: sessionPeakYears, finished }, opts);
 }
 
 // Shared by "Build it again" (end screen) and Restart (HUD): back to a
@@ -203,7 +210,7 @@ function resetForReplay(): void {
   endScreen.hide();
   beatCards.clear();
   sim = initialSim();
-  scroll = { velocity: 0, lastAt: nowSeconds() };
+  peakYears = 0;
   tickAccumulator = 0;
   hasScrolledOnce = false;
   firstInputKind = null;
@@ -255,16 +262,20 @@ function armAudioOnce(): void {
 }
 
 createScrollInput(window, (deltaPx, kind) => {
-  scroll = pushScroll(scroll, deltaPx, nowSeconds());
-
   // A scroll can reach this listener while the start screen is still up (its
   // own padding, its label text are excluded, but a gesture can still land
-  // just outside them) or after the sim is already done — neither is a
-  // qualifying scroll for either the prompt or analytics.
+  // just outside them) or after the sim is already done — neither should
+  // move the stack (applyScroll no-ops once done on its own, but the start
+  // screen's gate has to happen here).
   if (startScreen.isOpen() || sim.done) return;
 
-  const rate = yearsPerSecond(scroll.velocity, sim.years);
-  if (rate <= 0) return;
+  sim = applyScroll(sim, deltaPx);
+  needsRender = true;
+
+  // Only a build scroll (negative page delta) qualifies for the prompt or
+  // analytics: an undo scroll before anything has been built yet is
+  // clamped to nothing visible, so it shouldn't read as engagement either.
+  if (deltaPx >= 0) return;
 
   // The prompt and the first audio arm happen once per build attempt
   // (cleared by resetForReplay(), not by a page hide) — hiding the page
@@ -284,6 +295,7 @@ createScrollInput(window, (deltaPx, kind) => {
   if (!sessionActive) {
     sessionActive = true;
     firstInputKind = kind;
+    sessionPeakYears = sim.years;
     analytics.start({
       ageYears: profile.ageYears,
       homeMeters: profile.homeMeters,
@@ -311,7 +323,7 @@ window.addEventListener('pointerdown', armAudioFromGesture);
 window.addEventListener('keydown', armAudioFromGesture);
 
 // First visit: no URL params and nothing stored yet. Personalize before the
-// build can begin; the frame loop below ignores scroll input while this is
+// build can begin; the scroll handler above ignores input while this is
 // open. Escape is disabled here since there's no existing profile to fall
 // back to.
 if (!hasUrlParams && storedRaw === null) {
@@ -348,21 +360,17 @@ function frame(timeMs: number): void {
   lastTimeMs = timeMs;
 
   const before = sim;
+  sim = step(before, dtSeconds, reducedMotionQuery.matches);
 
-  // Velocity keeps decaying every frame regardless of what's on screen, so
-  // it doesn't build up silently behind a modal and surge once it closes.
-  scroll = decayVelocity(scroll, timeMs / 1000);
-
-  // Ignore the resulting rate while a modal screen (start or end) is up —
-  // the sim itself already refuses to advance once done, but this also
-  // keeps the idle-frame check below from thinking something is happening.
-  const inputActive = !startScreen.isOpen() && !before.done;
-  const rate = inputActive ? yearsPerSecond(scroll.velocity, before.years) : 0;
-  sim = step(before, dtSeconds, rate, reducedMotionQuery.matches);
+  // The audio rate is derived from how much years actually moved this
+  // frame, not from a tracked scroll speed — direction doesn't matter, so
+  // undo ticks and hums too.
+  const yearsDelta = Math.abs(sim.years - before.years);
+  const rate = dtSeconds > 0 ? yearsDelta / dtSeconds : 0;
 
   // Both calls are safe no-ops before enable() has run — the AudioContext is
   // created lazily and enable() must be called from a user gesture.
-  if (inputActive && !sim.done) {
+  if (!sim.done) {
     tickAccumulator += ticksPerSecond(rate) * dtSeconds;
     while (tickAccumulator >= 1) {
       audio.tick();
@@ -374,7 +382,13 @@ function frame(timeMs: number): void {
     audio.hum(0, humFor(rate).hz);
   }
 
-  for (const beat of beatsCrossed(before.years, sim.years)) {
+  // The peak only ever rises, even while an undo pulls sim.years back down,
+  // so beats fire once each on the way past and are never replayed by a
+  // later undo-then-rebuild.
+  const prevPeak = peakYears;
+  peakYears = Math.max(peakYears, sim.years);
+  if (sessionActive) sessionPeakYears = Math.max(sessionPeakYears, sim.years);
+  for (const beat of beatsCrossed(prevPeak, peakYears)) {
     beatCards.show(beat);
     audio.chime();
   }
@@ -386,14 +400,14 @@ function frame(timeMs: number): void {
     endSession(true);
   }
 
-  // Idle frame: no active scroll rate, no zoom tween running (in either the
-  // previous or the new state), and years/done didn't change this step.
-  // Redrawing would produce pixel-identical output, so skip it — the rAF
-  // loop keeps going regardless, ready for the next input.
+  // Idle frame: years/done didn't change this step, and no zoom tween is
+  // running (in either the previous or the new state). Redrawing would
+  // produce pixel-identical output, so skip it — the rAF loop keeps going
+  // regardless, ready for the next input.
   const simAdvancing = sim.years !== before.years || sim.done !== before.done;
   const zoomActive = sim.zoom !== null || before.zoom !== null;
 
-  if (needsRender || rate > 0 || simAdvancing || zoomActive) {
+  if (needsRender || simAdvancing || zoomActive) {
     const placed = placeLandmarks(landmarks, heightM(sim), sim.scaleM, stageBox(view));
     drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId));
     hud.update(sim);

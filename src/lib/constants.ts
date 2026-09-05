@@ -5,3 +5,6 @@ export const ZOOM_FACTOR = 10; // how much the visible scale grows on each zoom-
 export const ZOOM_MS = 750; // duration of the zoom tween, in milliseconds
 export const SCALE_MIN_M = 0.1; // the smallest scale (screen height, in meters) the camera can show
 export const SCALE_MAX_M = 1e8; // the largest scale (screen height, in meters) the camera can show
+export const SMOOTH_S = 0.06; // time constant (seconds) years takes to approach targetYears — a wheel notch reads as motion, not a jump
+export const SMOOTH_SNAP_YEARS = 0.01; // once years is this close to targetYears, snap instead of asymptotically crawling forever
+export const ZOOM_IN_MARGIN = 0.9; // hysteresis: zoom back in only once height drops to this fraction of the height that would have triggered zooming back out at the smaller scale, so undoing near the boundary doesn't flicker
