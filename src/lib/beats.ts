@@ -7,6 +7,10 @@ export interface Beat {
   atYears: number;
   title: string;
   line: string;
+  // Short "before X" copy for the footer's right-hand comparison
+  // (src/lib/comparisons.ts's beforePhraseFor) — what the current point in
+  // the stack was before, in a phrase that reads naturally after nothing.
+  beforePhrase: string;
 }
 
 export const BEATS: readonly Beat[] = [
@@ -16,6 +20,7 @@ export const BEATS: readonly Beat[] = [
     atYears: 5000,
     title: 'People start writing.',
     line: 'Every history book ever written is about the bricks under this one.',
+    beforePhrase: 'before anyone wrote anything down',
   },
   {
     id: 'humans',
@@ -24,6 +29,7 @@ export const BEATS: readonly Beat[] = [
     atYears: 300000,
     title: 'The first people.',
     line: 'Above this brick, nobody looked like us.',
+    beforePhrase: 'before the first people',
   },
   {
     id: 'asteroid',
@@ -32,6 +38,7 @@ export const BEATS: readonly Beat[] = [
     atYears: 66e6,
     title: 'The asteroid.',
     line: 'A rock six miles wide hits the Earth. The dinosaurs are gone. The hole it left is 110 miles across.',
+    beforePhrase: 'before the asteroid hit',
   },
   {
     id: 'dinosaurs',
@@ -40,6 +47,7 @@ export const BEATS: readonly Beat[] = [
     atYears: 235e6,
     title: 'The first dinosaurs.',
     line: 'From here down to the asteroid is about 170 million bricks. A stack 1,600 kilometers tall.',
+    beforePhrase: 'before the first dinosaurs',
   },
   {
     id: 'animals',
@@ -48,6 +56,7 @@ export const BEATS: readonly Beat[] = [
     atYears: 600e6,
     title: 'The first animals.',
     line: 'Soft and small, in the sea. No bones yet.',
+    beforePhrase: 'before the first animals',
   },
   {
     id: 'oxygen',
@@ -55,6 +64,7 @@ export const BEATS: readonly Beat[] = [
     atYears: 2.4e9,
     title: 'The air gets oxygen.',
     line: "Tiny living things breathe out oxygen for a billion years. Before this, you couldn't breathe here.",
+    beforePhrase: 'before the air had oxygen',
   },
   {
     id: 'life',
@@ -62,6 +72,7 @@ export const BEATS: readonly Beat[] = [
     atYears: 3.7e9,
     title: 'The first life.',
     line: 'Smaller than a speck. Everything alive comes from here.',
+    beforePhrase: 'before anything was alive',
   },
 ];
 

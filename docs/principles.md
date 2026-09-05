@@ -20,6 +20,26 @@ zoom thresholds, sound thresholds — is a named constant with a one-line
 comment saying what it does, not a number inlined at its use site. Tune the
 feel by changing one number in one place.
 
+## Look
+
+The picture-book look — cream paper, navy ink, coral and mustard accents,
+teal paper hills, square corners, and a flat "paper drop" (an offset copy in
+a warm shadow tint, never a blur) on anything that sits on the paper — is
+defined in two places kept in sync by eye, since a canvas can't read CSS:
+`src/style.css`'s custom properties (`--paper`, `--navy`, `--coral`,
+`--mustard`, `--muted`, `--paper-shadow`, `--font-display`, `--font-hand`)
+for the DOM chrome, and matching constants at the top of
+`src/render/stage.ts` for the canvas-drawn scene. Two hand-lettered
+typefaces carry all the type: Fredoka for the big numbers and footer values,
+Patrick Hand for everything else.
+
+## Compaction
+
+Every drawn brick is worth `unit` years (`src/lib/compaction.ts`), and the
+legend beside the tower's base always says so (`unitLabel(unit)`, shown
+whenever `unit > 1`) — nothing is ever drawn that the legend doesn't
+account for.
+
 ## Facts have a source
 
 Scientific and historical facts carry a named source in their comment;

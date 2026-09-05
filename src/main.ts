@@ -7,7 +7,8 @@ import { createScrollInput, type ScrollKind } from './input';
 import { createHud } from './hud';
 import { createStartScreen } from './start-screen';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
-import { beatsCrossed } from './lib/beats';
+import { BEATS, beatsCrossed } from './lib/beats';
+import { beforePhraseFor, tallerThan } from './lib/comparisons';
 import { pxPerMeter } from './lib/compaction';
 import { fmtYears } from './lib/format';
 import { buildLandmarks, type Landmark } from './lib/landmarks';
@@ -448,6 +449,10 @@ function frame(timeMs: number): void {
     const placed = placeLandmarks(landmarks, heightM(sim), pxPerMeter(sim.compaction), stageBox(view));
     drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId));
     hud.update(sim);
+    hud.setComparisons({
+      tall: tallerThan(heightM(sim), landmarks),
+      ago: beforePhraseFor(sim.years, BEATS, profile.ageYears),
+    });
     needsRender = false;
   }
 

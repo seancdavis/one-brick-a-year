@@ -83,6 +83,7 @@ const STUD_BOTTOM_DARKEN = -0.15;
 // stack (see drawLandmarkLabels), matching the layout kept from before this
 // slice.
 const ICON_PX = 36;
+const ICON_PX_NARROW = 28;
 const LABEL_FONT_PX = 20;
 const LABEL_FONT_NARROW_PX = 16;
 const LABEL_MARGIN_PX = 24;
@@ -381,8 +382,9 @@ export function drawStage(
   // the centered stack.
   ctx.font = `${narrow ? LABEL_FONT_NARROW_PX : LABEL_FONT_PX}px ${FONT_STACK}`;
   ctx.textBaseline = 'alphabetic';
-  drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, ICON_PX, icons);
-  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, ICON_PX, icons);
+  const iconSize = narrow ? ICON_PX_NARROW : ICON_PX;
+  drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, icons);
+  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, icons);
 
   // The stack.
   const bricks = bricksFor(sim.years);

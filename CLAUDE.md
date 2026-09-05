@@ -4,7 +4,7 @@ You are Sean's development partner on this project. Work collaboratively, make d
 
 ## What this is
 
-An interactive web page for an eight-year-old, and for sharing, that makes 4.6 billion years feel long. One LEGO brick for every year, stacked back in time, while she scrolls. Scrolling forward builds the stack and scrolling back undoes it, instantly and in proportion to how far she scrolls. The camera zooms out as the stack passes things she knows (a door, her house, the Eiffel Tower, airplanes, the space station) until it wraps around the Earth. The feeling comes from cost: a vigorous, sustained scroll takes about a minute and a half to finish, and that's the lesson. Every ratio on screen is real. Icons are labels, not to scale.
+An interactive web page for an eight-year-old, and for sharing, that makes 4.6 billion years feel long. One LEGO brick for every year, stacked back in time, while she scrolls. Scrolling forward builds the stack and scrolling back undoes it, instantly and in proportion to how far she scrolls. The stack passes things she knows (a door, her house, the Eiffel Tower, airplanes, the space station) on its way to wrapping around the Earth, compacting ten bricks into one whenever it would otherwise outgrow the screen so it always stays visible. The feeling comes from cost: a vigorous, sustained scroll takes about a minute and a half to finish, and that's the lesson. Every ratio on screen is real. Icons are labels, not to scale.
 
 ## Project Documentation
 
@@ -19,7 +19,7 @@ When Sean wants to align on upcoming work, he uses `/grill-me`.
 ## Tech Stack
 
 - **Framework:** Vite with vanilla TypeScript. No UI framework. One page, one canvas, a small HTML HUD.
-- **Styling:** plain CSS in `src/style.css`. No Tailwind: it is one screen and most pixels are canvas-drawn.
+- **Styling:** plain CSS with the picture-book tokens in `src/style.css`; Fredoka and Patrick Hand from Google Fonts. No Tailwind: it is one screen and most pixels are canvas-drawn.
 - **Hosting:** Netlify, via `@netlify/vite-plugin` and `netlify.toml`.
 - **Database:** Netlify Database via `@netlify/database`; SQL migrations in `netlify/database/migrations/<timestamp>_<slug>/migration.sql`, applied by Netlify on deploy; functions in `netlify/functions/` with `_shared/` for cross-function code, `path` declared in the function file.
 - **Tests:** Vitest, for the pure modules only.
