@@ -35,9 +35,10 @@ export function yearsPerPx(years: number): number {
 //
 // which holds exactly for negative x too, so undoing retraces the same
 // curve regardless of how the distance is chopped into individual events —
-// advance is composable: advance(advance(y, x1), x2) === advance(y, x1+x2).
-// Clamped to [0, TOTAL_YEARS] since the stack can't build past the present
-// or undo past year zero.
+// advance is composable: advance(advance(y, x1), x2) === advance(y, x1+x2),
+// as long as neither the intermediate value (after x1) nor the final value
+// (after x1+x2) is clamped. Clamped to [0, TOTAL_YEARS] since the stack
+// can't build past the present or undo past year zero.
 export function advance(years: number, buildPx: number): number {
   const next = ((1 + PROGRESS_K * years) * Math.exp(BASE_YEARS_PER_PX * PROGRESS_K * buildPx) - 1) / PROGRESS_K;
   return Math.max(0, Math.min(TOTAL_YEARS, next));

@@ -156,11 +156,19 @@ const endScreen = createEndScreen(app, () => resetForReplay());
 const hasTouch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
 
 let sim = initialSim();
-// The stack's high-water mark: only ever rises, even while an undo pulls
-// `sim.years` back down. Beats fire off this (never replayed by an
-// undo-then-rebuild) and it's what analytics records as how far a session
-// got.
+// The build attempt's high-water mark, used for beat dedup: only ever
+// rises, even while an undo pulls `sim.years` back down, so beats fire once
+// each on the way past and are never replayed by a later undo-then-rebuild.
+// Reset only on replay (resetForReplay()), so it spans every analytics
+// session within one build attempt.
 let peakYears = 0;
+// The current analytics session's own high-water mark, used for
+// `yearsReached` in that session's end() payload. Set to the sim's current
+// years whenever a session starts (see createScrollInput below) and raised
+// alongside peakYears while the session is active, so a session that starts
+// after returning from a hidden page doesn't inherit an earlier session's
+// peak.
+let sessionPeakYears = 0;
 let hasScrolledOnce = false;
 let tickAccumulator = 0;
 
@@ -188,7 +196,7 @@ let firstInputKind: ScrollKind | null = null;
 function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void {
   if (!sessionActive) return;
   sessionActive = false;
-  analytics.end({ yearsReached: peakYears, finished }, opts);
+  analytics.end({ yearsReached: sessionPeakYears, finished }, opts);
 }
 
 // Shared by "Build it again" (end screen) and Restart (HUD): back to a
@@ -287,6 +295,7 @@ createScrollInput(window, (deltaPx, kind) => {
   if (!sessionActive) {
     sessionActive = true;
     firstInputKind = kind;
+    sessionPeakYears = sim.years;
     analytics.start({
       ageYears: profile.ageYears,
       homeMeters: profile.homeMeters,
@@ -378,6 +387,7 @@ function frame(timeMs: number): void {
   // later undo-then-rebuild.
   const prevPeak = peakYears;
   peakYears = Math.max(peakYears, sim.years);
+  if (sessionActive) sessionPeakYears = Math.max(sessionPeakYears, sim.years);
   for (const beat of beatsCrossed(prevPeak, peakYears)) {
     beatCards.show(beat);
     audio.chime();
