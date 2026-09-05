@@ -16,9 +16,28 @@ DOM glue, kept out of the pure layer.
 ## Where the feel lives
 
 Every number that shapes the feel — brick height, the pace of the scroll,
-zoom thresholds, sound thresholds — is a named constant with a one-line
-comment saying what it does, not a number inlined at its use site. Tune the
-feel by changing one number in one place.
+compaction thresholds, sound thresholds — is a named constant with a
+one-line comment saying what it does, not a number inlined at its use site,
+living in `src/lib/constants.ts` or `src/lib/compaction.ts`. Tune the feel
+by changing one number in one place.
+
+## Look
+
+The picture-book look — cream paper, navy ink, coral and mustard accents,
+teal paper hills, square corners, and a flat "paper drop" (an offset copy in
+a warm shadow tint, never a blur) on anything that sits on the paper — is
+defined once. Shared colors and fonts are CSS custom properties in
+`src/style.css`, the canonical token file, and the canvas resolves them once
+per resize rather than keeping its own copies. Nothing is duplicated by
+hand. Two hand-lettered typefaces carry all the type: Fredoka for the big
+numbers and footer values, Patrick Hand for everything else.
+
+## Compaction
+
+Every drawn brick is worth `unit` years (`src/lib/compaction.ts`). The legend
+always describes the effective render unit actually on screen — nothing is
+ever drawn that the legend doesn't account for — and sits beside the tower's
+base on wide layouts, below it on narrow ones.
 
 ## Facts have a source
 
@@ -63,7 +82,7 @@ and touch drag work. Scrolling one way builds the stack and the other way
 undoes it, both instantly and in direct proportion to scroll distance
 (`src/lib/scroll-coupling.ts`'s exact closed form) — no velocity tracking,
 ramp-up, or spin-down. Every interactive control has a visible focus state.
-`prefers-reduced-motion: reduce` is honored: the zoom tween and other
+`prefers-reduced-motion: reduce` is honored: the compaction squish and other
 transitions become instant. Milestone cards are the live region
 (`aria-live="polite"`): they announce a beat without moving focus. The HUD
 counter is deliberately silent (`aria-live="off"`) — it changes every

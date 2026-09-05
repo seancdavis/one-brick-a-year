@@ -34,7 +34,7 @@ export function createEndScreen(
   const big = document.createElement('div');
   big.id = 'end-screen-big';
   big.className = 'end-big';
-  big.textContent = '4,600,000,000 bricks.';
+  big.textContent = '4,600,000,000 bricks!';
 
   const aroundLine = document.createElement('p');
   aroundLine.className = 'end-line';
@@ -49,13 +49,13 @@ export function createEndScreen(
 
   const againButton = document.createElement('button');
   againButton.type = 'button';
-  againButton.className = 'end-button';
+  againButton.className = 'end-button end-button--primary';
   againButton.textContent = 'Build it again';
   againButton.addEventListener('click', onAgain);
 
   const copyButton = document.createElement('button');
   copyButton.type = 'button';
-  copyButton.className = 'end-button';
+  copyButton.className = 'end-button end-button--secondary';
   copyButton.textContent = 'Copy link';
   copyButton.addEventListener('click', handleCopy);
 

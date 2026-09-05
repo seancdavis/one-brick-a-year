@@ -1,14 +1,37 @@
+/* Picture-book design tokens (docs/design/picture-book.dc.html,
+   docs/autopilot/2026-09-05-picture-book.md). Paper, ink, and the accent
+   colors, plus the two hand-lettered typefaces. This file is the single
+   source of truth: src/render/stage.ts resolves these same custom
+   properties with getComputedStyle rather than keeping its own copies. */
+:root {
+  --paper: #f6ecd9;
+  --cream: #fbf4e4;
+  --navy: #24395c;
+  --coral: #ea6b4f;
+  --mustard: #f0c85a;
+  --leaf: #6aa84f;
+  --muted: #8a7d6a;
+  /* An upcoming landmark's icon (src/render/stage.ts): drawn at full opacity
+     in this flat, desaturated tone rather than a dimmed version of its
+     passed color. */
+  --muted-icon: #c9c3b8;
+  /* The two-tone paper hills behind the tower (src/render/stage.ts). */
+  --hill: #3f9e92;
+  --hill-deep: #25756b;
+  /* The cut-paper drop: a flat offset copy in a warm shadow tint, never a
+     blur. Two strengths — the stronger one for things sitting on the paper
+     (cards, tabs, chips), the softer one for the footer's top edge. */
+  --paper-shadow: rgba(90, 61, 30, 0.2);
+  --paper-shadow-soft: rgba(90, 61, 30, 0.15);
+
+  --font-display: 'Fredoka', 'Arial Rounded MT Bold', sans-serif;
+  --font-hand: 'Patrick Hand', 'Comic Sans MS', 'Chalkboard SE', cursive;
+}
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
-}
-
-:root {
-  --sky: #f3efe6;
-  --ink: #2a2420;
-  --cap: #7b736a;
-  --red: #d5281b;
 }
 
 html,
@@ -18,9 +41,9 @@ body {
 }
 
 body {
-  background: var(--sky);
-  color: var(--ink);
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+  background: var(--paper);
+  color: var(--navy);
+  font-family: var(--font-hand);
   overflow: hidden;
   touch-action: none;
   user-select: none;
@@ -35,78 +58,107 @@ canvas {
   height: 100dvh;
 }
 
-.hud {
+button,
+input,
+select {
+  border-radius: 0;
+}
+
+.hud-big {
   position: fixed;
-  left: 24px;
-  top: 20px;
+  left: 44px;
+  top: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   pointer-events: none;
-  text-shadow:
-    0 1px 2px rgba(243, 239, 230, 0.9),
-    0 0 8px rgba(243, 239, 230, 0.9);
 }
 
-.big {
-  font-family: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
-  font-weight: 300;
-  font-size: clamp(56px, 8vw, 112px);
-  line-height: 0.9;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.005em;
-}
-
-.row {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--cap);
-  margin-top: 10px;
-  line-height: 1.7;
-}
-
-.row b {
-  color: var(--ink);
-  font-weight: 500;
-}
-
-/* Side headings (src/hud.ts): "How tall" (left, above the live height
-   readout) and "How long ago" (right, above the milestone column). Same
-   11px uppercase caption style as .row. On narrow screens both panels are
-   already pinned to the top corners (see .hud and .side-panel below), so no
-   separate narrow rule is needed to keep them "at the top of each side". */
-.side-heading {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--cap);
-  margin-top: 14px;
-}
-
-.side-value {
-  font-size: 13px;
-  color: var(--ink);
-  margin-top: 4px;
+.hud-years {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 112px;
+  line-height: 1;
+  color: var(--navy);
   font-variant-numeric: tabular-nums;
 }
 
-/* Right-side panel (src/hud.ts): mirrors .hud's top-left position so "How
-   long ago" sits above the milestone (time event) column on the right. */
-.side-panel {
-  position: fixed;
-  top: 20px;
-  pointer-events: none;
-  text-shadow:
-    0 1px 2px rgba(243, 239, 230, 0.9),
-    0 0 8px rgba(243, 239, 230, 0.9);
+.hud-ago {
+  font-family: var(--font-hand);
+  font-size: 26px;
+  color: var(--coral);
 }
 
-.side-panel--right {
-  right: 24px;
+/* "Next up" teaser, top-right, under where the sun paints. */
+.hud-teaser {
+  position: fixed;
+  right: 44px;
+  top: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   text-align: right;
+  pointer-events: none;
+}
+
+.hud-teaser[hidden] {
+  display: none;
+}
+
+.hud-teaser-label {
+  font-family: var(--font-hand);
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.hud-teaser-value {
+  font-family: var(--font-hand);
+  font-size: 20px;
+  color: var(--navy);
+}
+
+.hud-controls {
+  position: fixed;
+  right: 44px;
+  top: 206px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.hud-tabs {
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.hud-tab {
+  font-family: var(--font-hand);
+  font-size: 16px;
+  color: var(--navy);
+  background: var(--cream);
+  border: none;
+  box-shadow: 0 2px 0 var(--paper-shadow);
+  min-height: 44px;
+  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* The sound toggle (src/hud.ts) uses aria-pressed to reflect its own state,
+   so it reads as "on" even without hover/focus. */
+.hud-tab[aria-pressed='true'] {
+  background: var(--mustard);
 }
 
 /* Color swatch row (src/color-picker.ts): shared by the start screen's 28px
    version and the HUD's 18px compact version (--swatch-size set inline per
-   instance). */
+   instance) — both drawn as small paper chips. */
 .color-picker {
   display: flex;
   flex-wrap: wrap;
@@ -115,7 +167,6 @@ canvas {
 
 .color-picker--compact {
   gap: 4px;
-  margin-top: 10px;
   pointer-events: auto;
 }
 
@@ -123,133 +174,137 @@ canvas {
   width: var(--swatch-size, 28px);
   height: var(--swatch-size, 28px);
   padding: 0;
-  border: 1px solid rgba(42, 36, 32, 0.25);
-  border-radius: 0;
+  border: none;
+  box-shadow: 0 2px 0 var(--paper-shadow);
   cursor: pointer;
 }
 
 .color-swatch[aria-pressed='true'] {
-  border: 2px solid var(--ink);
+  outline: 2px solid var(--navy);
+  outline-offset: 1px;
 }
 
-.hud-controls {
+.hud-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: 64px;
+  background: var(--mustard);
+  box-shadow: 0 -3px 0 var(--paper-shadow-soft);
   display: flex;
-  gap: 8px;
-  margin-top: 10px;
-  pointer-events: auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 44px;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+  z-index: 5;
 }
 
-.hud-button {
-  font-family: inherit;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink);
-  background: transparent;
-  border: 1px solid var(--ink);
-  border-radius: 0;
-  padding: 6px 10px;
-  cursor: pointer;
+.hud-footer.visible {
+  transform: translateY(0);
 }
 
-.hud-button:hover {
-  background: var(--ink);
-  color: var(--sky);
+.hud-footer-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  color: var(--navy);
 }
 
-/* The sound toggle (src/hud.ts) uses aria-pressed to reflect its own state,
-   so it reads as "on" even without hover/focus. */
-.hud-button[aria-pressed='true'] {
-  background: var(--ink);
-  color: var(--sky);
+.hud-footer-label {
+  font-family: var(--font-hand);
+  font-size: 18px;
+}
+
+.hud-footer-value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-footer-comparison {
+  font-family: var(--font-hand);
+  font-size: 18px;
 }
 
 .prompt {
   position: fixed;
   left: 50%;
-  bottom: 30px;
+  bottom: 96px;
   transform: translateX(-50%);
   width: max-content;
   max-width: 90vw;
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--cap);
+  font-family: var(--font-hand);
+  font-size: 22px;
+  color: var(--navy);
   text-align: center;
-  line-height: 1.8;
   pointer-events: none;
-  text-shadow:
-    0 1px 2px rgba(243, 239, 230, 0.9),
-    0 0 8px rgba(243, 239, 230, 0.9);
-  transition: opacity 0.5s;
+  opacity: 1;
+  transition: opacity 0.3s ease;
 }
 
 .prompt.off {
   opacity: 0;
 }
 
-/* Milestone card (src/beats.ts). Sits above the prompt, right-of-center on
-   wide screens so it never overlaps the centered stack column (per
-   src/render/stage.ts); full-width on narrow screens. Its own opaque
-   background keeps it readable over the right side's milestone labels while
-   it's briefly visible. */
+/* Milestone card (src/beats.ts): a cream paper note, bottom-center, above
+   the footer (or the prompt, before the first scroll — the two sit in
+   roughly the same band, so one position works for both). Alternates a
+   slight tilt per card via .beat-card--alt. */
 .beat-card {
   position: fixed;
-  left: 62%;
-  bottom: 92px;
-  transform: translate(-50%, 10px);
+  left: 50%;
+  bottom: 84px;
+  transform: translate(-50%, 10px) rotate(-1.5deg);
   width: max-content;
-  max-width: 38ch; /* about 38 characters at this font size */
-  background: rgba(243, 239, 230, 0.94);
-  border: 1px solid var(--ink);
+  max-width: 38ch;
+  background: var(--cream);
+  color: var(--navy);
+  box-shadow: 0 3px 0 var(--paper-shadow);
   padding: 14px 18px;
   opacity: 0;
   pointer-events: none;
   transition:
     opacity 0.35s ease,
     transform 0.35s ease;
-  z-index: 5;
+  z-index: 6;
 }
 
 .beat-card.visible {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translate(-50%, 0) rotate(-1.5deg);
+}
+
+.beat-card--alt {
+  transform: translate(-50%, 10px) rotate(1.5deg);
+}
+
+.beat-card--alt.visible {
+  transform: translate(-50%, 0) rotate(1.5deg);
 }
 
 .beat-title {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--cap);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 16px;
+  color: var(--navy);
   margin: 0 0 6px;
 }
 
 .beat-line {
-  font-size: 15px;
-  line-height: 1.5;
+  font-family: var(--font-hand);
+  font-size: 18px;
+  line-height: 1.4;
+  color: var(--navy);
   margin: 0;
 }
 
-@media (max-width: 699px) {
-  .beat-card {
-    left: 0;
-    right: 0;
-    width: 100%;
-    max-width: none;
-    transform: translateY(10px);
-    border-left: none;
-    border-right: none;
-  }
-
-  .beat-card.visible {
-    transform: translateY(0);
-  }
-}
-
-/* Start screen (src/start-screen.ts): full-screen overlay shown on first
-   visit (no URL params, nothing stored) and reopened from the HUD's
-   "Restart" button. Shown/hidden via the `hidden` attribute — an instant
-   toggle, so there's no motion here to guard behind prefers-reduced-motion. */
+/* Start screen (src/start-screen.ts): a paper panel shown on first visit (no
+   URL params, nothing stored) and reopened from the HUD's "restart" tab.
+   Shown/hidden via the `hidden` attribute — an instant toggle, so there's no
+   motion here to guard behind prefers-reduced-motion. */
 .start-screen {
   position: fixed;
   inset: 0;
@@ -258,7 +313,7 @@ canvas {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: var(--sky);
+  background: var(--paper);
 }
 
 .start-screen[hidden] {
@@ -267,28 +322,30 @@ canvas {
 
 .start-form {
   width: 100%;
-  max-width: 360px;
+  max-width: 380px;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  border: 1px solid var(--ink);
+  background: var(--cream);
+  box-shadow: 0 3px 0 var(--paper-shadow);
   padding: 32px 28px;
-  background: var(--sky);
+  color: var(--navy);
 }
 
 .start-title {
-  font-family: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
-  font-weight: 300;
-  font-size: clamp(36px, 6vw, 56px);
-  line-height: 0.95;
-  letter-spacing: -0.005em;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 1.05;
+  color: var(--navy);
   margin: 0;
 }
 
 .start-blurb {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--cap);
+  font-family: var(--font-hand);
+  font-size: 20px;
+  line-height: 1.4;
+  color: var(--navy);
   margin: 0;
 }
 
@@ -296,59 +353,36 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--cap);
+  font-family: var(--font-hand);
+  font-size: 16px;
+  color: var(--muted);
 }
 
 .start-field input,
 .start-field select {
-  font-family: inherit;
-  font-size: 14px;
-  letter-spacing: normal;
-  text-transform: none;
-  color: var(--ink);
-  background: var(--sky);
-  border: 1px solid var(--ink);
-  border-radius: 0;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  color: var(--navy);
+  background: var(--paper);
+  border: 2px solid var(--navy);
   padding: 10px 12px;
 }
 
 .start-button {
-  font-family: inherit;
-  font-size: 13px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--sky);
-  background: var(--ink);
-  border: 1px solid var(--ink);
-  border-radius: 0;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  color: var(--navy);
+  background: var(--mustard);
+  border: 2px solid transparent;
+  box-shadow: 0 3px 0 var(--paper-shadow);
   padding: 12px 16px;
   cursor: pointer;
 }
 
-.start-button:hover {
-  background: var(--red);
-  border-color: var(--red);
-}
-
-.start-field input:focus-visible,
-.start-field select:focus-visible,
-.start-button:focus-visible,
-.hud-button:focus-visible,
-.end-button:focus-visible,
-.color-swatch:focus-visible {
-  outline: 2px solid var(--red);
-  outline-offset: 2px;
-}
-
 /* End screen (src/end-screen.ts): shown once the stack reaches TOTAL_YEARS.
-   Reference is the prototype's `.done` overlay — the backdrop lets pointer
-   events pass through to the HUD (so "Start over" stays reachable) and only
-   the panel itself is interactive. Shown/hidden via the `hidden` attribute —
-   an instant toggle, so there's no motion here to guard behind
-   prefers-reduced-motion, matching the start screen above. */
+   The backdrop lets pointer events pass through (so nothing behind it is
+   blocked); only the panel itself is interactive. Shown/hidden via the
+   `hidden` attribute, same as the start screen above. */
 .end-screen {
   position: fixed;
   inset: 0;
@@ -367,25 +401,27 @@ canvas {
 .end-panel {
   pointer-events: auto;
   max-width: 40ch;
-  background: rgba(243, 239, 230, 0.94);
-  border: 1px solid var(--ink);
-  border-radius: 0;
+  background: var(--cream);
+  box-shadow: 0 3px 0 var(--paper-shadow);
   padding: 28px 30px 30px;
   text-align: center;
+  color: var(--navy);
 }
 
 .end-big {
-  font-family: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
-  font-weight: 300;
-  font-size: clamp(28px, 4vw, 38px);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 40px;
   line-height: 1.1;
-  letter-spacing: -0.005em;
+  color: var(--navy);
   margin: 0 0 14px;
 }
 
 .end-line {
-  font-size: 15px;
-  line-height: 1.65;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--navy);
   margin: 0 0 14px;
 }
 
@@ -397,31 +433,79 @@ canvas {
 }
 
 .end-button {
-  font-family: inherit;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink);
-  background: transparent;
-  border: 1px solid var(--ink);
-  border-radius: 0;
-  padding: 11px 16px;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  color: var(--navy);
+  border: 2px solid transparent;
+  box-shadow: 0 3px 0 var(--paper-shadow);
+  padding: 12px 18px;
   cursor: pointer;
 }
 
-.end-button:hover {
-  background: var(--ink);
-  color: var(--sky);
+.end-button--primary {
+  background: var(--mustard);
+}
+
+.end-button--secondary {
+  background: var(--paper);
+  border-color: var(--navy);
+}
+
+/* Accessibility baseline (CLAUDE.md): one visible focus style for every
+   interactive element, so keyboard users always see where they are. */
+:focus-visible {
+  outline: 3px solid var(--coral);
+  outline-offset: 2px;
 }
 
 /* Reduced motion: every CSS transition in the page, made instant. (The sim's
-   zoom tween is already skipped in JS — src/lib/sim.ts — and the start and
-   end screens toggle via `hidden` with no transition, so neither needs an
-   entry here.) One block for the whole page, per CLAUDE.md's accessibility
-   baseline. */
+   compaction squish is already skipped in JS — src/lib/compaction.ts — and
+   the start and end screens toggle via `hidden` with no transition, so
+   neither needs an entry here.) */
 @media (prefers-reduced-motion: reduce) {
+  .hud-footer,
   .prompt,
   .beat-card {
     transition: none;
+  }
+}
+
+@media (max-width: 699px) {
+  .hud-years {
+    font-size: 64px;
+  }
+
+  /* Below 700px there isn't room for the teaser and the controls at their
+     own fixed positions (206px assumes a one-line teaser; a wrapped one
+     collides with the sun, which paints from 60px to 136px). Instead the two
+     share one right-aligned column, anchored below the sun, so the controls
+     flow beneath however tall the teaser actually rendered. */
+  .hud-side {
+    position: fixed;
+    right: 44px;
+    top: 148px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .hud-teaser,
+  .hud-controls {
+    position: static;
+  }
+
+  .hud-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 64px;
+    padding: 10px 20px;
+    gap: 4px;
+  }
+
+  .hud-footer-cell {
+    width: 100%;
+    justify-content: space-between;
   }
 }

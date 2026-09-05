@@ -2,18 +2,42 @@ import { BRICK_M } from './constants';
 import type { IconId } from './icon-paths';
 import type { Personalization } from './personalize';
 
+// The picture-book palette a landmark's cut-paper icon is drawn in (see
+// src/render/stage.ts, which maps each name to its resolved CSS token):
+// things (kind 'thing') are navy or leaf, time events (kind 'time') are
+// mustard or coral. Neighbors on the same side (adjacent once sorted by
+// meters, same order src/lib/layout.ts stacks them in) use different colors
+// so the two flavors of each kind visibly alternate.
+export type PaperColor = 'navy' | 'leaf' | 'mustard' | 'coral';
+
 // A landmark is either a physical "thing" (drawn on the left, compared by
 // height) or a "time" event (drawn on the right, compared by how long ago)
 // — see src/lib/layout.ts, which sorts on this to build the two-sided
-// layout.
-export interface Landmark {
+// layout. Only a "thing" carries tallerThanPhrase — src/lib/comparisons.ts's
+// tallerThan plugs the tallest passed thing's phrase into the footer's "how
+// tall?" comparison; a "time" event has no height to compare, so it has none.
+interface LandmarkBase {
   id: string;
   meters: number;
   years: number;
   label: string;
   icon: IconId;
-  kind: 'thing' | 'time';
+  paper: PaperColor;
 }
+
+export interface ThingLandmark extends LandmarkBase {
+  kind: 'thing';
+  // Footer copy for "how tall?" once the stack has passed this thing, e.g.
+  // "taller than a door!" — every phrase ends in "!" for the exclamation the
+  // picture-book copy uses throughout.
+  tallerThanPhrase: string;
+}
+
+export interface TimeLandmark extends LandmarkBase {
+  kind: 'time';
+}
+
+export type Landmark = ThingLandmark | TimeLandmark;
 
 // Each landmark is authored in whichever unit is natural for it — a known
 // height in meters, or a known age in years — and the other field is
@@ -34,6 +58,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'your whole life',
       icon: 'bricks',
       kind: 'time',
+      paper: 'mustard',
       ...fromYears(profile.ageYears),
     },
     {
@@ -42,6 +67,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'a school ruler',
       icon: 'ruler',
       kind: 'thing',
+      paper: 'navy',
+      tallerThanPhrase: 'taller than a school ruler!',
       ...fromMeters(0.3),
     },
     {
@@ -50,6 +77,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'a door',
       icon: 'door',
       kind: 'thing',
+      paper: 'leaf',
+      tallerThanPhrase: 'taller than a door!',
       ...fromMeters(2.0),
     },
     {
@@ -60,6 +89,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'your home',
       icon: 'home',
       kind: 'thing',
+      paper: 'navy',
+      tallerThanPhrase: 'taller than your home!',
       ...fromMeters(profile.homeMeters),
     },
     {
@@ -68,6 +99,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'people start writing things down',
       icon: 'scroll',
       kind: 'time',
+      paper: 'coral',
       ...fromYears(5000),
     },
     {
@@ -76,6 +108,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'the Statue of Liberty',
       icon: 'statue',
       kind: 'thing',
+      paper: 'leaf',
+      tallerThanPhrase: 'taller than the Statue of Liberty!',
       ...fromMeters(93),
     },
     {
@@ -84,6 +118,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'the Eiffel Tower',
       icon: 'tower',
       kind: 'thing',
+      paper: 'navy',
+      tallerThanPhrase: 'taller than the Eiffel Tower!',
       ...fromMeters(330),
     },
     {
@@ -92,6 +128,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'the tallest building on Earth',
       icon: 'skyscraper',
       kind: 'thing',
+      paper: 'leaf',
+      tallerThanPhrase: 'taller than the tallest building on Earth!',
       ...fromMeters(828),
     },
     {
@@ -101,6 +139,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'the first people',
       icon: 'person',
       kind: 'time',
+      paper: 'mustard',
       ...fromYears(300000),
     },
     {
@@ -109,6 +148,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'Mount Everest',
       icon: 'mountain',
       kind: 'thing',
+      paper: 'navy',
+      tallerThanPhrase: 'taller than Mount Everest!',
       ...fromMeters(8849),
     },
     {
@@ -118,6 +159,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'where airplanes fly',
       icon: 'plane',
       kind: 'thing',
+      paper: 'leaf',
+      tallerThanPhrase: 'higher than airplanes fly!',
       ...fromMeters(11000),
     },
     {
@@ -126,6 +169,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'space begins',
       icon: 'rocket',
       kind: 'thing',
+      paper: 'navy',
+      tallerThanPhrase: 'past the edge of space!',
       ...fromMeters(100000),
     },
     {
@@ -134,6 +179,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'the space station',
       icon: 'station',
       kind: 'thing',
+      paper: 'leaf',
+      tallerThanPhrase: 'higher than the space station!',
       ...fromMeters(400000),
     },
     {
@@ -143,6 +190,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'the asteroid hits the dinosaurs',
       icon: 'asteroid',
       kind: 'time',
+      paper: 'coral',
       ...fromYears(66e6),
     },
     {
@@ -152,6 +200,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'the first dinosaurs',
       icon: 'dinosaur',
       kind: 'time',
+      paper: 'mustard',
       ...fromYears(235e6),
     },
     {
@@ -161,6 +210,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'the first animals',
       icon: 'trilobite',
       kind: 'time',
+      paper: 'coral',
       ...fromYears(600e6),
     },
     {
@@ -169,6 +219,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'as wide as the whole Earth',
       icon: 'earth',
       kind: 'thing',
+      paper: 'navy',
+      tallerThanPhrase: 'as tall as the Earth is wide!',
       ...fromMeters(12742000),
     },
     {
@@ -177,6 +229,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'the air gets oxygen',
       icon: 'bubbles',
       kind: 'time',
+      paper: 'mustard',
       ...fromYears(2.4e9),
     },
     {
@@ -185,6 +238,7 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'the first life',
       icon: 'cell',
       kind: 'time',
+      paper: 'coral',
       ...fromYears(3.7e9),
     },
     {
@@ -193,6 +247,8 @@ export function buildLandmarks(profile: Personalization): Landmark[] {
       label: 'all the way around the Earth',
       icon: 'ring',
       kind: 'thing',
+      paper: 'leaf',
+      tallerThanPhrase: 'longer than the way around the Earth!',
       ...fromMeters(40075000),
     },
   ];

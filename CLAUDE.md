@@ -4,7 +4,7 @@ You are Sean's development partner on this project. Work collaboratively, make d
 
 ## What this is
 
-An interactive web page for an eight-year-old, and for sharing, that makes 4.6 billion years feel long. One LEGO brick for every year, stacked back in time, while she scrolls. Scrolling forward builds the stack and scrolling back undoes it, instantly and in proportion to how far she scrolls. The camera zooms out as the stack passes things she knows (a door, her house, the Eiffel Tower, airplanes, the space station) until it wraps around the Earth. The feeling comes from cost: a vigorous, sustained scroll takes about a minute and a half to finish, and that's the lesson. Every ratio on screen is real. Icons are labels, not to scale.
+An interactive web page for an eight-year-old, and for sharing, that makes 4.6 billion years feel long. One LEGO brick for every year, stacked back in time, while she scrolls. Scrolling forward builds the stack and scrolling back undoes it, instantly and in proportion to how far she scrolls. The stack passes things she knows (a door, her house, the Eiffel Tower, airplanes, the space station) on its way to wrapping around the Earth, compacting ten bricks into one whenever it would otherwise outgrow the screen so it always stays visible. The feeling comes from cost: a vigorous, sustained scroll takes about a minute and a half to finish, and that's the lesson. Every ratio on screen is real. Icons are labels, not to scale.
 
 ## Project Documentation
 
@@ -12,14 +12,14 @@ An interactive web page for an eight-year-old, and for sharing, that makes 4.6 b
 - **Decisions:** `docs/decisions/` — ADRs explaining why each rule exists. Read when a rule seems arbitrary.
 - **Session logs:** `docs/sessions/` — outcomes of past grill sessions. Skim recent ones for context.
 - **Autopilot specs:** `docs/autopilot/` — settled specs for unattended runs.
-- **Prototype:** `docs/prototype/brick-stack.html` — the single-file prototype this grew from. The reference for pacing, camera behavior, and landmark math.
+- **Prototype:** `docs/prototype/brick-stack.html` — the single-file prototype this grew from. The reference for pacing and landmark math.
 
 When Sean wants to align on upcoming work, he uses `/grill-me`.
 
 ## Tech Stack
 
 - **Framework:** Vite with vanilla TypeScript. No UI framework. One page, one canvas, a small HTML HUD.
-- **Styling:** plain CSS in `src/style.css`. No Tailwind: it is one screen and most pixels are canvas-drawn.
+- **Styling:** plain CSS with the picture-book tokens in `src/style.css`; Fredoka and Patrick Hand from Google Fonts. No Tailwind: it is one screen and most pixels are canvas-drawn.
 - **Hosting:** Netlify, via `@netlify/vite-plugin` and `netlify.toml`.
 - **Database:** Netlify Database via `@netlify/database`; SQL migrations in `netlify/database/migrations/<timestamp>_<slug>/migration.sql`, applied by Netlify on deploy; functions in `netlify/functions/` with `_shared/` for cross-function code, `path` declared in the function file.
 - **Tests:** Vitest, for the pure modules only.
@@ -39,7 +39,8 @@ npm run preview    # serve dist/
 - Pure logic lives in `src/lib/` and never touches the DOM or canvas, so it can be unit tested. Every file in `src/lib/` has a sibling `*.test.ts`.
 - Rendering lives in `src/render/`. It reads state and draws. It never mutates state.
 - DOM glue (input, HUD, cards, audio, start screen) lives at the top of `src/`, one file per concern, wired together in `src/main.ts`.
-- Every number that shapes the feel (brick height, pacing constants, zoom thresholds) lives in `src/lib/constants.ts` with a one-line comment saying what it does.
+- Every number that shapes the feel (brick height, pacing constants, compaction thresholds) lives in `src/lib/constants.ts` or `src/lib/compaction.ts` with a one-line comment saying what it does.
+- Compaction rule: every drawn brick is worth `unit` years, and the legend beside the tower always says so (`unitLabel(unit)`, shown whenever the unit being drawn is greater than one) — nothing is ever drawn that the legend doesn't account for.
 - Facts (ages, heights) live in `src/lib/landmarks.ts` and `src/lib/beats.ts` with a source comment. Do not invent facts. If a number is uncertain, round and say "about".
 - Copy is written for an eight-year-old who can read: short sentences, concrete nouns, no jargon.
 - Accessibility baseline: keyboard scroll equivalents (arrow keys, space, page up/down), visible focus states, `prefers-reduced-motion` respected, sound off by default and only started by a user gesture.

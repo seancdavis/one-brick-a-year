@@ -29,6 +29,9 @@ export function createBeatCards(root: HTMLElement): { show(beat: Beat): void; cl
   let showTimer: ReturnType<typeof setTimeout> | null = null;
   let leaveTimer: ReturnType<typeof setTimeout> | null = null;
   let active = false;
+  // Alternates the card's paper-note tilt (-1.5deg / 1.5deg) each time a new
+  // one is shown, so consecutive cards don't all lean the same way.
+  let tiltAlt = false;
 
   function clearTimers(): void {
     if (showTimer !== null) {
@@ -51,6 +54,8 @@ export function createBeatCards(root: HTMLElement): { show(beat: Beat): void; cl
     active = true;
     title.textContent = beat.title;
     line.textContent = beat.line;
+    card.classList.toggle('beat-card--alt', tiltAlt);
+    tiltAlt = !tiltAlt;
     card.classList.add('visible');
 
     // More than one beat still waiting behind this one: drain the queue

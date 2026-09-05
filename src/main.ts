@@ -7,9 +7,12 @@ import { createScrollInput, type ScrollKind } from './input';
 import { createHud } from './hud';
 import { createStartScreen } from './start-screen';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
-import { beatsCrossed } from './lib/beats';
-import { buildLandmarks } from './lib/landmarks';
-import { placeLandmarks } from './lib/layout';
+import { BEATS, beatsCrossed } from './lib/beats';
+import { beforePhraseFor, tallerThan } from './lib/comparisons';
+import { pxPerMeter } from './lib/compaction';
+import { fmtYears } from './lib/format';
+import { buildLandmarks, type Landmark } from './lib/landmarks';
+import { LABEL_MIN_GAP_NARROW_PX, placeLandmarks } from './lib/layout';
 import { colorById } from './lib/lego-colors';
 import {
   hasPersonalizationKeys,
@@ -38,8 +41,8 @@ function getContext2D(el: HTMLCanvasElement): CanvasRenderingContext2D {
 const ctx = getContext2D(canvas);
 
 // Set whenever something the canvas or HUD draws might have changed, so an
-// otherwise-idle frame (no active scroll, no zoom tween, nothing crossed)
-// can skip the redraw. The rAF loop itself keeps running either way —
+// otherwise-idle frame (no active scroll, no compaction transition, nothing
+// crossed) can skip the redraw. The rAF loop itself keeps running either way —
 // cheap to keep alive, and simpler than pausing/resuming around every event
 // source.
 let needsRender = true;
@@ -90,8 +93,20 @@ const params = mergeParams(query, fragment);
 const storedRaw = readStoredProfile();
 const hasUrlParams = hasPersonalizationKeys(params);
 
+// The "time" landmarks (src/lib/landmarks.ts), ascending by years-ago, for
+// the HUD's "next up" teaser (src/hud.ts's setNext) — the first one not yet
+// passed by sim.years.
+function timeEventsFrom(list: Landmark[]): Landmark[] {
+  return list.filter((l) => l.kind === 'time').sort((a, b) => a.years - b.years);
+}
+
 let profile = parsePersonalization(params, storedRaw);
 let landmarks = buildLandmarks(profile);
+let timeEvents = timeEventsFrom(landmarks);
+// The most recently reported "next up" event's identity (id and years, since
+// a profile rebuild can change a landmark's years — e.g. age — without
+// changing its id), so setNext is only called when it actually changes.
+let lastNextKey: string | null = null;
 
 // URL params are applied and stored like any other source, but the page
 // never writes the child's name (or anything else) back into the URL —
@@ -112,10 +127,12 @@ if (hasUrlParams) {
 const startScreen = createStartScreen(app, (nextProfile) => {
   profile = nextProfile;
   saveProfile(profile);
-  // Rebuild landmarks only — the running sim (years, scale, zoom) is left
+  // Rebuild landmarks only — the running sim (years, compaction) is left
   // untouched, whether this came from the mandatory first-run screen or a
   // Restart.
   landmarks = buildLandmarks(profile);
+  timeEvents = timeEventsFrom(landmarks);
+  lastNextKey = null; // force the teaser to recheck against the rebuilt list
   hud.setColor(profile.colorId);
   startScreen.close();
   needsRender = true;
@@ -169,6 +186,15 @@ let peakYears = 0;
 // after returning from a hidden page doesn't inherit an earlier session's
 // peak.
 let sessionPeakYears = 0;
+// Whether the start screen has closed and any scroll has reached the stack
+// — build or undo — since the last replay: the prompt/footer swap responds
+// to either direction, since an undo scroll before anything's built still
+// reads as "I touched it," even though applyScroll clamps it to nothing
+// visible.
+let hasInteracted = false;
+// Whether a build-direction (negative page delta) scroll has happened since
+// the last replay: gates the one-time audio arm, which should read as a
+// deliberate "start building" gesture rather than any touch of the stack.
 let hasScrolledOnce = false;
 let tickAccumulator = 0;
 
@@ -212,9 +238,10 @@ function resetForReplay(): void {
   sim = initialSim();
   peakYears = 0;
   tickAccumulator = 0;
+  hasInteracted = false;
   hasScrolledOnce = false;
   firstInputKind = null;
-  hud.showPrompt();
+  hud.setHasScrolled(false);
   needsRender = true;
 }
 
@@ -272,17 +299,24 @@ createScrollInput(window, (deltaPx, kind) => {
   sim = applyScroll(sim, deltaPx);
   needsRender = true;
 
-  // Only a build scroll (negative page delta) qualifies for the prompt or
-  // analytics: an undo scroll before anything has been built yet is
-  // clamped to nothing visible, so it shouldn't read as engagement either.
+  // Any scroll counts as interaction, even one in the undo direction that
+  // applyScroll clamps to nothing visible before anything's been built —
+  // the prompt and footer respond to the first touch either way. This
+  // happens once per build attempt (cleared by resetForReplay(), not by a
+  // page hide) — hiding the page mid-build and coming back doesn't bring
+  // the prompt back.
+  if (!hasInteracted) {
+    hasInteracted = true;
+    hud.setHasScrolled(true);
+  }
+
+  // Only a build scroll (negative page delta) qualifies for analytics or
+  // arming audio: it's the deliberate "start building" gesture, where an
+  // undo scroll before anything has been built yet has nothing to report.
   if (deltaPx >= 0) return;
 
-  // The prompt and the first audio arm happen once per build attempt
-  // (cleared by resetForReplay(), not by a page hide) — hiding the page
-  // mid-build and coming back doesn't bring the prompt back.
   if (!hasScrolledOnce) {
     hasScrolledOnce = true;
-    hud.hidePrompt();
     armAudioOnce();
   }
 
@@ -352,6 +386,16 @@ function resize(): void {
 window.addEventListener('resize', resize);
 resize();
 
+// Canvas labels are set in Patrick Hand (src/render/stage.ts); if that font
+// is still loading when the first frame paints, the browser falls back to
+// the generic cursive stack for that draw. document.fonts.ready resolves
+// once every requested font has finished loading (or failed), so this
+// forces one more redraw right after, which is enough to pick up the real
+// font even if it wasn't ready in time for the very first paint.
+void document.fonts.ready.then(() => {
+  needsRender = true;
+});
+
 let lastTimeMs: number | null = null;
 
 function frame(timeMs: number): void {
@@ -400,17 +444,37 @@ function frame(timeMs: number): void {
     endSession(true);
   }
 
-  // Idle frame: years/done didn't change this step, and no zoom tween is
-  // running (in either the previous or the new state). Redrawing would
-  // produce pixel-identical output, so skip it — the rAF loop keeps going
-  // regardless, ready for the next input.
-  const simAdvancing = sim.years !== before.years || sim.done !== before.done;
-  const zoomActive = sim.zoom !== null || before.zoom !== null;
+  // The "next up" teaser: the first time landmark not yet passed. Cheap
+  // enough to check every frame regardless of needsRender — it only calls
+  // into the HUD when the identity (id + years) actually changes.
+  const nextEvent = timeEvents.find((t) => t.years > sim.years) ?? null;
+  const nextKey = nextEvent ? `${nextEvent.id}:${nextEvent.years}` : null;
+  if (nextKey !== lastNextKey) {
+    lastNextKey = nextKey;
+    hud.setNext(nextEvent ? `${nextEvent.label} · ${fmtYears(nextEvent.years)}` : null);
+  }
 
-  if (needsRender || simAdvancing || zoomActive) {
-    const placed = placeLandmarks(landmarks, heightM(sim), sim.scaleM, stageBox(view));
+  // Idle frame: years/done didn't change this step, and no compaction
+  // transition is running (in either the previous or the new state).
+  // Redrawing would produce pixel-identical output, so skip it — the rAF
+  // loop keeps going regardless, ready for the next input.
+  const simAdvancing = sim.years !== before.years || sim.done !== before.done;
+  const compactionActive = sim.compaction.transition !== null || before.compaction.transition !== null;
+
+  if (needsRender || simAdvancing || compactionActive) {
+    const placed = placeLandmarks(
+      landmarks,
+      heightM(sim),
+      pxPerMeter(sim.compaction),
+      stageBox(view),
+      view.narrow ? LABEL_MIN_GAP_NARROW_PX : undefined,
+    );
     drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId));
     hud.update(sim);
+    hud.setComparisons({
+      tall: tallerThan(heightM(sim), landmarks),
+      ago: beforePhraseFor(sim.years, BEATS, profile.ageYears),
+    });
     needsRender = false;
   }
 

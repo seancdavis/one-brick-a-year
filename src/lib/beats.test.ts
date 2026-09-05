@@ -7,6 +7,13 @@ describe('BEATS', () => {
       expect(BEATS[i].atYears).toBeGreaterThan(BEATS[i - 1].atYears);
     }
   });
+
+  it('gives every beat a non-empty beforePhrase', () => {
+    for (const beat of BEATS) {
+      expect(typeof beat.beforePhrase).toBe('string');
+      expect(beat.beforePhrase.length).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('beatsCrossed', () => {
