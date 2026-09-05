@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BRICK_PX,
   COMPACT_MS,
+  courseHeightPx,
   drawnBricks,
   EXPAND_FRACTION,
   INITIAL_COMPACTION,
   MAX_DRAWN,
   pxPerMeter,
+  renderCourses,
+  renderUnit,
   stepCompaction,
+  towerHeightPx,
   unitLabel,
   visualUnit,
   type Compaction,
@@ -114,6 +119,78 @@ describe('pxPerMeter', () => {
     const base = pxPerMeter({ unit: 1, transition: null });
     const compacted = pxPerMeter({ unit: 10, transition: null });
     expect(compacted).toBeCloseTo(base / 10, 10);
+  });
+});
+
+describe('renderUnit', () => {
+  it('is unit when idle', () => {
+    expect(renderUnit({ unit: 100, transition: null })).toBe(100);
+  });
+
+  it('is the finer (smaller) of from and to during a compaction, where to > from', () => {
+    const c: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: 200 } };
+    expect(renderUnit(c)).toBe(1);
+  });
+
+  it('is the finer (smaller) of from and to during an expansion, where to < from', () => {
+    const c: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: 200 } };
+    expect(renderUnit(c)).toBe(1);
+  });
+});
+
+describe('renderCourses', () => {
+  it('matches drawnBricks when idle', () => {
+    expect(renderCourses(25, { unit: 10, transition: null })).toBe(drawnBricks(25, 10));
+  });
+
+  it('draws every fine brick, unchanged in count, through a compaction (shrinking, not disappearing)', () => {
+    const start: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: 0 } };
+    const end: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: COMPACT_MS } };
+    expect(renderCourses(25, start)).toBe(25);
+    expect(renderCourses(25, end)).toBe(25);
+  });
+
+  it('a 16-brick expansion from 10 to 1 renders 10 courses growing from 3px to 30px each', () => {
+    const start: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: 0 } };
+    const end: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: COMPACT_MS } };
+    expect(renderCourses(16, start)).toBe(10);
+    expect(renderCourses(16, end)).toBe(10);
+    expect(courseHeightPx(start)).toBeCloseTo(3, 10);
+    expect(courseHeightPx(end)).toBeCloseTo(30, 10);
+  });
+
+  it('is never zero for bricks a state can actually reach: idle at or above its own unit, or mid-transition', () => {
+    expect(renderCourses(1, { unit: 1, transition: null })).toBeGreaterThan(0);
+    expect(renderCourses(10, { unit: 10, transition: null })).toBeGreaterThan(0);
+    expect(renderCourses(9, { unit: 1, transition: { from: 1, to: 10, elapsedMs: 0 } })).toBeGreaterThan(0);
+    expect(renderCourses(16, { unit: 10, transition: { from: 10, to: 1, elapsedMs: 0 } })).toBeGreaterThan(0);
+    expect(renderCourses(16, { unit: 10, transition: { from: 10, to: 1, elapsedMs: COMPACT_MS } })).toBeGreaterThan(0);
+  });
+});
+
+describe('towerHeightPx', () => {
+  it('is exactly continuous at both ends of a compaction and of an expansion, for bricks a multiple of the coarse unit', () => {
+    const bricks = 20; // a multiple of the coarse unit (10) on both sides
+
+    const idleFine: Compaction = { unit: 1, transition: null };
+    const compactStart: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: 0 } };
+    const compactEnd: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: COMPACT_MS } };
+    const idleCoarse: Compaction = { unit: 10, transition: null };
+    expect(towerHeightPx(bricks, compactStart)).toBeCloseTo(towerHeightPx(bricks, idleFine), 8);
+    expect(towerHeightPx(bricks, compactEnd)).toBeCloseTo(towerHeightPx(bricks, idleCoarse), 8);
+
+    const expandStart: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: 0 } };
+    const expandEnd: Compaction = { unit: 10, transition: { from: 10, to: 1, elapsedMs: COMPACT_MS } };
+    expect(towerHeightPx(bricks, expandStart)).toBeCloseTo(towerHeightPx(bricks, idleCoarse), 8);
+    expect(towerHeightPx(bricks, expandEnd)).toBeCloseTo(towerHeightPx(bricks, idleFine), 8);
+  });
+
+  it('for non-multiples, the jump at a compaction snap is less than one coarse brick (BRICK_PX)', () => {
+    const bricks = 25; // not a multiple of the coarse unit (10)
+    const compactEnd: Compaction = { unit: 1, transition: { from: 1, to: 10, elapsedMs: COMPACT_MS } };
+    const idleCoarse: Compaction = { unit: 10, transition: null };
+    const jump = Math.abs(towerHeightPx(bricks, compactEnd) - towerHeightPx(bricks, idleCoarse));
+    expect(jump).toBeLessThan(BRICK_PX);
   });
 });
 

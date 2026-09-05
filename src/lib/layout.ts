@@ -26,11 +26,15 @@ export interface PlacedLandmarks {
 const LABEL_LINE_OFFSET_PX = 6;
 
 // ...but never closer than this to the previous (lower) label's baseline, so
-// two labels never overlap however close their landmarks are. Large enough
-// to clear a wrapped label's second line (src/render/stage.ts draws it
-// SECOND_LINE_HEIGHT_PX = 12 below the first) so a two-line label never
-// touches the label stacked above it.
+// two labels never overlap however close their landmarks are.
 export const LABEL_MIN_GAP_PX = 30;
+
+// This module has no canvas to measure text with, so it can't tell ahead of
+// render time which labels src/render/stage.ts will wrap to two lines. On a
+// narrow canvas, where wrapping is common, the simplest safe choice is to
+// reserve a second line's worth of gap for every label rather than guessing
+// per landmark.
+export const LABEL_MIN_GAP_NARROW_PX = 46;
 
 // A landmark whose line sits within this many px of the ground line reads as
 // indistinguishable from the ground itself, so it's dropped instead of drawn
@@ -43,7 +47,7 @@ export const GROUND_HIDE_PX = 24;
 // one just placed below it, so the stack builds bottom-to-top with no
 // overlap — but only against labels on the *same* side, so a thing and a
 // time event at the same height never push each other.
-function placeSide(landmarks: Landmark[], heightM: number, pxPerM: number, stage: StageBox): PlacedLandmark[] {
+function placeSide(landmarks: Landmark[], heightM: number, pxPerM: number, stage: StageBox, minGapPx: number): PlacedLandmark[] {
   const placed: PlacedLandmark[] = [];
   const ordered = [...landmarks].sort((a, b) => a.meters - b.meters);
 
@@ -53,7 +57,7 @@ function placeSide(landmarks: Landmark[], heightM: number, pxPerM: number, stage
     const lineY = stage.ground - landmark.meters * pxPerM;
     if (lineY < stage.top - 30 || lineY > stage.ground - GROUND_HIDE_PX) continue;
 
-    const labelY = Math.min(lineY - LABEL_LINE_OFFSET_PX, previousLabelY - LABEL_MIN_GAP_PX);
+    const labelY = Math.min(lineY - LABEL_LINE_OFFSET_PX, previousLabelY - minGapPx);
     previousLabelY = labelY;
 
     placed.push({
@@ -72,6 +76,7 @@ export function placeLandmarks(
   heightM: number,
   pxPerMeter: number,
   stage: StageBox,
+  minGapPx: number = LABEL_MIN_GAP_PX,
 ): PlacedLandmarks {
   return {
     left: placeSide(
@@ -79,12 +84,14 @@ export function placeLandmarks(
       heightM,
       pxPerMeter,
       stage,
+      minGapPx,
     ),
     right: placeSide(
       landmarks.filter((l) => l.kind === 'time'),
       heightM,
       pxPerMeter,
       stage,
+      minGapPx,
     ),
   };
 }

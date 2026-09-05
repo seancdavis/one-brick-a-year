@@ -12,7 +12,7 @@ import { beforePhraseFor, tallerThan } from './lib/comparisons';
 import { pxPerMeter } from './lib/compaction';
 import { fmtYears } from './lib/format';
 import { buildLandmarks, type Landmark } from './lib/landmarks';
-import { placeLandmarks } from './lib/layout';
+import { LABEL_MIN_GAP_NARROW_PX, placeLandmarks } from './lib/layout';
 import { colorById } from './lib/lego-colors';
 import {
   hasPersonalizationKeys,
@@ -186,6 +186,15 @@ let peakYears = 0;
 // after returning from a hidden page doesn't inherit an earlier session's
 // peak.
 let sessionPeakYears = 0;
+// Whether the start screen has closed and any scroll has reached the stack
+// — build or undo — since the last replay: the prompt/footer swap responds
+// to either direction, since an undo scroll before anything's built still
+// reads as "I touched it," even though applyScroll clamps it to nothing
+// visible.
+let hasInteracted = false;
+// Whether a build-direction (negative page delta) scroll has happened since
+// the last replay: gates the one-time audio arm, which should read as a
+// deliberate "start building" gesture rather than any touch of the stack.
 let hasScrolledOnce = false;
 let tickAccumulator = 0;
 
@@ -229,6 +238,7 @@ function resetForReplay(): void {
   sim = initialSim();
   peakYears = 0;
   tickAccumulator = 0;
+  hasInteracted = false;
   hasScrolledOnce = false;
   firstInputKind = null;
   hud.showPrompt();
@@ -289,18 +299,25 @@ createScrollInput(window, (deltaPx, kind) => {
   sim = applyScroll(sim, deltaPx);
   needsRender = true;
 
-  // Only a build scroll (negative page delta) qualifies for the prompt or
-  // analytics: an undo scroll before anything has been built yet is
-  // clamped to nothing visible, so it shouldn't read as engagement either.
-  if (deltaPx >= 0) return;
-
-  // The prompt and the first audio arm happen once per build attempt
-  // (cleared by resetForReplay(), not by a page hide) — hiding the page
-  // mid-build and coming back doesn't bring the prompt back.
-  if (!hasScrolledOnce) {
-    hasScrolledOnce = true;
+  // Any scroll counts as interaction, even one in the undo direction that
+  // applyScroll clamps to nothing visible before anything's been built —
+  // the prompt and footer respond to the first touch either way. This
+  // happens once per build attempt (cleared by resetForReplay(), not by a
+  // page hide) — hiding the page mid-build and coming back doesn't bring
+  // the prompt back.
+  if (!hasInteracted) {
+    hasInteracted = true;
     hud.hidePrompt();
     hud.showFooter();
+  }
+
+  // Only a build scroll (negative page delta) qualifies for analytics or
+  // arming audio: it's the deliberate "start building" gesture, where an
+  // undo scroll before anything has been built yet has nothing to report.
+  if (deltaPx >= 0) return;
+
+  if (!hasScrolledOnce) {
+    hasScrolledOnce = true;
     armAudioOnce();
   }
 
@@ -446,7 +463,13 @@ function frame(timeMs: number): void {
   const compactionActive = sim.compaction.transition !== null || before.compaction.transition !== null;
 
   if (needsRender || simAdvancing || compactionActive) {
-    const placed = placeLandmarks(landmarks, heightM(sim), pxPerMeter(sim.compaction), stageBox(view));
+    const placed = placeLandmarks(
+      landmarks,
+      heightM(sim),
+      pxPerMeter(sim.compaction),
+      stageBox(view),
+      view.narrow ? LABEL_MIN_GAP_NARROW_PX : undefined,
+    );
     drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId));
     hud.update(sim);
     hud.setComparisons({

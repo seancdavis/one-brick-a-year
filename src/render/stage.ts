@@ -5,7 +5,7 @@
 // come from docs/design/picture-book.dc.html and are pinned as constants
 // below, not hard-coded inline, so they can be spotted and reused.
 
-import { BRICK_PX, drawnBricks, unitLabel, visualUnit } from '../lib/compaction';
+import { courseHeightPx, renderCourses, renderUnit, unitLabel } from '../lib/compaction';
 import { fmtYears } from '../lib/format';
 import type { IconId } from '../lib/icon-paths';
 import { PAPER_COLORS } from '../lib/landmarks';
@@ -89,7 +89,6 @@ const LABEL_FONT_NARROW_PX = 16;
 const LABEL_MARGIN_PX = 24;
 const ICON_LABEL_GAP_PX = 8;
 const CONNECTOR_THRESHOLD_PX = 8;
-const NEAR_STACK_MIN_GAP_PX = 8;
 const SECOND_LINE_HEIGHT_PX = 16;
 const LEADER_WIDTH_PX = 2;
 const PASSED_LABEL_COLOR = NAVY;
@@ -97,10 +96,17 @@ const UPCOMING_LABEL_COLOR = MUTED;
 const UPCOMING_ICON_ALPHA = 0.6;
 
 // Legend beside the tower's base: what one drawn brick is worth right now.
+// On narrow canvases there's no room beside the tower, so it moves under
+// the HUD's big number instead (src/hud.ts's .hud-big, left: 44px) —
+// centered within a box roughly as wide as that number reads at its
+// narrow font size.
 const LEGEND_FONT_PX = 16;
 const LEGEND_COLOR = MUTED;
 const LEGEND_GAP_PX = 12;
 const LEGEND_BASELINE_OFFSET_PX = 8;
+const LEGEND_NARROW_LEFT_PX = 44;
+const LEGEND_NARROW_WIDTH_PX = 200;
+const LEGEND_NARROW_TOP_PX = 150;
 
 // Fiber texture: a cached offscreen canvas of low-alpha speckle noise,
 // regenerated only when the CSS viewport size changes (never per frame).
@@ -215,18 +221,30 @@ function drawPaperIcon(
   ctx.restore();
 }
 
-// One side's landmark lines, icons, and labels. Each label unit (icon +
-// text) anchors at the outer viewport margin instead of a fixed gap from
-// the stack, so the longest label never runs off a narrow viewport's edge:
-// left labels are left-aligned at LABEL_MARGIN_PX with their icon
-// immediately to the right; right labels are right-aligned at
-// width - LABEL_MARGIN_PX with their icon immediately to the left. Either
-// way the icon ends up nearest the stack, and the dashed leader spans from
-// the stack's edge on this side out to that icon. A vertical connector
-// bridges the gap when stacking has pushed the label away from its true
-// (lineY) height. If the unit would still land within NEAR_STACK_MIN_GAP_PX
-// of the stack on one line, the years drop to a second line instead so the
-// unit narrows.
+// Shortens text with a trailing ellipsis until it fits maxWidth, measured
+// with the canvas's current font. Assumes text alone doesn't already fit
+// (callers check that first).
+function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  const ELLIPSIS = '…';
+  let end = text.length;
+  while (end > 0 && ctx.measureText(text.slice(0, end).trimEnd() + ELLIPSIS).width > maxWidth) {
+    end--;
+  }
+  return end > 0 ? text.slice(0, end).trimEnd() + ELLIPSIS : ELLIPSIS;
+}
+
+// One side's landmark lines, icons, and labels. Each side gets a fixed,
+// explicit text width — from the outer viewport margin to where the icon
+// column sits (iconSize plus a gap short of the stack edge) — so the
+// longest label can never run off a narrow viewport's edge or crowd the
+// stack: left labels are left-aligned at LABEL_MARGIN_PX, right labels
+// right-aligned at width - LABEL_MARGIN_PX, and the icon column (and the
+// dashed leader reaching it from the stack) sits at the same x for every
+// landmark on that side. A label that fits `${label} · ${years}` within
+// that width draws on one line; otherwise the years drop to their own
+// second line, and if the label alone still doesn't fit, it's ellipsized
+// (years never are). A vertical connector bridges the gap when stacking has
+// pushed the label away from its true (lineY) height.
 function drawLandmarkLabels(
   ctx: CanvasRenderingContext2D,
   placed: PlacedLandmark[],
@@ -240,28 +258,24 @@ function drawLandmarkLabels(
   const isLeft = side === 'left';
   const stackEdgeX = isLeft ? stackLeft : stackRight;
   const textAnchorX = isLeft ? LABEL_MARGIN_PX : width - LABEL_MARGIN_PX;
+  const sideRoomPx = isLeft ? stackLeft - LABEL_MARGIN_PX : width - LABEL_MARGIN_PX - stackRight;
+  const availableWidth = Math.max(0, sideRoomPx - ICON_LABEL_GAP_PX - iconSize);
+  const iconLeftX = isLeft
+    ? textAnchorX + availableWidth + ICON_LABEL_GAP_PX
+    : textAnchorX - availableWidth - ICON_LABEL_GAP_PX - iconSize;
+  const nearEdgeX = isLeft ? iconLeftX + iconSize : iconLeftX;
   ctx.textAlign = isLeft ? 'left' : 'right';
 
   for (const p of placed) {
     const labelText = p.landmark.label;
     const yearsText = fmtYears(p.landmark.years);
     const oneLineText = `${labelText} · ${yearsText}`;
-
-    const oneLineWidth = ctx.measureText(oneLineText).width;
-    const oneLineNearEdgeX = isLeft
-      ? textAnchorX + oneLineWidth + ICON_LABEL_GAP_PX + iconSize
-      : textAnchorX - oneLineWidth - ICON_LABEL_GAP_PX - iconSize;
-    const oneLineGap = isLeft ? stackEdgeX - oneLineNearEdgeX : oneLineNearEdgeX - stackEdgeX;
-    const twoLine = oneLineGap < NEAR_STACK_MIN_GAP_PX;
-
-    const textWidth = twoLine
-      ? Math.max(ctx.measureText(labelText).width, ctx.measureText(yearsText).width)
-      : oneLineWidth;
-
-    const iconLeftX = isLeft
-      ? textAnchorX + textWidth + ICON_LABEL_GAP_PX
-      : textAnchorX - textWidth - ICON_LABEL_GAP_PX - iconSize;
-    const nearEdgeX = isLeft ? iconLeftX + iconSize : iconLeftX;
+    const twoLine = ctx.measureText(oneLineText).width > availableWidth;
+    const line1 = twoLine
+      ? ctx.measureText(labelText).width <= availableWidth
+        ? labelText
+        : ellipsize(ctx, labelText, availableWidth)
+      : oneLineText;
     const iconCenterY = twoLine ? p.labelY + SECOND_LINE_HEIGHT_PX / 2 : p.labelY;
 
     const labelColor = p.passed ? PASSED_LABEL_COLOR : UPCOMING_LABEL_COLOR;
@@ -281,11 +295,9 @@ function drawLandmarkLabels(
     ctx.setLineDash([]);
 
     ctx.fillStyle = labelColor;
+    ctx.fillText(line1, textAnchorX, p.labelY);
     if (twoLine) {
-      ctx.fillText(labelText, textAnchorX, p.labelY);
       ctx.fillText(yearsText, textAnchorX, p.labelY + SECOND_LINE_HEIGHT_PX);
-    } else {
-      ctx.fillText(oneLineText, textAnchorX, p.labelY);
     }
   }
 }
@@ -386,24 +398,30 @@ export function drawStage(
   drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, icons);
   drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, icons);
 
-  // The stack.
+  // The stack: always the whole, visible courses renderCourses says to draw
+  // (never zero while bricks > 0, never a single course growing to fill the
+  // whole stage), each courseHeightPx tall — see src/lib/compaction.ts.
   const bricks = bricksFor(sim.years);
-  const unit = sim.compaction.unit;
-  const drawn = drawnBricks(bricks, unit);
-  const pxPerBrick = BRICK_PX * (unit / visualUnit(sim.compaction));
+  const drawn = renderCourses(bricks, sim.compaction);
+  const pxPerBrick = courseHeightPx(sim.compaction);
   drawBrickTower(ctx, sx, sw, ground, drawn, pxPerBrick, color);
 
-  // Legend, beside the tower's base: what one drawn brick is worth right
-  // now. During a transition this shows the *target* unit (transition.to)
-  // rather than the stale settled one (sim.compaction.unit doesn't flip
-  // until the transition finishes — see stepCompaction), so the legend
-  // updates the instant a squish or expansion starts.
-  const legendUnit = sim.compaction.transition ? sim.compaction.transition.to : unit;
+  // Legend: what one drawn brick is worth right now — describes the bricks
+  // renderUnit says are actually on screen, so it disappears the instant an
+  // expansion to unit 1 starts and appears only once a compaction to 10 has
+  // finished (unlike sim.compaction.unit, renderUnit already reflects a
+  // transition in flight).
+  const legendUnit = renderUnit(sim.compaction);
   if (legendUnit > 1) {
     ctx.font = `${LEGEND_FONT_PX}px ${FONT_STACK}`;
-    ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = LEGEND_COLOR;
-    ctx.fillText(unitLabel(legendUnit), sx + sw + LEGEND_GAP_PX, ground - LEGEND_BASELINE_OFFSET_PX);
+    if (narrow) {
+      ctx.textAlign = 'center';
+      ctx.fillText(unitLabel(legendUnit), LEGEND_NARROW_LEFT_PX + LEGEND_NARROW_WIDTH_PX / 2, LEGEND_NARROW_TOP_PX);
+    } else {
+      ctx.textAlign = 'left';
+      ctx.fillText(unitLabel(legendUnit), sx + sw + LEGEND_GAP_PX, ground - LEGEND_BASELINE_OFFSET_PX);
+    }
   }
 }

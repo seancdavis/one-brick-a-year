@@ -104,6 +104,47 @@ export function pxPerMeter(c: Compaction): number {
   return BRICK_PX / (visualUnit(c) * BRICK_M);
 }
 
+// The unit whose bricks are actually being drawn right now: idle, that's
+// just `unit`; mid-transition it's the finer (smaller) of `from` and `to` —
+// whichever end of the transition has more, smaller bricks — held fixed for
+// the whole transition so renderCourses (below) has a stable count to
+// animate the height of instead of jumping between counts.
+export function renderUnit(c: Compaction): number {
+  if (!c.transition) return c.unit;
+  return Math.min(c.transition.from, c.transition.to);
+}
+
+// How many drawn courses to render right now. Idle, that's just the normal
+// drawnBricks count. A compaction (to > from) draws every one of the fine
+// `from`-unit bricks, unchanged in count, and lets courseHeightPx (below)
+// shrink them together. An expansion (to < from) draws the coarse
+// `from`-unit bricks already on screen, exploded into their COMPACT_FACTOR
+// fine sub-bricks each, and lets courseHeightPx grow them back up — so the
+// count is never zero mid-transition just because the target unit's own
+// drawnBricks would floor to a small number.
+export function renderCourses(bricks: number, c: Compaction): number {
+  if (!c.transition) return drawnBricks(bricks, c.unit);
+  const { from, to } = c.transition;
+  if (to > from) return drawnBricks(bricks, from);
+  return drawnBricks(bricks, from) * COMPACT_FACTOR;
+}
+
+// The height of one drawn course right now, in css px: BRICK_PX at rest,
+// and continuously scaled by renderUnit/visualUnit mid-transition — the
+// squish. Continuous with the idle BRICK_PX at both ends of a transition
+// whenever the brick count is a multiple of the coarse unit; otherwise the
+// snap when the transition finishes is bounded by less than one brick's
+// worth of height.
+export function courseHeightPx(c: Compaction): number {
+  return (BRICK_PX * renderUnit(c)) / visualUnit(c);
+}
+
+// The whole tower's height in css px right now — what src/render/stage.ts
+// draws the stack at.
+export function towerHeightPx(bricks: number, c: Compaction): number {
+  return renderCourses(bricks, c) * courseHeightPx(c);
+}
+
 // Legend copy for what one drawn brick is worth right now — shown whenever
 // unit > 1 (src/render/stage.ts). `unit` only ever takes power-of-ten
 // values, so rounding to the nearest one guards against float drift from
