@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countSentences, fmtInt, fmtMeters, fmtYears, yearsAgo } from './format';
+import { countSentences, fmtInt, fmtMeters, fmtYears, fmtYearsCompact, yearsAgo } from './format';
 
 describe('fmtYears', () => {
   it('formats billions', () => {
@@ -16,6 +16,24 @@ describe('fmtYears', () => {
 
   it('formats small numbers plainly', () => {
     expect(fmtYears(31)).toBe('31 years');
+  });
+});
+
+describe('fmtYearsCompact', () => {
+  it('abbreviates each magnitude word', () => {
+    expect(fmtYearsCompact(4.6e9)).toBe('4.6B years');
+    expect(fmtYearsCompact(66e6)).toBe('66M years');
+    expect(fmtYearsCompact(5000)).toBe('5K years');
+  });
+
+  it('leaves small numbers exactly as fmtYears does', () => {
+    expect(fmtYearsCompact(31)).toBe(fmtYears(31));
+  });
+
+  it('is never longer than the full form it stands in for', () => {
+    for (const years of [4.6e9, 252e6, 66e6, 12000, 5000, 300, 1]) {
+      expect(fmtYearsCompact(years).length).toBeLessThanOrEqual(fmtYears(years).length);
+    }
   });
 });
 

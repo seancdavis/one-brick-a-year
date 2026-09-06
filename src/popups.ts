@@ -127,7 +127,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): H
 // The one item an open popup stands for: an event on the right, a thing on
 // the left.
 function popupId(model: PopupModel): string {
-  return model.event?.id ?? model.thing?.id ?? '';
+  return model.side === 'right' ? model.event.id : model.thing.id;
 }
 
 // One element per open item, so it survives from frame to frame exactly as
@@ -139,9 +139,10 @@ function popupKey(side: Side, model: PopupModel): string {
 }
 
 // Every member of a pin's brick: its events (right) or its things (left),
-// ascending, exactly as src/lib/popups.ts grouped them.
+// ascending, exactly as src/lib/popups.ts grouped them — widened to the one
+// type both sides can be walked as.
 function pinMembers(model: PinModel): (Beat | ThingLandmark)[] {
-  return model.events.length > 0 ? model.events : model.things;
+  return model.members;
 }
 
 // Every id a pin stands for, sorted. This is the pin's DOM key, so a
@@ -156,19 +157,20 @@ function pinKey(side: Side, model: PinModel): string {
 }
 
 // A pin's representative: the most recently passed event, or the tallest
-// thing — both lists arrive ascending, so both are the last entry. It is what
-// a single pin wears as its icon and answers to by name.
-function pinLead(model: PinModel): Beat | ThingLandmark | null {
+// thing — both lists arrive ascending, so both are the last entry, and a pin
+// always has at least one. It is what a single pin wears as its icon and
+// answers to by name.
+function pinLead(model: PinModel): Beat | ThingLandmark {
   const members = pinMembers(model);
-  return members[members.length - 1] ?? null;
+  return members[members.length - 1];
 }
 
 function paperOf(model: PinModel): PaperColor {
-  return pinLead(model)?.paper ?? 'navy';
+  return pinLead(model).paper;
 }
 
-function iconOf(model: PinModel): IconId | null {
-  return pinLead(model)?.icon ?? null;
+function iconOf(model: PinModel): IconId {
+  return pinLead(model).icon;
 }
 
 // A landmark icon as a flat, single-color silhouette, from the same 24×24
@@ -208,13 +210,9 @@ function setStub(node: HTMLElement, towerEdgeX: number, stubW: number, anchorYRe
 // The open item, rendered as a pin instead: what a side falls back to when it
 // has no room for a readable popup (see POPUP_MIN_WIDTH_PX).
 function openAsPin(model: PopupModel): PinModel {
-  return {
-    side: model.side,
-    bricksFromGround: model.bricksFromGround,
-    events: model.event ? [model.event] : [],
-    things: model.thing ? [model.thing] : [],
-    count: 1,
-  };
+  return model.side === 'right'
+    ? { side: 'right', bricksFromGround: model.bricksFromGround, members: [model.event] }
+    : { side: 'left', bricksFromGround: model.bricksFromGround, members: [model.thing] };
 }
 
 export function createPopups(
@@ -223,7 +221,13 @@ export function createPopups(
     onPop(): void;
     onNudge(): void;
     profile: () => Personalization;
+    // A pin was tapped and that one fact is now what the side is reading.
     onSelect(side: Side, id: string): void;
+    // A pin's card was opened over the side instead — a bundle's list, or a
+    // lone fact where there is no room to read it as a popup. The card is the
+    // reading now, so the side closes what it had open behind it and shows
+    // every one of its facts as a pin until the stack passes something new.
+    onOpenCard(side: Side): void;
   },
 ): Popups {
   const layer = el('div', 'popup-layer');
@@ -276,6 +280,12 @@ export function createPopups(
   // changed underneath us — a compaction folding facts into a bundle, an undo
   // dropping back to the previous fact — appears in place instead.
   const tapped = new Set<Side>();
+  // Whether each side currently has room for a readable popup at all, kept
+  // fresh by update() below. A pin tap reads it to decide between opening the
+  // fact as a popup and opening its card — the pin outlives the frame that
+  // built it, so this has to be the live answer rather than one baked in at
+  // build time.
+  const roomForPopup: Record<Side, boolean> = { left: false, right: false };
 
   let returnFocus: HTMLElement | null = null;
 
@@ -299,9 +309,8 @@ export function createPopups(
     return pinMembers(model).map((member) => ('title' in member ? eventNote(member) : thingNote(member)));
   }
 
-  function popupNote(model: PopupModel): Note | null {
-    if (model.event) return eventNote(model.event);
-    return model.thing ? thingNote(model.thing) : null;
+  function popupNote(model: PopupModel): Note {
+    return model.side === 'right' ? eventNote(model.event) : thingNote(model.thing);
   }
 
   function closeCard(): void {
@@ -364,11 +373,11 @@ export function createPopups(
     const paper = el('div', 'popup-paper');
     const note = popupNote(model);
     const title = el('span', 'popup-title');
-    title.textContent = note?.title ?? '';
+    title.textContent = note.title;
     const line = el('span', 'popup-line');
-    line.textContent = note?.line ?? '';
+    line.textContent = note.line;
     const meta = el('span', 'popup-meta');
-    meta.textContent = note?.meta ?? '';
+    meta.textContent = note.meta;
     paper.append(title, line, meta);
 
     container.append(paper);
@@ -389,40 +398,44 @@ export function createPopups(
 
   // A pin: the same paper and drop as a popup, shrunk to a square holding the
   // landmark's icon — or, for a bundle, how many facts share the brick.
-  // Tapping a single pin opens its popup; tapping a bundle opens its whole
-  // list in that one tap, since there is no single fact to open.
+  //
+  // Tapping a single pin opens its popup — unless the side has no room for
+  // one (see POPUP_MIN_WIDTH_PX), in which case the tap opens that one fact's
+  // card instead, so a pin on a narrow side is never a dead end. Tapping a
+  // bundle always opens its whole list in that one tap, room or no, since
+  // there is no single fact to open.
   function createPin(side: Side, model: PinModel): PinRecord {
     const container = el('div', `pin hangs--${side}`);
     container.append(buildStub());
 
+    const count = pinMembers(model).length;
     const paper = el('button', `pin-paper pin-paper--${paperOf(model)}`);
     paper.type = 'button';
-    const icon = iconOf(model);
-    if (model.count > 1) {
+    if (count > 1) {
       const badge = el('span', 'pin-count');
-      badge.textContent = String(model.count);
+      badge.textContent = String(count);
       paper.append(badge);
-    } else if (icon) {
-      paper.append(iconSvg(icon));
+    } else {
+      paper.append(iconSvg(iconOf(model)));
     }
 
     const lead = pinLead(model);
-    const name = lead && 'title' in lead ? lead.title : (lead?.label ?? 'fact');
-    paper.setAttribute('aria-label', model.count > 1 ? `${name} and ${model.count - 1} more facts` : name);
+    const name = 'title' in lead ? lead.title : lead.label;
+    paper.setAttribute('aria-label', count > 1 ? `${name} and ${count - 1} more facts` : name);
 
     container.append(paper);
     layer.append(container);
 
     const record: PinRecord = { key: pinKey(side, model), side, el: container, model };
     paper.addEventListener('click', () => {
-      if (record.model.count > 1) {
+      const members = pinMembers(record.model);
+      if (members.length > 1 || !roomForPopup[side]) {
         openCard(pinNotes(record.model), paper);
+        opts.onOpenCard(side);
         return;
       }
-      const single = pinLead(record.model);
-      if (!single) return;
       tapped.add(side);
-      opts.onSelect(side, single.id);
+      opts.onSelect(side, pinLead(record.model).id);
     });
     return record;
   }
@@ -489,6 +502,9 @@ export function createPopups(
         const sideModels = models[side];
         const width = sideModels.open ? widthFor(side) : null;
         widths[side] = width;
+        // Asked whether or not anything is open, since it is what a pin tap on
+        // this side will read next.
+        roomForPopup[side] = widthFor(side) !== null;
         // Whether the fact this side is showing crossed the stack this frame:
         // asked of the model, not of the element, so it reads the same whether
         // the side renders a popup or falls back to a pin.
@@ -520,12 +536,12 @@ export function createPopups(
             existing.model = wantOpen;
           } else {
             open[side] = createPopup(side, wantOpen, (isArrival || tapped.has(side)) && !reduced);
-            openedTitles.push(popupNote(wantOpen)?.title ?? '');
+            openedTitles.push(popupNote(wantOpen).title);
           }
         } else if (isArrival && sideModels.open) {
           // No room for a popup on this side, so the arrival shows as a pin —
           // still worth announcing, since it is what the page just said.
-          openedTitles.push(popupNote(sideModels.open)?.title ?? '');
+          openedTitles.push(popupNote(sideModels.open).title);
         }
 
         // Pins: reconcile against the map, keyed by membership, so a pin only
@@ -554,7 +570,7 @@ export function createPopups(
         opts.onPop();
         if (!reduced) opts.onNudge();
       }
-      if (openedTitles.length > 0) liveRegion.textContent = openedTitles.filter(Boolean).join(', ');
+      if (openedTitles.length > 0) liveRegion.textContent = openedTitles.join(', ');
 
       tapped.clear();
 

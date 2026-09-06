@@ -7,7 +7,8 @@
 // - The open popup is exactly one event (right) or one thing (left) — never a
 //   bundle. 'latest' means the most recently passed one: the highest atYears
 //   on the right, the tallest passed thing on the left. An id means a pin was
-//   tapped and that one fact is being read instead.
+//   tapped and that one fact is being read instead. null means nothing is open
+//   on that side at all, and every passed item on it is a pin.
 // - Which item is open is chosen before anything is grouped, so a compaction
 //   regrouping the bricks underneath can never change it. The open item's own
 //   brick may still carry a pin — for the rest of that brick's members.
@@ -25,40 +26,33 @@ import { effectiveRenderUnit, type Compaction } from './compaction';
 import type { ThingLandmark } from './landmarks';
 import { bricksFor } from './sim';
 
-export interface PopupModel {
-  side: 'left' | 'right';
-  // The drawn course this popup hangs from, counted from the ground at the
-  // current effective render unit: bricksFromGround course-heights above the
-  // ground line is exactly where the canvas draws this landmark's dashed
-  // leader (src/render/stage.ts), so a popup never floats above the tower.
-  bricksFromGround: number;
-  // The right side's open event. Undefined for a left-side popup.
-  event?: Beat;
-  // The left side's open thing. Undefined for a right-side popup.
-  thing?: ThingLandmark;
-}
+// The one open item on a side. `bricksFromGround` is the drawn course it
+// hangs from, counted from the ground at the current effective render unit:
+// that many course-heights above the ground line is exactly where the canvas
+// draws this landmark's dashed leader (src/render/stage.ts), so a popup never
+// floats above the tower. Which side it is on says what it holds — an event
+// on the right, a thing on the left — so neither is ever absent.
+export type PopupModel =
+  | { side: 'right'; bricksFromGround: number; event: Beat }
+  | { side: 'left'; bricksFromGround: number; thing: ThingLandmark };
 
-export interface PinModel {
-  side: 'left' | 'right';
-  bricksFromGround: number;
-  // Every event this pin's brick holds, ascending by atYears — so the last is
-  // the most recently passed, the one the pin is named and iconed after.
-  // Empty on the left side.
-  events: Beat[];
-  // Every thing this pin's brick holds, ascending by meters — the last is the
-  // tallest. Empty on the right side.
-  things: ThingLandmark[];
-  // How many members this pin stands for: 1 for a lone fact, 2 or more for a
-  // bundle, which shows a count badge instead of an icon.
-  count: number;
-}
+// One brick's leftovers, collapsed to a pin. `members` is never empty: a pin
+// exists because a brick has facts on it. They are ascending — by atYears on
+// the right, by meters on the left — so the last is the most recently passed
+// (or the tallest), which is the one the pin is named and iconed after. One
+// member is a lone fact; two or more is a bundle, which src/popups.ts draws
+// with a count badge instead of an icon.
+export type PinModel =
+  | { side: 'right'; bricksFromGround: number; members: Beat[] }
+  | { side: 'left'; bricksFromGround: number; members: ThingLandmark[] };
 
-// Which popup is open on each side: an id (an event's or a thing's), or
-// 'latest' for the most recently passed one — the default, and where a side
-// returns whenever the stack passes something new on it.
+// Which popup is open on each side: an id (an event's or a thing's), 'latest'
+// for the most recently passed one — the default, and where a side returns
+// whenever the stack passes something new on it — or null for none at all,
+// which is where a side goes when the reader opens a pin's card over it.
 export interface PopupSelection {
-  right: string | 'latest';
-  left: string | 'latest';
+  right: string | 'latest' | null;
+  left: string | 'latest' | null;
 }
 
 export interface PopupSide {
@@ -101,21 +95,25 @@ function rightSide(beats: readonly Beat[], years: number, unit: number, selectio
   const passed = beats.filter((beat) => beat.atYears <= years).sort((a, b) => a.atYears - b.atYears);
   if (passed.length === 0) return { open: null, pins: [] };
 
-  // A selected id the stack no longer holds leaves this side with nothing
-  // open; src/main.ts notices and falls back to 'latest'.
-  const openEvent = selection === 'latest' ? passed[passed.length - 1] : (passed.find((b) => b.id === selection) ?? null);
+  // null opens nothing deliberately. A selected id the stack no longer holds
+  // opens nothing by accident; src/main.ts notices that one and falls back to
+  // 'latest'.
+  const openEvent =
+    selection === null
+      ? null
+      : selection === 'latest'
+        ? passed[passed.length - 1]
+        : (passed.find((b) => b.id === selection) ?? null);
 
   const open: PopupModel | null = openEvent
     ? { side: 'right', bricksFromGround: brickOf(openEvent.atYears, unit), event: openEvent }
     : null;
 
   const rest = openEvent ? passed.filter((b) => b.id !== openEvent.id) : passed;
-  const pins = pinsFrom(rest, (b) => b.atYears, unit, (bricksFromGround, events) => ({
+  const pins = pinsFrom(rest, (b) => b.atYears, unit, (bricksFromGround, members) => ({
     side: 'right',
     bricksFromGround,
-    events,
-    things: [],
-    count: events.length,
+    members,
   }));
 
   return { open, pins };
@@ -136,19 +134,22 @@ function leftSide(
   const passed = things.filter((thing) => thing.meters <= heightM).sort((a, b) => a.meters - b.meters);
   if (passed.length === 0) return { open: null, pins: [] };
 
-  const openThing = selection === 'latest' ? passed[passed.length - 1] : (passed.find((t) => t.id === selection) ?? null);
+  const openThing =
+    selection === null
+      ? null
+      : selection === 'latest'
+        ? passed[passed.length - 1]
+        : (passed.find((t) => t.id === selection) ?? null);
 
   const open: PopupModel | null = openThing
     ? { side: 'left', bricksFromGround: brickOf(openThing.years, unit), thing: openThing }
     : null;
 
   const rest = openThing ? passed.filter((t) => t.id !== openThing.id) : passed;
-  const pins = pinsFrom(rest, (t) => t.years, unit, (bricksFromGround, group) => ({
+  const pins = pinsFrom(rest, (t) => t.years, unit, (bricksFromGround, members) => ({
     side: 'left',
     bricksFromGround,
-    events: [],
-    things: group,
-    count: group.length,
+    members,
   }));
 
   return { open, pins };
@@ -172,5 +173,19 @@ export function popupsFor(args: {
   return {
     right: rightSide(args.beats, args.years, unit, args.selection.right),
     left: leftSide(args.things, args.heightM, unit, args.selection.left),
+  };
+}
+
+// Something new arriving on a side takes it back to its latest fact, whatever
+// the reader had there — a pin they had tapped open, or the nothing a side
+// falls to while its card is up. The arrival is the page's new thing to say,
+// so it always wins; a side nothing arrived on is left exactly as it was.
+export function selectionAfterArrivals(
+  selection: PopupSelection,
+  arrived: { right: boolean; left: boolean },
+): PopupSelection {
+  return {
+    right: arrived.right ? 'latest' : selection.right,
+    left: arrived.left ? 'latest' : selection.left,
   };
 }

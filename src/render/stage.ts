@@ -8,7 +8,7 @@
 // docs/design/picture-book.dc.html and are pinned as constants below.
 
 import { courseHeightPx, effectiveRenderUnit, renderCourses, unitLabel } from '../lib/compaction';
-import { fmtYears } from '../lib/format';
+import { fmtYears, fmtYearsCompact } from '../lib/format';
 import type { IconId } from '../lib/icon-paths';
 import { boxesIntersect, labelRoom, type OccupiedBox, type PlacedLandmark, type PlacedLandmarks } from '../lib/layout';
 import { shade, type LegoColor } from '../lib/lego-colors';
@@ -116,10 +116,11 @@ const STUD_BOTTOM_DARKEN = -0.15;
 
 // Landmark cut-paper icons and labels — see drawLandmarkLabels for how
 // these lay out a side.
-// A label unit's above-baseline reach is the taller of the font size and half
-// the icon; src/lib/layout.ts mirrors these as LABEL_RISE_PX /
-// LABEL_RISE_NARROW_PX to keep every unit clear of the stage's usable top, so
-// the two must move together.
+// A label unit's height is the taller of its icon and its one or two text
+// lines, and its above-baseline reach is the taller of the font size and half
+// the icon; src/lib/layout.ts mirrors both as its LABEL_METRICS /
+// LABEL_METRICS_NARROW, which is what it stacks units by, so the two must move
+// together.
 const ICON_PX = 36;
 const ICON_PX_NARROW = 20;
 const LABEL_FONT_PX = 20;
@@ -354,6 +355,19 @@ function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
   return end > 0 ? text.slice(0, end).trimEnd() + ELLIPSIS : ELLIPSIS;
 }
 
+// The years of a label whose text has wrapped, fitted to the room its own
+// line has: the full form if it fits, else the compact one ("4.6B years"),
+// else that ellipsized. A second line is no wider than the first, so the years
+// have to be fitted just as the label above them is — otherwise a long number
+// on a narrow canvas runs straight off the screen edge.
+function fitYears(ctx: CanvasRenderingContext2D, years: number, maxWidth: number): string {
+  const full = fmtYears(years);
+  if (ctx.measureText(full).width <= maxWidth) return full;
+
+  const compact = fmtYearsCompact(years);
+  return ctx.measureText(compact).width <= maxWidth ? compact : ellipsize(ctx, compact, maxWidth);
+}
+
 // Greedily wraps text onto a second line once it no longer fits maxWidth,
 // measured with the canvas's current font — used for the narrow legend,
 // which sits centered over the hill rather than in a fixed side column and
@@ -382,10 +396,11 @@ function wrapToTwoLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: n
 // wrapped within the room labelRoom leaves before the screen margin
 // (src/lib/layout.ts). A label that
 // fits `${label} · ${years}` within that room draws on one line; otherwise
-// the years drop to their own second line, and if the label alone still
-// doesn't fit, it's ellipsized (years never are). A vertical connector
-// bridges the gap when stacking has pushed the label away from its true
-// (lineY) height.
+// the years drop to their own second line, and each line is fitted to that
+// same room in turn — the label ellipsized if it still doesn't fit, the years
+// abbreviated to their compact form first and only then ellipsized. A vertical
+// connector bridges the gap when stacking has pushed the label away from its
+// true (lineY) height.
 //
 // A landmark the stack has already passed draws nothing here: its popup or
 // pin (src/popups.ts) has taken the label's place, hanging off the very brick
@@ -417,19 +432,22 @@ function drawLandmarkLabels(
     if (p.passed) continue;
 
     const labelText = p.landmark.label;
-    const yearsText = fmtYears(p.landmark.years);
-    const oneLineText = `${labelText} · ${yearsText}`;
+    const oneLineText = `${labelText} · ${fmtYears(p.landmark.years)}`;
     const twoLine = ctx.measureText(oneLineText).width > textMaxWidth;
     const line1 = twoLine
       ? ctx.measureText(labelText).width <= textMaxWidth
         ? labelText
         : ellipsize(ctx, labelText, textMaxWidth)
       : oneLineText;
+    // Only a wrapped label has a years line of its own to fit; on one line the
+    // years are already inside the text just measured.
+    const line2 = twoLine ? fitYears(ctx, p.landmark.years, textMaxWidth) : '';
     const iconCenterY = twoLine ? p.labelY + SECOND_LINE_HEIGHT_PX / 2 : p.labelY;
 
     // The whole unit's box — icon plus however much of the text actually
-    // rendered — measured against the open popups before anything is drawn.
-    const textW = Math.max(ctx.measureText(line1).width, twoLine ? ctx.measureText(yearsText).width : 0);
+    // rendered, both lines constrained to the room they had — measured against
+    // the open popups before anything is drawn.
+    const textW = Math.max(ctx.measureText(line1).width, twoLine ? ctx.measureText(line2).width : 0);
     const boxX = isLeft ? textX - textW : iconX;
     const boxRight = isLeft ? iconX + iconSize : textX + textW;
     const boxTop = Math.min(iconCenterY - iconSize / 2, p.labelY - fontPx);
@@ -465,7 +483,7 @@ function drawLandmarkLabels(
     ctx.fillStyle = labelColor;
     ctx.fillText(line1, textX, p.labelY);
     if (twoLine) {
-      ctx.fillText(yearsText, textX, p.labelY + SECOND_LINE_HEIGHT_PX);
+      ctx.fillText(line2, textX, p.labelY + SECOND_LINE_HEIGHT_PX);
     }
   }
 }

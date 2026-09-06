@@ -68,39 +68,57 @@ export interface PlacedLandmarks {
 // A label always starts this far above its own line...
 const LABEL_LINE_OFFSET_PX = 6;
 
-// ...but never closer than this to the previous (lower) label's baseline, so
-// two labels never overlap however close their landmarks are.
-export const LABEL_MIN_GAP_PX = 30;
-
-// This module has no canvas to measure text with, so it can't tell ahead of
-// render time which labels src/render/stage.ts will wrap to two lines. On a
-// narrow canvas, where wrapping is common, the simplest safe choice is to
-// reserve a second line's worth of gap for every label rather than guessing
-// per landmark.
-export const LABEL_MIN_GAP_NARROW_PX = 46;
+// ...but never closer to the label below it than that label unit's own height
+// plus this much clear air, so two units never overlap however close their
+// landmarks are.
+export const LABEL_STACK_GAP_PX = 4;
 
 // How far a label unit's box reaches above its baseline: the taller of the
 // text's own ascent and half the icon (the icon is centered on the first
-// line, so it never reaches higher than the text does at these sizes). Mirrors
-// src/render/stage.ts's LABEL_FONT_PX / ICON_PX and their narrow counterparts,
-// which is what a unit is actually drawn at — the two must move together.
+// line, so it never reaches higher than the text does at these sizes).
 export const LABEL_RISE_PX = 20;
 export const LABEL_RISE_NARROW_PX = 16;
 
-// What one side's label units cost vertically: how much clear room to keep
-// between two of them, and how far each reaches above its own baseline. The
-// second is what StageBox.top is enforced against, so a label unit is never
-// placed with any part of itself under the HUD's corner block.
+// The whole height of one label unit — the icon and the one or two lines of
+// text beside it, whichever is taller, plus a little pad — so stacking can
+// reserve the room a unit will actually take rather than a guessed baseline
+// distance. Both heights mirror src/render/stage.ts's ICON_PX / LABEL_FONT_PX
+// / SECOND_LINE_HEIGHT_PX and their narrow counterparts, which is what a unit
+// is really drawn at: the two must move together.
+const LABEL_ONE_LINE_HEIGHT_PX = 44;
+const LABEL_TWO_LINE_HEIGHT_PX = 52;
+const LABEL_ONE_LINE_HEIGHT_NARROW_PX = 32;
+const LABEL_TWO_LINE_HEIGHT_NARROW_PX = 42;
+
+// What one side's label units cost vertically: how tall each is with its
+// years on the first line and with them wrapped to a second, and how far each
+// reaches above its own baseline. The rise is what StageBox.top is enforced
+// against, so a label unit is never placed with any part of itself under the
+// HUD's corner block.
 export interface LabelMetrics {
-  minGapPx: number;
+  oneLineHeightPx: number;
+  twoLineHeightPx: number;
   risePx: number;
 }
 
-export const LABEL_METRICS: LabelMetrics = { minGapPx: LABEL_MIN_GAP_PX, risePx: LABEL_RISE_PX };
+export const LABEL_METRICS: LabelMetrics = {
+  oneLineHeightPx: LABEL_ONE_LINE_HEIGHT_PX,
+  twoLineHeightPx: LABEL_TWO_LINE_HEIGHT_PX,
+  risePx: LABEL_RISE_PX,
+};
 export const LABEL_METRICS_NARROW: LabelMetrics = {
-  minGapPx: LABEL_MIN_GAP_NARROW_PX,
+  oneLineHeightPx: LABEL_ONE_LINE_HEIGHT_NARROW_PX,
+  twoLineHeightPx: LABEL_TWO_LINE_HEIGHT_NARROW_PX,
   risePx: LABEL_RISE_NARROW_PX,
 };
+
+// The room a unit has to be given. This module has no canvas to measure text
+// with, so it can't tell ahead of render time which labels src/render/stage.ts
+// will wrap; it reserves the taller of the two heights for every unit, and a
+// label that turns out to fit on one line simply gets the spare air.
+function unitHeight(metrics: LabelMetrics): number {
+  return Math.max(metrics.oneLineHeightPx, metrics.twoLineHeightPx);
+}
 
 // A landmark whose line sits within this many px of the ground line reads as
 // indistinguishable from the ground itself, so it's dropped instead of drawn
@@ -164,6 +182,10 @@ function placeSide(
 ): PlacedLandmark[] {
   const placed: PlacedLandmark[] = [];
   const ordered = [...landmarks].sort((a, b) => a.meters - b.meters);
+  // Each unit is pushed up clear of the one below by its own full height, not
+  // by a fixed baseline distance: the unit being placed is the one that hangs
+  // down toward its neighbor, so its height is what has to fit in the gap.
+  const stackStep = unitHeight(metrics) + LABEL_STACK_GAP_PX;
 
   let previousLabelY = Infinity;
 
@@ -174,7 +196,7 @@ function placeSide(
     const lineY = stage.ground - landmark.meters * pxPerM;
     if (lineY > stage.ground - GROUND_HIDE_PX) continue;
 
-    const labelY = Math.min(lineY - LABEL_LINE_OFFSET_PX, previousLabelY - metrics.minGapPx);
+    const labelY = Math.min(lineY - LABEL_LINE_OFFSET_PX, previousLabelY - stackStep);
     // The whole label unit — the icon and its text lines, not just the dashed
     // line — has to clear the stage's usable top, which is the bottom of the
     // HUD's corner block. A unit that would reach above it is dropped rather

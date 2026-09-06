@@ -4,18 +4,40 @@ import {
   boxesIntersect,
   GROUND_HIDE_PX,
   LABEL_MARGIN_PX,
-  LABEL_MIN_GAP_PX,
+  LABEL_METRICS,
+  LABEL_METRICS_NARROW,
   LABEL_RISE_PX,
   labelRoom,
   placeLandmarks,
   STAGE_TOP_GAP_PX,
   stageTopFor,
+  type LabelMetrics,
+  type PlacedLandmark,
   type StageBox,
 } from './layout';
 
 // top=150, ground=650 -> a 500px tall stage; pxPerMeter=50.
 const stage: StageBox = { top: 150, ground: 650 };
+// Taller again, for the cluster test: enough headroom that a unit is only
+// ever dropped by the test's own doing, never for running out of stage.
+const tallStage: StageBox = { top: 40, ground: 650 };
 const pxPerMeter = 50;
+
+// The rectangle a placed label unit occupies: it hangs from its baseline,
+// reaching metrics.risePx above it and standing as tall as its text made it —
+// one line, or two once the years have wrapped to their own. Every unit on a
+// side shares the same x range, so only the vertical spans can separate them.
+function unitBox(p: PlacedLandmark, metrics: LabelMetrics, wrapped: boolean) {
+  return {
+    x: 0,
+    y: p.labelY - metrics.risePx,
+    w: 100,
+    h: wrapped ? metrics.twoLineHeightPx : metrics.oneLineHeightPx,
+  };
+}
+
+// Which of a cluster's units wrap: none of them, all of them, and a mix.
+const WRAP_PATTERNS: ((i: number) => boolean)[] = [() => false, () => true, (i) => i % 2 === 0];
 
 function mark(id: string, meters: number, kind: Landmark['kind'] = 'thing'): Landmark {
   const base = { id, meters, years: meters * 100, label: id, icon: 'bricks' as const, paper: 'navy' as const };
@@ -45,17 +67,29 @@ describe('placeLandmarks', () => {
     expect(placed.left[0].labelY).toBe(placed.right[0].labelY);
   });
 
-  it('stacks a cluster of nearby landmarks on one side so no two labels are ever closer than LABEL_MIN_GAP_PX', () => {
-    // meters 0.1 apart -> lineY 5px apart, well inside a 30px cluster.
+  it('stacks a cluster of nearby landmarks on one side so no two label units ever intersect', () => {
+    // meters 0.1 apart -> lineY 5px apart: without stacking, every one of
+    // these units would be drawn on top of the last.
     const landmarks = [mark('a', 5.0), mark('b', 5.1), mark('c', 5.2), mark('d', 5.3), mark('e', 5.4)];
-    const placed = placeLandmarks(landmarks, 0, pxPerMeter, stage);
 
-    expect(placed.left).toHaveLength(5);
-    expect(placed.right).toHaveLength(0);
-    const labelYs = [...placed.left].sort((a, b) => a.labelY - b.labelY);
-    for (let i = 1; i < labelYs.length; i++) {
-      const gap = labelYs[i].labelY - labelYs[i - 1].labelY;
-      expect(gap).toBeGreaterThanOrEqual(LABEL_MIN_GAP_PX);
+    for (const [name, metrics] of [
+      ['wide', LABEL_METRICS],
+      ['narrow', LABEL_METRICS_NARROW],
+    ] as const) {
+      const placed = placeLandmarks(landmarks, 0, pxPerMeter, tallStage, metrics);
+      expect(placed.left, name).toHaveLength(5);
+      expect(placed.right, name).toHaveLength(0);
+
+      // Whichever of them wrap and whichever don't: a unit's own height is
+      // reserved for it either way, so no mix of the two can overlap.
+      for (const wraps of WRAP_PATTERNS) {
+        const boxes = placed.left.map((p, i) => unitBox(p, metrics, wraps(i)));
+        for (let i = 0; i < boxes.length; i++) {
+          for (let j = i + 1; j < boxes.length; j++) {
+            expect(boxesIntersect(boxes[i], boxes[j]), `${name}: units ${i} and ${j}`).toBe(false);
+          }
+        }
+      }
     }
   });
 

@@ -15,7 +15,7 @@ import { pxPerMeter } from './lib/compaction';
 import { fmtYears } from './lib/format';
 import { buildLandmarks, type Landmark, type ThingLandmark } from './lib/landmarks';
 import { LABEL_METRICS, LABEL_METRICS_NARROW, placeLandmarks, stageTopFor } from './lib/layout';
-import { popupsFor, type PopupSelection } from './lib/popups';
+import { popupsFor, selectionAfterArrivals, type PopupSelection } from './lib/popups';
 import { colorById } from './lib/lego-colors';
 import {
   hasPersonalizationKeys,
@@ -177,9 +177,7 @@ const hud = createHud(app);
 // asking which kind each callback is.
 const scrapbook = createScrapbook(app, { profile: () => profile });
 
-// The compact menu: one tab in the HUD's corner (src/hud.ts's menuSlot)
-// holding sound, "my facts", restart, and the color chips — everything the
-// old tabs-and-chips row used to spread across the corner.
+// The compact menu holds sound, facts, restart, and color controls.
 const menu = createMenu(hud.menuSlot, {
   onSound: () => {
     soundEnabled = !soundEnabled;
@@ -206,9 +204,19 @@ const menu = createMenu(hud.menuSlot, {
 // Which popup is open on each side. 'latest' — the default, and where a side
 // returns whenever the stack passes something new on it — means "whatever was
 // passed most recently"; an id means a pin was tapped and that fact is being
-// read instead. src/lib/popups.ts's popupsFor turns this into one open item
-// per side, with pins for everything else on it.
+// read instead; null means the reader has a pin's card open over that side,
+// so nothing hangs off it until the next arrival. src/lib/popups.ts's
+// popupsFor turns this into one open item per side, with pins for everything
+// else on it.
 let selection: PopupSelection = { right: 'latest', left: 'latest' };
+
+// A pin-tapped id the tower no longer holds — an undo can take the very fact
+// a pin had opened back off it, leaving that side with a selection nothing
+// matches. 'latest' always resolves, and null opens nothing on purpose, so
+// neither of those is ever stale however little the side has open.
+function isStaleSelection(chosen: PopupSelection['right'], hasOpen: boolean): boolean {
+  return chosen !== 'latest' && chosen !== null && !hasOpen;
+}
 
 // The facts themselves: a popup flips out of the tower for every time event
 // (right) and every physical thing (left) the stack passes, pops once, and
@@ -222,6 +230,10 @@ const popups = createPopups(app, {
   profile: () => profile,
   onSelect: (side, id) => {
     selection = { ...selection, [side]: id };
+    needsRender = true;
+  },
+  onOpenCard: (side) => {
+    selection = { ...selection, [side]: null };
     needsRender = true;
   },
 });
@@ -545,10 +557,12 @@ function frame(timeMs: number): void {
   const newIds = new Set<string>([...arrivedEvents.map((e) => e.id), ...arrivedThings.map((t) => t.id)]);
 
   // Something new arriving takes that side back to its latest fact, whatever
-  // pin the reader had opened before — the arrival is the page's new thing to
-  // say.
-  if (arrivedEvents.length > 0) selection = { ...selection, right: 'latest' };
-  if (arrivedThings.length > 0) selection = { ...selection, left: 'latest' };
+  // the reader had there — a pin they had tapped open, or the nothing a side
+  // falls to while its card is up.
+  selection = selectionAfterArrivals(selection, {
+    right: arrivedEvents.length > 0,
+    left: arrivedThings.length > 0,
+  });
 
   if (sim.done && !before.done) {
     endScreen.show(profile);
@@ -587,15 +601,14 @@ function frame(timeMs: number): void {
       compaction: sim.compaction,
     };
     let models = popupsFor({ ...popupArgs, selection });
-    // An undo can take the very fact a pin had opened back off the tower,
-    // leaving that side with a selection nothing matches. Falling back to the
-    // latest keeps a popup open there rather than a bare column of pins.
-    const stale =
-      (selection.right !== 'latest' && !models.right.open) || (selection.left !== 'latest' && !models.left.open);
-    if (stale) {
+    // Falling back to the latest keeps a popup open on a side whose selected
+    // fact has gone, rather than a bare column of pins.
+    const staleRight = isStaleSelection(selection.right, models.right.open !== null);
+    const staleLeft = isStaleSelection(selection.left, models.left.open !== null);
+    if (staleRight || staleLeft) {
       selection = {
-        right: models.right.open ? selection.right : 'latest',
-        left: models.left.open ? selection.left : 'latest',
+        right: staleRight ? 'latest' : selection.right,
+        left: staleLeft ? 'latest' : selection.left,
       };
       models = popupsFor({ ...popupArgs, selection });
     }
