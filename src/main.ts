@@ -8,7 +8,7 @@ import { createScrapbook } from './scrapbook';
 import { createStartScreen } from './start-screen';
 import { createTags } from './tags';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
-import { buildBeats } from './lib/beats';
+import { beatsCrossed, buildBeats } from './lib/beats';
 import { beforePhraseFor, tallerThan } from './lib/comparisons';
 import { pxPerMeter } from './lib/compaction';
 import { fmtYears } from './lib/format';
@@ -183,11 +183,13 @@ const tags = createTags(app, {
 });
 
 // The scrapbook: every fact the build has reached, kept even after an undo
-// drops its tag off the tower — collected is derived from peakYears below,
-// never from sim.years itself. Slotted into the HUD's tabs row (src/hud.ts's
+// drops its tag off the tower — fed from peakYears below, never from
+// sim.years itself. Its tab slots into the HUD's tabs row (src/hud.ts's
 // tabsSlot) so it sits alongside sound/restart without src/hud.ts knowing
-// anything about facts.
-const scrapbook = createScrapbook(hud.tabsSlot, { profile: () => profile });
+// anything about facts; its panel mounts at the app root, same as the tags
+// layer's opened-card backdrop, so neither is trapped under the HUD's own
+// stacking context.
+const scrapbook = createScrapbook(app, hud.tabsSlot, { profile: () => profile });
 
 const endScreen = createEndScreen(app, () => resetForReplay());
 
@@ -206,14 +208,15 @@ let sim = initialSim();
 let sessionPeakYears = 0;
 // The build's own high-water mark, independent of the analytics session:
 // unlike sessionPeakYears it is never reset by a session ending (Restart
-// aside), so it is what the scrapbook collects from — an undo that pulls
-// sim.years back down takes a fact's tag off the tower (src/tags.ts reads
-// sim.years directly) without forgetting that the build once reached it.
+// aside), and it is the sole source of "what has this build reached" —
+// nothing else keeps its own copy. Whenever it advances, beatsCrossed
+// (src/lib/beats.ts) between the previous peak and the new one is every
+// beat newly reached this step, handed to the scrapbook to collect and to
+// the tags layer as "new this frame" for its flip animation, pop, and nudge.
+// An undo that pulls sim.years back down takes a fact's tag off the tower
+// (src/tags.ts reads sim.years directly) without forgetting that the build
+// once reached it, since peakYears itself never drops.
 let peakYears = 0;
-// The identity of the collected list last handed to the scrapbook (the
-// joined ids), so setCollected is only called when the set of facts actually
-// changes — every rendered frame otherwise, same reasoning as lastNextKey.
-let lastCollectedKey: string | null = null;
 // Whether the start screen has closed and any scroll has reached the stack
 // — build or undo — since the last replay: the prompt/footer swap responds
 // to either direction, since an undo scroll before anything's built still
@@ -254,20 +257,20 @@ function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void 
 }
 
 // Shared by "Build it again" (end screen) and Restart (HUD): back to a
-// fresh, unstarted sim, with the prompt and the collected tags reset to
-// match — clearing the tags also empties the "already popped" set, so the
-// next build's facts flip out again. The analytics session itself is not
-// ended here — "Build it again" only runs after finish, which already ended
-// it (see the frame loop below), and Restart ends it itself before calling
-// this. Clearing firstInputKind means the next session's first scroll gets
-// its own input_kind, not a leftover from this one.
+// fresh, unstarted sim, with the prompt, the tags, and the scrapbook reset to
+// match — resetting peakYears to 0 is what makes the next build's facts flip
+// out (and pop, and collect) again: the very next peak advance finds every
+// beat newly crossed. The analytics session itself is not ended here —
+// "Build it again" only runs after finish, which already ended it (see the
+// frame loop below), and Restart ends it itself before calling this.
+// Clearing firstInputKind means the next session's first scroll gets its own
+// input_kind, not a leftover from this one.
 function resetForReplay(): void {
   endScreen.hide();
   tags.clear();
   scrapbook.clear();
   sim = initialSim();
   peakYears = 0;
-  lastCollectedKey = null;
   tickAccumulator = 0;
   hasInteracted = false;
   hasScrolledOnce = false;
@@ -463,18 +466,16 @@ function frame(timeMs: number): void {
   // label back.
   if (sessionActive) sessionPeakYears = Math.max(sessionPeakYears, sim.years);
 
-  // The build's own peak, independent of any analytics session: collected
-  // facts (the scrapbook) are every beat reached by this high-water mark, so
-  // scrolling back never un-collects one even though its tag leaves the
-  // tower. Cheap enough to check every frame regardless of needsRender — it
-  // only calls into the scrapbook when the collected set actually changes.
+  // The build's own peak, independent of any analytics session: whenever it
+  // advances, beatsCrossed is every beat newly reached this step — handed to
+  // the scrapbook to collect right away, and to the tags layer below as
+  // "new this frame" once the render gate decides whether this frame draws.
+  // Scrolling back never un-collects a beat, even though its tag leaves the
+  // tower, since peakYears itself never drops.
+  const prevPeakYears = peakYears;
   peakYears = Math.max(peakYears, sim.years);
-  const collected = beats.filter((b) => b.atYears <= peakYears);
-  const collectedKey = collected.map((b) => b.id).join('|');
-  if (collectedKey !== lastCollectedKey) {
-    lastCollectedKey = collectedKey;
-    scrapbook.setCollected(collected);
-  }
+  const newlyCrossed = peakYears > prevPeakYears ? beatsCrossed(prevPeakYears, peakYears, beats) : [];
+  if (newlyCrossed.length > 0) scrapbook.add(newlyCrossed);
 
   if (sim.done && !before.done) {
     endScreen.show(profile);
@@ -503,9 +504,16 @@ function frame(timeMs: number): void {
     // The tags are laid out before the canvas draws, so their measured boxes
     // are available to the stage below: on a narrow viewport a tag clamped
     // back over the tower can crowd the left side's labels, and those give
-    // way rather than the tag moving.
+    // way rather than the tag moving. newlyCrossed is always computed on the
+    // very frame these models can first include it (peakYears and sim.years
+    // advance together), so passing its ids straight through is safe even
+    // though tags.update only actually runs on a rendered frame.
     const bricks = bricksFor(sim.years);
-    tags.update(tagsFor(beats, sim.years, sim.compaction, bricks), stageGeometry(view, sim));
+    tags.update(
+      tagsFor(beats, sim.years, sim.compaction, bricks),
+      stageGeometry(view, sim),
+      newlyCrossed.map((b) => b.id),
+    );
     const bands = view.narrow ? tags.occupiedBands() : [];
 
     const placed = placeLandmarks(

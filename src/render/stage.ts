@@ -253,8 +253,16 @@ export function nudge(): void {
   nudgeStartMs = performance.now();
 }
 
+// Only checks that a nudge is pending, not whether it has actually expired —
+// nudgeScale() below is what detects real expiry, clears nudgeStartMs, and
+// returns the resting scale of 1. Keeping this loose guarantees the render
+// loop calls nudgeScale() at least once after expiry (since nudgeActive()
+// still reads true from the *previous* frame's timestamp until that call
+// clears it), so the tower's very last nudged frame always redraws at scale
+// 1 rather than getting stuck slightly off-scale if nothing else happens to
+// trigger a redraw right when the nudge's animation would have finished.
 export function nudgeActive(): boolean {
-  return nudgeStartMs !== null && performance.now() - nudgeStartMs < NUDGE_MS;
+  return nudgeStartMs !== null;
 }
 
 // 1 at both ends, NUDGE_SCALE at the midpoint: the stack swells and settles
@@ -558,24 +566,15 @@ export function drawStage(
 
   // Landmark lines, icons, and labels: things (physical comparisons) on the
   // left, time events (history milestones) on the right, mirrored around
-  // the centered stack. A time event the stack has already passed is not
-  // drawn here at all — its paper tag (src/tags.ts) has taken the label's
-  // place, hanging off the very brick for its year.
+  // the centered stack. A time event the stack has already passed never
+  // reaches `placed.right` at all (src/lib/layout.ts excludes it before
+  // stacking) — its paper tag (src/tags.ts) has taken the label's place,
+  // hanging off the very brick for its year.
   ctx.font = `${narrow ? LABEL_FONT_NARROW_PX : LABEL_FONT_PX}px ${tokens.fonts.hand}`;
   ctx.textBaseline = 'alphabetic';
   const iconSize = narrow ? ICON_PX_NARROW : ICON_PX;
   drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, icons, tokens);
-  drawLandmarkLabels(
-    ctx,
-    placed.right.filter((p) => !p.passed),
-    'right',
-    sx,
-    sx + sw,
-    W,
-    iconSize,
-    icons,
-    tokens,
-  );
+  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, icons, tokens);
 
   // The stack: always the whole, visible courses renderCourses says to draw
   // (never zero while bricks > 0, never a single course growing to fill the

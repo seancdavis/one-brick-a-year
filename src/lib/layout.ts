@@ -46,14 +46,29 @@ export const GROUND_HIDE_PX = 24;
 // high, near the top. Walking this order lets each label push up against the
 // one just placed below it, so the stack builds bottom-to-top with no
 // overlap — but only against labels on the *same* side, so a thing and a
-// time event at the same height never push each other.
-function placeSide(landmarks: Landmark[], heightM: number, pxPerM: number, stage: StageBox, minGapPx: number): PlacedLandmark[] {
+// time event at the same height never push each other. `excludePassed` drops
+// a passed landmark from the stack entirely, rather than merely not drawing
+// it, so it can't take up stacking room an upcoming label further along
+// would otherwise get: a right-side time event whose label has already
+// become a tag (src/tags.ts) would otherwise still crowd the labels above it
+// even though nothing of it is ever drawn.
+function placeSide(
+  landmarks: Landmark[],
+  heightM: number,
+  pxPerM: number,
+  stage: StageBox,
+  minGapPx: number,
+  excludePassed: boolean,
+): PlacedLandmark[] {
   const placed: PlacedLandmark[] = [];
   const ordered = [...landmarks].sort((a, b) => a.meters - b.meters);
 
   let previousLabelY = Infinity;
 
   for (const landmark of ordered) {
+    const passed = heightM >= landmark.meters;
+    if (excludePassed && passed) continue;
+
     const lineY = stage.ground - landmark.meters * pxPerM;
     if (lineY < stage.top - 30 || lineY > stage.ground - GROUND_HIDE_PX) continue;
 
@@ -64,7 +79,7 @@ function placeSide(landmarks: Landmark[], heightM: number, pxPerM: number, stage
       landmark,
       lineY,
       labelY,
-      passed: heightM >= landmark.meters,
+      passed,
     });
   }
 
@@ -79,12 +94,15 @@ export function placeLandmarks(
   minGapPx: number = LABEL_MIN_GAP_PX,
 ): PlacedLandmarks {
   return {
+    // Things (left) keep their label after the stack passes them — only time
+    // events hand off to a tag — so nothing is excluded here.
     left: placeSide(
       landmarks.filter((l) => l.kind === 'thing'),
       heightM,
       pxPerMeter,
       stage,
       minGapPx,
+      false,
     ),
     right: placeSide(
       landmarks.filter((l) => l.kind === 'time'),
@@ -92,6 +110,7 @@ export function placeLandmarks(
       pxPerMeter,
       stage,
       minGapPx,
+      true,
     ),
   };
 }

@@ -1,10 +1,14 @@
 // The scrapbook: every fact the stack has reached this build, kept even after
-// an undo drops the tag back off the tower (src/main.ts computes "collected"
-// from the build's peak, never from the current, undo-able position). A paper
-// tab in the HUD controls row ("my facts · N") opens a paper panel listing
-// them newest first, each one a compact paper note in the same voice as an
-// opened tag (src/tags.ts). DOM glue only — no state lives here beyond the
-// last list src/main.ts handed in.
+// an undo drops the tag back off the tower (src/main.ts hands over each
+// newly crossed beat, from its peakYears high-water mark, the moment it
+// crosses — never re-derived from sim.years, which an undo can pull back
+// down). A paper tab in the HUD controls row ("my facts · N") opens a paper
+// panel listing them newest first, each one a compact paper note in the same
+// voice as an opened tag (src/tags.ts). The tab lives in the HUD's tabs row;
+// the panel itself mounts at the app root, never inside the HUD's own
+// fixed-position stacking context, which would otherwise trap it underneath
+// the tag layer. DOM glue only — no state lives here beyond what's been
+// added.
 
 import { fmtYears } from './lib/format';
 import { fillTokens, type Personalization } from './lib/personalize';
@@ -24,15 +28,20 @@ function yearsAgo(years: number): string {
 
 export function createScrapbook(
   root: HTMLElement,
+  tabsSlot: HTMLElement,
   opts: { profile: () => Personalization },
-): { setCollected(events: readonly Beat[]): void; clear(): void } {
+): { add(events: readonly Beat[]): void; clear(): void } {
   const tab = el('button', 'hud-tab scrapbook-tab');
   tab.type = 'button';
   tab.setAttribute('aria-haspopup', 'dialog');
   tab.setAttribute('aria-expanded', 'false');
 
+  // A tap or drag on the panel's own padding or list must not reach the
+  // window scroll listener and be mistaken for a build/undo gesture
+  // (src/input.ts's data-scroll-ignore).
   const backdrop = el('div', 'scrapbook-backdrop');
   backdrop.hidden = true;
+  backdrop.setAttribute('data-scroll-ignore', '');
   const panel = el('div', 'scrapbook-panel');
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-modal', 'true');
@@ -47,9 +56,14 @@ export function createScrapbook(
 
   panel.append(title, list, closeButton);
   backdrop.append(panel);
-  root.append(tab, backdrop);
+  tabsSlot.append(tab);
+  root.append(backdrop);
 
-  let collected: readonly Beat[] = [];
+  // Ascending by atYears, since every addition arrives that way already
+  // (beatsCrossed(prevPeak, peak) hands over one increasing slice at a time)
+  // — which is also newest-first order: the smallest atYears is the event
+  // the stack reached most recently in real-world time.
+  let collected: Beat[] = [];
   let returnFocus: HTMLElement | null = null;
 
   function paintTab(): void {
@@ -59,13 +73,10 @@ export function createScrapbook(
     tab.classList.toggle('hud-tab--disabled', count === 0);
   }
 
-  // Newest first: the smallest atYears is the event the stack reached most
-  // recently in real-world time.
   function paintList(): void {
-    const ordered = [...collected].sort((a, b) => a.atYears - b.atYears);
     const profile = opts.profile();
     list.replaceChildren(
-      ...ordered.map((beat) => {
+      ...collected.map((beat) => {
         const note = el('div', 'scrapbook-note');
         const noteTitle = el('div', 'scrapbook-note-title');
         noteTitle.textContent = beat.title;
@@ -115,8 +126,9 @@ export function createScrapbook(
   paintTab();
 
   return {
-    setCollected(events) {
-      collected = events;
+    add(events) {
+      if (events.length === 0) return;
+      collected = collected.concat(events);
       paintTab();
     },
     clear() {

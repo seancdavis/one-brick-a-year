@@ -27,7 +27,14 @@ export interface TagBand {
 }
 
 export interface Tags {
-  update(models: TagModel[], geometry: TagGeometry): void;
+  // `newIds` is every event id src/main.ts's peakYears high-water mark newly
+  // crossed this frame (via src/lib/beats.ts's beatsCrossed) — the single
+  // source for "just arrived", replacing any bookkeeping of our own. A model
+  // whose events don't intersect it is treated as already-seen: no flip
+  // animation, no pop, no nudge, even if this is the first frame it has a
+  // record (e.g. a bundle newly formed by compaction out of tags that were
+  // already on the tower).
+  update(models: TagModel[], geometry: TagGeometry, newIds: readonly string[]): void;
   occupiedBands(): TagBand[];
   clear(): void;
 }
@@ -97,9 +104,12 @@ export function createTags(
   root.append(layer);
 
   // The opened fact, centered: the same paper note, listing one fact for a
-  // single tag and every fact in the brick for a bundle.
+  // single tag and every fact in the brick for a bundle. Marked
+  // data-scroll-ignore (src/input.ts) so a wheel or drag over it scrolls the
+  // card's own content instead of building or undoing the tower.
   const backdrop = el('div', 'tag-card-backdrop');
   backdrop.hidden = true;
+  backdrop.setAttribute('data-scroll-ignore', '');
   const card = el('div', 'tag-card');
   card.setAttribute('role', 'dialog');
   card.setAttribute('aria-modal', 'true');
@@ -121,10 +131,6 @@ export function createTags(
   });
 
   const records = new Map<string, TagRecord>();
-  // Every event that has ever had a tag in this build. Scrolling back below
-  // an event drops its tag; scrolling forward again brings it back without a
-  // second pop, because its id is still in here. Restart empties it.
-  const seen = new Set<string>();
   let returnFocus: HTMLElement | null = null;
 
   function closeCard(): void {
@@ -219,13 +225,13 @@ export function createTags(
   }
 
   return {
-    update(models: TagModel[], geometry: TagGeometry) {
+    update(models: TagModel[], geometry: TagGeometry, newIds: readonly string[]) {
       const widthPx = geometry.narrow ? TAG_WIDTH_NARROW_PX : TAG_WIDTH_PX;
       const reduced = prefersReducedMotion();
+      const newIdSet = new Set(newIds);
 
       // Tags off the top of the viewport are dropped rather than drawn where
-      // nobody can see them; their events still count as seen below, so
-      // coming back down doesn't set off a burst of pops.
+      // nobody can see them.
       const anchorFor = (model: TagModel) => geometry.groundY - model.bricksFromGround * geometry.courseHeightPx;
       const visible = models.filter((m) => anchorFor(m) >= 0);
       const wanted = new Map(visible.map((m) => [keyOf(m), m] as const));
@@ -241,7 +247,13 @@ export function createTags(
 
       // One pop and one nudge per frame at most, however many tags arrived:
       // a fast scroll through the dense first century crosses several events
-      // in a single step, and a burst of pops reads as noise.
+      // in a single step, and a burst of pops reads as noise. `isNew` reads
+      // directly off newIds — src/main.ts's peakYears high-water mark, via
+      // beatsCrossed — rather than any set of our own: a record with no id
+      // in newIds is either a tag reappearing after an undo (its event
+      // already passed peakYears once) or a bundle newly formed by
+      // compaction out of tags already on the tower, and neither should
+      // animate again.
       let popped = false;
       for (const [key, model] of wanted) {
         const existing = records.get(key);
@@ -249,18 +261,13 @@ export function createTags(
           existing.model = model;
           continue;
         }
-        const isNew = model.events.some((e) => !seen.has(e.id));
+        const isNew = model.events.some((e) => newIdSet.has(e.id));
         records.set(key, createRecord(model, isNew && !reduced));
         if (isNew && !popped) {
           popped = true;
           opts.onPop();
           if (!reduced) opts.onNudge();
         }
-      }
-
-      // Every event with a model this frame counts as seen, visible or not.
-      for (const model of models) {
-        for (const event of model.events) seen.add(event.id);
       }
 
       // Width first, then one batch of height reads, then the positions: the
@@ -329,7 +336,6 @@ export function createTags(
       closeCard();
       for (const record of records.values()) record.el.remove();
       records.clear();
-      seen.clear();
     },
   };
 }

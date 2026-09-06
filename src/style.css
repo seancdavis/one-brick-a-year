@@ -365,6 +365,7 @@ select {
   max-width: 34ch;
   max-height: 80vh;
   overflow-y: auto;
+  touch-action: pan-y;
   background: var(--cream);
   color: var(--navy);
   box-shadow: 0 3px 0 var(--paper-shadow);
@@ -444,6 +445,7 @@ select {
   max-width: 40ch;
   max-height: 80vh;
   overflow-y: auto;
+  touch-action: pan-y;
   background: var(--cream);
   color: var(--navy);
   box-shadow: 0 3px 0 var(--paper-shadow);
