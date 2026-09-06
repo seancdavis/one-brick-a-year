@@ -4,7 +4,7 @@ You are Sean's development partner on this project. Work collaboratively, make d
 
 ## What this is
 
-An interactive web page for an eight-year-old, and for sharing, that makes 4.6 billion years feel long. One LEGO brick for every year, stacked back in time, while she scrolls. Scrolling forward builds the stack and scrolling back undoes it, instantly and in proportion to how far she scrolls. The stack passes things she knows (a door, her house, the Eiffel Tower, airplanes, the space station) on its way to wrapping around the Earth, compacting ten bricks into one whenever it would otherwise outgrow the screen so it always stays visible. The feeling comes from cost: a vigorous, sustained scroll takes about a minute and a half to finish, and that's the lesson. Every ratio on screen is real. Icons are labels, not to scale.
+An interactive web page for an eight-year-old, and for sharing, that makes 4.6 billion years feel long. One LEGO brick for every year, stacked back in time, while she scrolls. Scrolling forward builds the stack and scrolling back undoes it, instantly and in proportion to how far she scrolls. The stack passes things she knows (a door, her house, the Eiffel Tower, airplanes, the space station) on its way to wrapping around the Earth, compacting ten bricks into one whenever it would otherwise outgrow the screen so it always stays visible. The feeling comes from cost: a vigorous, sustained scroll takes about three minutes of hard scrolling to finish, and a curious one takes much longer — that's the lesson. Every ratio on screen is real. Icons are labels, not to scale.
 
 ## Project Documentation
 

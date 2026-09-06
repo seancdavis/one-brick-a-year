@@ -81,7 +81,9 @@ keyboard equivalent (Arrow Up/Down, Space, Page Up/Down) anywhere the wheel
 and touch drag work. Scrolling one way builds the stack and the other way
 undoes it, both instantly and in direct proportion to scroll distance
 (`src/lib/scroll-coupling.ts`'s exact closed form) — no velocity tracking,
-ramp-up, or spin-down. Every interactive control has a visible focus state.
+ramp-up, or spin-down. A hard scroll takes about three minutes of hard
+scrolling to finish the full stack; a curious one takes much longer.
+Every interactive control has a visible focus state.
 `prefers-reduced-motion: reduce` is honored: the compaction squish and other
 transitions become instant. Milestone cards are the live region
 (`aria-live="polite"`): they announce a beat without moving focus. The HUD

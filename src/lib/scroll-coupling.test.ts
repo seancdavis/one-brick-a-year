@@ -3,22 +3,27 @@ import { TOTAL_YEARS } from './constants';
 import { BASE_YEARS_PER_PX, PROGRESS_K, advance, pageDeltaToBuildPx, yearsPerPx } from './scroll-coupling';
 
 describe('advance', () => {
-  it('reaches TOTAL_YEARS between 50,000 and 80,000 px of cumulative upward scroll from 0', () => {
+  it('reaches TOTAL_YEARS between 150,000 and 210,000 px of cumulative upward scroll from 0', () => {
     let years = 0;
     let px = 0;
-    while (years < TOTAL_YEARS && px < 200000) {
+    while (years < TOTAL_YEARS && px < 400000) {
       years = advance(years, 100);
       px += 100;
     }
     expect(years).toBeGreaterThanOrEqual(TOTAL_YEARS);
-    expect(px).toBeGreaterThanOrEqual(50000);
-    expect(px).toBeLessThanOrEqual(80000);
+    expect(px).toBeGreaterThanOrEqual(150000);
+    expect(px).toBeLessThanOrEqual(210000);
   });
 
-  it('the first 100 px yields between 8 and 15 years', () => {
-    const years = advance(0, 100);
-    expect(years).toBeGreaterThanOrEqual(8);
-    expect(years).toBeLessThanOrEqual(15);
+  it('the first 100 years take at least 3,000 px of cumulative upward scroll', () => {
+    let years = 0;
+    let px = 0;
+    while (years < 100 && px < 400000) {
+      years = advance(years, 100);
+      px += 100;
+    }
+    expect(years).toBeGreaterThanOrEqual(100);
+    expect(px).toBeGreaterThanOrEqual(3000);
   });
 
   it('undoes exactly: building 5,000 px then undoing 5,000 px returns to 0', () => {
