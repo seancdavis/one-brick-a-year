@@ -41,15 +41,7 @@ export interface ThingLandmark extends LandmarkBase {
   // "taller than a door!" — every phrase ends in "!" for the exclamation the
   // picture-book copy uses throughout.
   tallerThanPhrase: string;
-  // An optional aside for the left-side popup
-  // (docs/autopilot/2026-09-06-popups-and-menu.md's "Popups and pins"):
-  // src/lib/popups.ts's popupsFor uses funLine as a thing's popup line when
-  // present, falling back to tallerThanPhrase otherwise — most things don't
-  // have one. Same copy rules as a beat's line (src/lib/beats.ts): at most
-  // two short sentences and 140 characters. Sourced verbatim from
-  // docs/content/candidate-heights.md's "Fun line" column via
-  // `node scripts/candidates-to-data.mjs`; facts are checked, never
-  // invented, so funLine is only set where the candidate list gave one.
+  // The left popup's line (src/popups.ts falls back to tallerThanPhrase), set only where docs/content/candidate-heights.md gave one.
   funLine?: string;
 }
 

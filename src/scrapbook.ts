@@ -1,13 +1,13 @@
 // The scrapbook: every fact the stack has reached this build, kept even after
-// an undo drops the tag back off the tower (src/main.ts hands over each
+// an undo drops the popup back off the tower (src/main.ts hands over each
 // newly crossed beat, from its peakYears high-water mark, the moment it
 // crosses — never re-derived from sim.years, which an undo can pull back
 // down). A paper tab in the HUD controls row ("my facts · N") opens a paper
 // panel listing them newest first, each one a compact paper note in the same
-// voice as an opened tag (src/tags.ts). The tab lives in the HUD's tabs row;
-// the panel itself mounts at the app root, never inside the HUD's own
+// voice as an opened popup (src/popups.ts). The tab lives in the HUD's tabs
+// row; the panel itself mounts at the app root, never inside the HUD's own
 // fixed-position stacking context, which would otherwise trap it underneath
-// the tag layer (see src/style.css's .modal-backdrop comment). DOM glue
+// the popup layer (see src/style.css's .modal-backdrop comment). DOM glue
 // only — no state lives here beyond what's been added.
 
 import { yearsAgo } from './lib/format';
@@ -33,7 +33,7 @@ export function createScrapbook(
   // A tap or drag on the panel's own padding or list must not reach the
   // window scroll listener and be mistaken for a build/undo gesture
   // (src/input.ts's data-scroll-ignore). Shares its backdrop/panel/
-  // close-tab/fact-note CSS with an opened tag card (src/tags.ts) under
+  // close-tab/fact-note CSS with an opened popup's card (src/popups.ts) under
   // common .modal-* class names.
   const backdrop = el('div', 'modal-backdrop');
   backdrop.hidden = true;

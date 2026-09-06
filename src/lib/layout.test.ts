@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Landmark } from './landmarks';
 import {
+  boxesIntersect,
   GROUND_HIDE_PX,
   LABEL_MARGIN_PX,
   LABEL_MIN_GAP_PX,
@@ -172,5 +173,29 @@ describe('labelRoom', () => {
 
     expect(left.textX - left.textMaxWidth).toBeGreaterThanOrEqual(LABEL_MARGIN_PX - 1);
     expect(right.textX + right.textMaxWidth).toBeLessThanOrEqual(width - LABEL_MARGIN_PX + 1);
+  });
+});
+
+describe('boxesIntersect', () => {
+  const popup = { x: 100, y: 200, w: 220, h: 90 };
+
+  it('finds a label box that lands inside the popup', () => {
+    expect(boxesIntersect({ x: 150, y: 240, w: 60, h: 20 }, popup)).toBe(true);
+  });
+
+  it("finds a label box that only clips the popup's corner", () => {
+    expect(boxesIntersect({ x: 60, y: 170, w: 60, h: 40 }, popup)).toBe(true);
+  });
+
+  it('lets a box clear of the popup through, above, below, and to either side', () => {
+    expect(boxesIntersect({ x: 100, y: 100, w: 220, h: 40 }, popup)).toBe(false);
+    expect(boxesIntersect({ x: 100, y: 400, w: 220, h: 40 }, popup)).toBe(false);
+    expect(boxesIntersect({ x: 0, y: 200, w: 60, h: 90 }, popup)).toBe(false);
+    expect(boxesIntersect({ x: 400, y: 200, w: 60, h: 90 }, popup)).toBe(false);
+  });
+
+  it('treats touching edges as clear, not overlapping', () => {
+    expect(boxesIntersect({ x: 40, y: 200, w: 60, h: 90 }, popup)).toBe(false);
+    expect(boxesIntersect({ x: 100, y: 110, w: 220, h: 90 }, popup)).toBe(false);
   });
 });

@@ -25,7 +25,7 @@ const FINISH_NOTES_HZ = [329.63, 493.88, 659.25]; // E4, B4, E5
 const FINISH_HOLD_S = 1.5;
 const FINISH_PEAK_GAIN = 0.22;
 
-// A tag flipping out of its brick (src/tags.ts): one short, soft blip, not a
+// A popup flipping out of its brick (src/popups.ts): one short, soft blip, not a
 // chime — it fires often enough that anything longer would crowd the ticks.
 const POP_HZ = 880; // A5
 const POP_DECAY_S = 0.06;

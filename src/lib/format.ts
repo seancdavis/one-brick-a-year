@@ -30,7 +30,7 @@ export function fmtInt(n: number): string {
 
 // fmtYears says "1 years" for a single-year gap, which is right for a
 // landmark label ("... · 1 years") but wrong in a sentence ("1 year ago").
-// Shared by the opened tag card (src/tags.ts) and the scrapbook
+// Shared by the popups and their opened card (src/popups.ts) and the scrapbook
 // (src/scrapbook.ts) so both read the same way.
 export function yearsAgo(years: number): string {
   return Math.round(years) === 1 ? '1 year ago' : `${fmtYears(years)} ago`;

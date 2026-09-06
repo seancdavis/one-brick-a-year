@@ -8,7 +8,7 @@
 // this module adds the "only one open per side" lifecycle and the left
 // side's things on top of that.
 //
-// Pure math only — src/popups.ts (slice 2) turns these models into DOM, and
+// Pure math only — src/popups.ts turns these models into DOM, and
 // src/main.ts recomputes them every rendered frame. No DOM here.
 
 import type { Beat } from './beats';

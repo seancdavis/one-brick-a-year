@@ -6,14 +6,16 @@ import { createScrollInput, type ScrollKind } from './input';
 import { createHud } from './hud';
 import { createScrapbook } from './scrapbook';
 import { createStartScreen } from './start-screen';
-import { createTags, type TagModel } from './tags';
+import { createPopups } from './popups';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
 import { beatsCrossed, buildBeats } from './lib/beats';
 import { beforePhraseFor, tallerThan } from './lib/comparisons';
 import { pxPerMeter } from './lib/compaction';
+import { BRICK_M } from './lib/constants';
 import { fmtYears } from './lib/format';
 import { buildLandmarks, type Landmark, type ThingLandmark } from './lib/landmarks';
 import { LABEL_MIN_GAP_NARROW_PX, placeLandmarks } from './lib/layout';
+import { popupsFor, type PopupSelection } from './lib/popups';
 import { colorById } from './lib/lego-colors';
 import {
   hasPersonalizationKeys,
@@ -23,8 +25,7 @@ import {
   STORAGE_KEY,
   type Personalization,
 } from './lib/personalize';
-import { popupsFor } from './lib/popups';
-import { applyScroll, heightM, initialSim, step } from './lib/sim';
+import { applyScroll, bricksFor, heightM, initialSim, step } from './lib/sim';
 import { drawStage, nudge, nudgeActive, stageBox, stageGeometry, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
 
@@ -178,22 +179,34 @@ const hud = createHud(app, {
 });
 hud.setSound(soundEnabled);
 
-// The facts themselves: a tag flips out of the tower for every time event
-// the stack passes, pops once, and nudges the tower as it goes.
-const tags = createTags(app, {
+// Which popup is open on each side. 'latest' — the default, and where a side
+// returns whenever the stack passes something new on it — means "whatever was
+// passed most recently"; an id means a pin was tapped and that fact is being
+// read instead. src/lib/popups.ts's popupsFor turns this into one open popup
+// and a pin for everything else, per side.
+let selection: PopupSelection = { right: 'latest', left: 'latest' };
+
+// The facts themselves: a popup flips out of the tower for every time event
+// (right) and every physical thing (left) the stack passes, pops once, and
+// nudges the tower as it goes; the popup it replaces collapses to a pin.
+const popups = createPopups(app, {
   onPop: () => audio.pop(),
   onNudge: () => {
     nudge();
     needsRender = true;
   },
   profile: () => profile,
+  onSelect: (side, id) => {
+    selection = { ...selection, [side]: id };
+    needsRender = true;
+  },
 });
 
 // The scrapbook: every fact the build has reached, kept even after an undo
-// drops its tag off the tower — fed from peakYears below, never from
+// drops its popup off the tower — fed from peakYears below, never from
 // sim.years itself. Its tab slots into the HUD's tabs row (src/hud.ts's
 // tabsSlot) so it sits alongside sound/restart without src/hud.ts knowing
-// anything about facts; its panel mounts at the app root, same as the tags
+// anything about facts; its panel mounts at the app root, same as the popup
 // layer's opened-card backdrop, so neither is trapped under the HUD's own
 // stacking context.
 const scrapbook = createScrapbook(app, hud.tabsSlot, { profile: () => profile });
@@ -217,13 +230,18 @@ let sessionPeakYears = 0;
 // unlike sessionPeakYears it is never reset by a session ending (Restart
 // aside), and it is the sole source of "what has this build reached" —
 // nothing else keeps its own copy. Whenever it advances, beatsCrossed
-// (src/lib/beats.ts) between the previous peak and the new one is every
-// beat newly reached this step, handed to the scrapbook to collect and to
-// the tags layer as "new this frame" for its flip animation, pop, and nudge.
-// An undo that pulls sim.years back down takes a fact's tag off the tower
-// (src/tags.ts reads sim.years directly) without forgetting that the build
-// once reached it, since peakYears itself never drops.
+// (src/lib/beats.ts) between the previous peak and the new one is every beat
+// newly reached this step, handed to the scrapbook to collect and used to
+// send the right side's popup selection back to 'latest'.
+// An undo that pulls sim.years back down takes a fact's popup off the tower
+// (src/popups.ts is fed from sim.years directly) without forgetting that the
+// build once reached it, since peakYears itself never drops.
 let peakYears = 0;
+// How many physical things the build has ever reached — the left side's
+// equivalent of newlyCrossed, since things are passed by height rather than
+// by year. When it rises, the left side has something new to say, so its
+// popup selection returns to 'latest' just as the right's does.
+let peakThingsPassed = 0;
 // Whether the start screen has closed and any scroll has reached the stack
 // — build or undo — since the last replay: the prompt/footer swap responds
 // to either direction, since an undo scroll before anything's built still
@@ -263,8 +281,8 @@ function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void 
   analytics.end({ yearsReached: sessionPeakYears, finished }, opts);
 }
 
-// Shared by "Build it again" (end screen) and Restart (HUD): back to a
-// fresh, unstarted sim, with the prompt, the tags, and the scrapbook reset to
+// Shared by "Build it again" (end screen) and Restart (HUD): back to a fresh,
+// unstarted sim, with the prompt, the popups, and the scrapbook reset to
 // match — resetting peakYears to 0 is what makes the next build's facts flip
 // out (and pop, and collect) again: the very next peak advance finds every
 // beat newly crossed. The analytics session itself is not ended here —
@@ -274,10 +292,12 @@ function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void 
 // input_kind, not a leftover from this one.
 function resetForReplay(): void {
   endScreen.hide();
-  tags.clear();
+  popups.clear();
   scrapbook.clear();
   sim = initialSim();
   peakYears = 0;
+  peakThingsPassed = 0;
+  selection = { right: 'latest', left: 'latest' };
   tickAccumulator = 0;
   hasInteracted = false;
   hasScrolledOnce = false;
@@ -468,21 +488,32 @@ function frame(timeMs: number): void {
   }
 
   // The session's peak only ever rises, even while an undo pulls sim.years
-  // back down. Nothing else keys off it: the tags read sim.years itself, so
+  // back down. Nothing else keys off it: the popups read sim.years itself, so
   // scrolling back really does take a fact off the tower and put its muted
   // label back.
   if (sessionActive) sessionPeakYears = Math.max(sessionPeakYears, sim.years);
 
   // The build's own peak, independent of any analytics session: whenever it
   // advances, beatsCrossed is every beat newly reached this step — handed to
-  // the scrapbook to collect right away, and to the tags layer below as
-  // "new this frame" once the render gate decides whether this frame draws.
-  // Scrolling back never un-collects a beat, even though its tag leaves the
-  // tower, since peakYears itself never drops.
+  // the scrapbook to collect right away. Scrolling back never un-collects a
+  // beat, even though its popup leaves the tower, since peakYears itself
+  // never drops.
   const prevPeakYears = peakYears;
   peakYears = Math.max(peakYears, sim.years);
   const newlyCrossed = peakYears > prevPeakYears ? beatsCrossed(prevPeakYears, peakYears, beats) : [];
   if (newlyCrossed.length > 0) scrapbook.add(newlyCrossed);
+
+  // Something new arriving takes that side back to its latest fact, whatever
+  // pin the reader had opened before — the arrival is the page's new thing to
+  // say. The two sides are counted separately: events by year (newlyCrossed),
+  // things by the height the build has ever reached.
+  if (newlyCrossed.length > 0) selection = { ...selection, right: 'latest' };
+  if (peakYears > prevPeakYears) {
+    const peakHeightM = bricksFor(peakYears) * BRICK_M;
+    const passedThings = things.reduce((n, t) => (t.meters <= peakHeightM ? n + 1 : n), 0);
+    if (passedThings > peakThingsPassed) selection = { ...selection, left: 'latest' };
+    peakThingsPassed = Math.max(peakThingsPassed, passedThings);
+  }
 
   if (sim.done && !before.done) {
     endScreen.show(profile);
@@ -508,39 +539,33 @@ function frame(timeMs: number): void {
   const compactionActive = sim.compaction.transition !== null || before.compaction.transition !== null;
 
   if (needsRender || simAdvancing || compactionActive || nudgeActive()) {
-    // popupsFor (src/lib/popups.ts) replaces the round 4 tagsFor: it splits
-    // each side into one open popup and the rest as pins, keyed by
-    // `selection`. Slice 2 (docs/autopilot/2026-09-06-popups-and-menu.md)
-    // wires up tap-to-select and a real popups/pins renderer; for now every
-    // group — open or pin — is fed to the round 4 tag layer as a plain tag
-    // or bundle, so nothing visible changes yet, and only the right side
-    // (time events) is rendered at all.
-    const popups = popupsFor({
+    // popupsFor (src/lib/popups.ts) splits each side into one open popup and
+    // a pin for every other drawn brick, keyed by `selection`.
+    const popupArgs = {
       beats,
       things,
       years: sim.years,
       heightM: heightM(sim),
       compaction: sim.compaction,
-      selection: { right: 'latest', left: 'latest' },
-    });
-    const rightModels: TagModel[] = [
-      ...(popups.right.open ? [popups.right.open] : []),
-      ...popups.right.pins,
-    ].map((g) => ({
-      kind: g.events.length > 1 ? 'bundle' : 'tag',
-      bricksFromGround: g.bricksFromGround,
-      events: g.events,
-    }));
+    };
+    let models = popupsFor({ ...popupArgs, selection });
+    // An undo can take the very fact a pin had opened back off the tower,
+    // leaving that side with a selection nothing matches. Falling back to the
+    // latest keeps a popup open there rather than a bare column of pins.
+    const stale =
+      (selection.right !== 'latest' && !models.right.open) || (selection.left !== 'latest' && !models.left.open);
+    if (stale) {
+      selection = {
+        right: models.right.open ? selection.right : 'latest',
+        left: models.left.open ? selection.left : 'latest',
+      };
+      models = popupsFor({ ...popupArgs, selection });
+    }
 
-    // The tags are laid out before the canvas draws, so their measured boxes
-    // are available to the stage below: on a narrow viewport a tag clamped
-    // back over the tower can crowd the left side's labels, and those give
-    // way rather than the tag moving. newlyCrossed is always computed on the
-    // very frame these models can first include it (peakYears and sim.years
-    // advance together), so passing its ids straight through is safe even
-    // though tags.update only actually runs on a rendered frame.
-    tags.update(rightModels, stageGeometry(view, sim), newlyCrossed.map((b) => b.id));
-    const bands = view.narrow ? tags.occupiedBands() : [];
+    // The popups are laid out before the canvas draws, so their measured
+    // boxes are available to the stage below: an open popup owns its band,
+    // and any upcoming label that would land inside it gives way.
+    popups.update(models, stageGeometry(view, sim));
 
     const placed = placeLandmarks(
       landmarks,
@@ -549,10 +574,7 @@ function frame(timeMs: number): void {
       stageBox(view),
       view.narrow ? LABEL_MIN_GAP_NARROW_PX : undefined,
     );
-    if (bands.length > 0) {
-      placed.left = placed.left.filter((p) => !bands.some((b) => p.labelY >= b.top && p.labelY <= b.bottom));
-    }
-    drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId));
+    drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId), popups.occupiedBoxes());
     hud.update(sim);
     hud.setComparisons({
       tall: tallerThan(heightM(sim), landmarks),

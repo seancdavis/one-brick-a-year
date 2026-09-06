@@ -10,6 +10,32 @@ export interface StageBox {
   ground: number;
 }
 
+// A rectangle in stage coordinates (CSS px, the same space the canvas draws
+// in and the popup layer is positioned in) that something already occupies:
+// src/popups.ts reports one per open popup, and src/render/stage.ts skips any
+// upcoming landmark label that would land inside one — round 5's overlap rule
+// (docs/autopilot/2026-09-06-popups-and-menu.md's "Popups and pins"). `side`
+// says which side of the tower the popup hangs on, so a caller can find the
+// popup's near edge (its left edge on the right side, its right edge on the
+// left) without re-deriving it.
+export interface OccupiedBox {
+  side: 'left' | 'right';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+// Whether two stage-coordinate rectangles share any area. Touching edges
+// don't count as an overlap, so a label placed exactly against a popup's edge
+// still draws.
+export function boxesIntersect(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
 export interface PlacedLandmark {
   landmark: Landmark;
   lineY: number;
@@ -92,8 +118,8 @@ export function labelRoom(
 // a passed landmark from the stack entirely, rather than merely not drawing
 // it, so it can't take up stacking room an upcoming label further along
 // would otherwise get: a right-side time event whose label has already
-// become a tag (src/tags.ts) would otherwise still crowd the labels above it
-// even though nothing of it is ever drawn.
+// become a popup (src/popups.ts) would otherwise still crowd the labels above
+// it even though nothing of it is ever drawn.
 function placeSide(
   landmarks: Landmark[],
   heightM: number,
@@ -136,8 +162,11 @@ export function placeLandmarks(
   minGapPx: number = LABEL_MIN_GAP_PX,
 ): PlacedLandmarks {
   return {
-    // Things (left) keep their label after the stack passes them — only time
-    // events hand off to a tag — so nothing is excluded here.
+    // Things (left) stay in the stack after the stack passes them, unlike
+    // time events: a passed thing's own label is no longer drawn (its popup
+    // or pin has taken its place — src/render/stage.ts), but keeping it here
+    // holds its place in the chain, so the upcoming labels above it don't
+    // jump down the instant the stack passes it.
     left: placeSide(
       landmarks.filter((l) => l.kind === 'thing'),
       heightM,
