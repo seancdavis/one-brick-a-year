@@ -343,9 +343,17 @@ select {
   color: var(--muted);
 }
 
-/* The opened fact: the same paper note, centered, listing one fact for a tag
-   and every fact in the brick for a bundle. */
-.tag-card-backdrop {
+/* Shared modal chrome between an opened tag card (src/tags.ts) and the
+   scrapbook panel (src/scrapbook.ts): the backdrop, the panel box, the
+   divider between stacked facts/notes, and the close tab. Both backdrops
+   carry data-scroll-ignore (src/input.ts) so a wheel or drag over them
+   scrolls the panel's own content instead of building or undoing the tower,
+   and both mount at the app root — never inside the HUD's own fixed-position
+   stacking context, which would trap z-index: 30 underneath the tag layer's
+   z-index: 6 regardless of the number itself. Only each panel's width and
+   each fact's own typography differ between the two — kept as separate
+   overrides below. */
+.modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 30;
@@ -356,13 +364,12 @@ select {
   background: rgba(36, 57, 92, 0.25);
 }
 
-.tag-card-backdrop[hidden] {
+.modal-backdrop[hidden] {
   display: none;
 }
 
-.tag-card {
+.modal-panel {
   width: 100%;
-  max-width: 34ch;
   max-height: 80vh;
   overflow-y: auto;
   touch-action: pan-y;
@@ -372,10 +379,27 @@ select {
   padding: 22px 24px;
 }
 
-.tag-fact + .tag-fact {
+.modal-fact + .modal-fact {
   margin-top: 18px;
   border-top: 2px dashed var(--paper-shadow);
   padding-top: 18px;
+}
+
+.modal-close {
+  font-family: var(--font-hand);
+  font-size: 18px;
+  color: var(--navy);
+  background: var(--mustard);
+  border: none;
+  box-shadow: 0 3px 0 var(--paper-shadow);
+  min-height: 44px;
+  padding: 8px 18px;
+  margin-top: 20px;
+  cursor: pointer;
+}
+
+.tag-card {
+  max-width: 34ch;
 }
 
 .tag-card-title {
@@ -400,56 +424,20 @@ select {
   margin-top: 6px;
 }
 
-/* A paper tab, same as the HUD's. */
-.tag-card-close {
-  font-family: var(--font-hand);
-  font-size: 18px;
-  color: var(--navy);
-  background: var(--mustard);
-  border: none;
-  box-shadow: 0 3px 0 var(--paper-shadow);
-  min-height: 44px;
-  padding: 8px 18px;
-  margin-top: 20px;
-  cursor: pointer;
-}
-
 /* The scrapbook (src/scrapbook.ts): a paper tab in the HUD controls row
    ("my facts · N") that opens a panel listing every fact the build has
-   reached, newest first. Same paper-note voice as an opened tag
-   (.tag-card above) — a scrapbook note is just a shorter, list-friendly cut
-   of the same card. */
+   reached, newest first. Same paper-note voice as an opened tag (.tag-card
+   above) — a scrapbook note is just a shorter, list-friendly cut of the same
+   card, sharing its modal chrome (.modal-backdrop / .modal-panel /
+   .modal-fact / .modal-close above). */
 .scrapbook-tab[disabled],
 .hud-tab--disabled {
   color: var(--muted);
   cursor: default;
 }
 
-.scrapbook-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(36, 57, 92, 0.25);
-}
-
-.scrapbook-backdrop[hidden] {
-  display: none;
-}
-
 .scrapbook-panel {
-  width: 100%;
   max-width: 40ch;
-  max-height: 80vh;
-  overflow-y: auto;
-  touch-action: pan-y;
-  background: var(--cream);
-  color: var(--navy);
-  box-shadow: 0 3px 0 var(--paper-shadow);
-  padding: 22px 24px;
 }
 
 .scrapbook-title {
@@ -458,12 +446,6 @@ select {
   font-size: 24px;
   color: var(--navy);
   margin-bottom: 14px;
-}
-
-.scrapbook-note + .scrapbook-note {
-  margin-top: 16px;
-  border-top: 2px dashed var(--paper-shadow);
-  padding-top: 16px;
 }
 
 .scrapbook-note-title {
@@ -486,20 +468,6 @@ select {
   font-size: 13px;
   color: var(--muted);
   margin-top: 2px;
-}
-
-/* A paper tab, same as the tag card's. */
-.scrapbook-close {
-  font-family: var(--font-hand);
-  font-size: 18px;
-  color: var(--navy);
-  background: var(--mustard);
-  border: none;
-  box-shadow: 0 3px 0 var(--paper-shadow);
-  min-height: 44px;
-  padding: 8px 18px;
-  margin-top: 20px;
-  cursor: pointer;
 }
 
 /* Start screen (src/start-screen.ts): a paper panel shown on first visit (no
@@ -672,6 +640,21 @@ select {
 :focus-visible {
   outline: 3px solid var(--coral);
   outline-offset: 2px;
+}
+
+/* Visually hidden but still reachable by assistive tech — used for the tag
+   layer's aria-live region (src/tags.ts), which announces a newly arrived
+   tag's title without ever being seen. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Reduced motion: every CSS transition in the page, made instant, and the

@@ -9,6 +9,7 @@
 
 import type { Beat } from './beats';
 import { effectiveRenderUnit, type Compaction } from './compaction';
+import { bricksFor } from './sim';
 
 export interface TagModel {
   // 'tag' is one event; 'bundle' is 2 or more events sharing one drawn brick.
@@ -25,10 +26,10 @@ export interface TagModel {
   events: Beat[];
 }
 
-// The tags for a build that has reached `years`, given the compaction state
-// and the whole-brick count that goes with it (src/lib/sim.ts's bricksFor —
-// passed in rather than recomputed here so the caller's brick count, the
-// drawn tower, and the tags can never disagree).
+// The tags for a build that has reached `years`, given the compaction state.
+// The whole-brick count effectiveRenderUnit needs is derived from `years`
+// with src/lib/sim.ts's bricksFor, the same function the drawn tower and the
+// HUD's own count key off, so this can never disagree with what's on screen.
 //
 // Passed events are those with atYears <= years. They group by the drawn
 // brick they land in — Math.floor(atYears / unit) at the unit actually being
@@ -37,8 +38,8 @@ export interface TagModel {
 // ten courses into one merges their tags into one bundle, and an expansion
 // splits them back. Ascending by brick; every passed event appears exactly
 // once.
-export function tagsFor(beats: readonly Beat[], years: number, compaction: Compaction, bricks: number): TagModel[] {
-  const unit = effectiveRenderUnit(compaction, bricks);
+export function tagsFor(beats: readonly Beat[], years: number, compaction: Compaction): TagModel[] {
+  const unit = effectiveRenderUnit(compaction, bricksFor(years));
 
   const groups = new Map<number, Beat[]>();
   for (const beat of beats) {

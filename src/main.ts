@@ -23,7 +23,7 @@ import {
   STORAGE_KEY,
   type Personalization,
 } from './lib/personalize';
-import { bricksFor, applyScroll, heightM, initialSim, step } from './lib/sim';
+import { applyScroll, heightM, initialSim, step } from './lib/sim';
 import { tagsFor } from './lib/tags';
 import { drawStage, nudge, nudgeActive, stageBox, stageGeometry, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
@@ -133,9 +133,9 @@ if (hasUrlParams) {
 const startScreen = createStartScreen(app, (nextProfile) => {
   profile = nextProfile;
   saveProfile(profile);
-  // Rebuild landmarks only — the running sim (years, compaction) is left
-  // untouched, whether this came from the mandatory first-run screen or a
-  // Restart.
+  // Rebuilds profile-derived content (beats, landmarks, timeEvents) — the
+  // running sim (years, compaction) is left untouched, whether this came
+  // from the mandatory first-run screen or a Restart.
   beats = buildBeats(profile);
   landmarks = buildLandmarks(profile);
   timeEvents = timeEventsFrom(landmarks);
@@ -508,9 +508,8 @@ function frame(timeMs: number): void {
     // very frame these models can first include it (peakYears and sim.years
     // advance together), so passing its ids straight through is safe even
     // though tags.update only actually runs on a rendered frame.
-    const bricks = bricksFor(sim.years);
     tags.update(
-      tagsFor(beats, sim.years, sim.compaction, bricks),
+      tagsFor(beats, sim.years, sim.compaction),
       stageGeometry(view, sim),
       newlyCrossed.map((b) => b.id),
     );

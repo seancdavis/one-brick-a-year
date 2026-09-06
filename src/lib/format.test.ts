@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtInt, fmtMeters, fmtYears } from './format';
+import { fmtInt, fmtMeters, fmtYears, yearsAgo } from './format';
 
 describe('fmtYears', () => {
   it('formats billions', () => {
@@ -48,5 +48,17 @@ describe('fmtInt', () => {
 
   it('rounds to the nearest integer', () => {
     expect(fmtInt(4.6)).toBe('5');
+  });
+});
+
+describe('yearsAgo', () => {
+  it('singularizes exactly one year', () => {
+    expect(yearsAgo(1)).toBe('1 year ago');
+  });
+
+  it('appends "ago" to fmtYears otherwise', () => {
+    expect(yearsAgo(57)).toBe('57 years ago');
+    expect(yearsAgo(5000)).toBe('5,000 years ago');
+    expect(yearsAgo(4.6e9)).toBe('4.6 billion years ago');
   });
 });

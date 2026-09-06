@@ -116,11 +116,16 @@ ramp-up, or spin-down. A hard scroll takes about three minutes of hard
 scrolling to finish the full stack; a curious one takes much longer.
 Every interactive control has a visible focus state.
 `prefers-reduced-motion: reduce` is honored: the compaction squish and other
-transitions become instant. Milestone cards are the live region
-(`aria-live="polite"`): they announce a beat without moving focus. The HUD
-counter is deliberately silent (`aria-live="off"`) — it changes every
-frame, and announcing it would be constant noise, not a milestone. A modal
-screen that needs deliberate attention moves focus to it instead.
+transitions become instant. A hidden `aria-live="polite"` region under the
+app root (`src/tags.ts`) announces each newly arrived tag's title as it flips
+out of the tower — a bundle announces its newest title, the same one shown
+on the tag itself — without moving focus. The HUD counter is deliberately
+silent (`aria-live="off"`) — it changes every frame, and announcing it would
+be constant noise, not a milestone. Any modal screen — the start screen, the
+end screen, an opened tag card, or the scrapbook panel — is `role="dialog"`
+with `aria-modal="true"`, moves focus into itself (its close button, where
+there is one) when it opens, traps Escape, and returns focus to whatever
+opened it when it closes.
 
 ## Run and test
 

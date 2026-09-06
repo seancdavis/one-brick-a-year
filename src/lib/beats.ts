@@ -3,14 +3,14 @@
 // right-side "time" landmarks from this list, so an event is authored once
 // and shows up as a label, a tag, and a footer phrase from the same row.
 //
-// Copy rules (docs/autopilot/2026-09-06-content-and-tags.md): `title` is 2 to
-// 5 words with no period; `line` is at most two short sentences and 140
-// characters, present tense, second person where natural, no dates and no
-// "BCE" (the tag shows the years). `{age}` and `{name}` are filled in by
-// src/lib/personalize.ts's fillTokens. `needsReview: true` marks a line
-// written by the developer rather than taken from the candidate list, so
-// Sean can find them. Every row keeps a one-line source comment; facts are
-// checked, never invented.
+// Copy rules (docs/principles.md's "Facts" section): `title` is 2 to 5 words
+// with no period; `line` is at most two short sentences and 140 characters,
+// present tense for things still true, past tense for one-off happenings,
+// second person where natural, no dates and no "BCE" (the tag shows the
+// years). `{age}` and `{name}` are filled in by src/lib/personalize.ts's
+// fillTokens. `needsReview: true` marks a line written by the developer
+// rather than taken from the candidate list, so Sean can find them. Every
+// row keeps a one-line source comment; facts are checked, never invented.
 //
 // Regenerate the skeleton from the ticked candidate lists with
 // `node scripts/candidates-to-data.mjs`. No DOM here.

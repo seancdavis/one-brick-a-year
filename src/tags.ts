@@ -8,7 +8,7 @@
 // into bundles when it compacts. DOM glue only — the grouping math is pure
 // and lives in src/lib/tags.ts.
 
-import { fmtYears } from './lib/format';
+import { yearsAgo } from './lib/format';
 import { fillTokens, type Personalization } from './lib/personalize';
 import type { Beat } from './lib/beats';
 import type { TagModel } from './lib/tags';
@@ -76,12 +76,6 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-// fmtYears says "1 years" for the birthday brick, which is right for a
-// landmark label ("... · 1 years") but wrong in a sentence.
-function yearsAgo(years: number): string {
-  return Math.round(years) === 1 ? '1 year ago' : `${fmtYears(years)} ago`;
-}
-
 // One tag per group of events, so an element survives from frame to frame
 // exactly as long as its group does: on a compaction two tags' keys vanish
 // and the merged bundle's key appears, which is what makes the bundle show up
@@ -106,21 +100,32 @@ export function createTags(
   // The opened fact, centered: the same paper note, listing one fact for a
   // single tag and every fact in the brick for a bundle. Marked
   // data-scroll-ignore (src/input.ts) so a wheel or drag over it scrolls the
-  // card's own content instead of building or undoing the tower.
-  const backdrop = el('div', 'tag-card-backdrop');
+  // card's own content instead of building or undoing the tower. Shares its
+  // backdrop/panel/close-tab/fact-note CSS with the scrapbook
+  // (src/scrapbook.ts) under common .modal-* class names — see
+  // src/style.css's comment there.
+  const backdrop = el('div', 'tag-card-backdrop modal-backdrop');
   backdrop.hidden = true;
   backdrop.setAttribute('data-scroll-ignore', '');
-  const card = el('div', 'tag-card');
+  const card = el('div', 'tag-card modal-panel');
   card.setAttribute('role', 'dialog');
   card.setAttribute('aria-modal', 'true');
   card.setAttribute('aria-label', 'fact');
   const cardFacts = el('div', 'tag-card-facts');
-  const cardClose = el('button', 'tag-card-close');
+  const cardClose = el('button', 'modal-close');
   cardClose.type = 'button';
   cardClose.textContent = 'close';
   card.append(cardFacts, cardClose);
   backdrop.append(card);
   root.append(backdrop);
+
+  // Announces a newly arrived tag's title (a bundle: its newest title) as it
+  // flips out of the tower, without moving focus — see docs/principles.md's
+  // accessibility section. Never visible; screen readers only.
+  const liveRegion = el('div', 'sr-only');
+  liveRegion.setAttribute('aria-live', 'polite');
+  liveRegion.setAttribute('role', 'status');
+  root.append(liveRegion);
 
   // Tag copy is set in Patrick Hand and Fredoka; a tag built before those
   // land measures at the fallback's height, so every tag is measured once
@@ -153,7 +158,7 @@ export function createTags(
     const profile = opts.profile();
     cardFacts.replaceChildren(
       ...model.events.map((beat: Beat) => {
-        const fact = el('div', 'tag-fact');
+        const fact = el('div', 'modal-fact');
         const title = el('div', 'tag-card-title');
         title.textContent = beat.title;
         const line = el('div', 'tag-card-line');
@@ -253,7 +258,7 @@ export function createTags(
       // in newIds is either a tag reappearing after an undo (its event
       // already passed peakYears once) or a bundle newly formed by
       // compaction out of tags already on the tower, and neither should
-      // animate again.
+      // animate or announce again.
       let popped = false;
       for (const [key, model] of wanted) {
         const existing = records.get(key);
@@ -267,6 +272,7 @@ export function createTags(
           popped = true;
           opts.onPop();
           if (!reduced) opts.onNudge();
+          liveRegion.textContent = model.events[0].title;
         }
       }
 

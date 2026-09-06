@@ -7,10 +7,10 @@
 // voice as an opened tag (src/tags.ts). The tab lives in the HUD's tabs row;
 // the panel itself mounts at the app root, never inside the HUD's own
 // fixed-position stacking context, which would otherwise trap it underneath
-// the tag layer. DOM glue only — no state lives here beyond what's been
-// added.
+// the tag layer (see src/style.css's .modal-backdrop comment). DOM glue
+// only — no state lives here beyond what's been added.
 
-import { fmtYears } from './lib/format';
+import { yearsAgo } from './lib/format';
 import { fillTokens, type Personalization } from './lib/personalize';
 import type { Beat } from './lib/beats';
 
@@ -18,12 +18,6 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): H
   const node = document.createElement(tag);
   node.className = className;
   return node;
-}
-
-// Mirrors src/tags.ts's yearsAgo: fmtYears says "1 years" for the birthday
-// brick, which is right for a landmark label but wrong in a sentence.
-function yearsAgo(years: number): string {
-  return Math.round(years) === 1 ? '1 year ago' : `${fmtYears(years)} ago`;
 }
 
 export function createScrapbook(
@@ -38,11 +32,13 @@ export function createScrapbook(
 
   // A tap or drag on the panel's own padding or list must not reach the
   // window scroll listener and be mistaken for a build/undo gesture
-  // (src/input.ts's data-scroll-ignore).
-  const backdrop = el('div', 'scrapbook-backdrop');
+  // (src/input.ts's data-scroll-ignore). Shares its backdrop/panel/
+  // close-tab/fact-note CSS with an opened tag card (src/tags.ts) under
+  // common .modal-* class names.
+  const backdrop = el('div', 'scrapbook-backdrop modal-backdrop');
   backdrop.hidden = true;
   backdrop.setAttribute('data-scroll-ignore', '');
-  const panel = el('div', 'scrapbook-panel');
+  const panel = el('div', 'scrapbook-panel modal-panel');
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-modal', 'true');
   panel.setAttribute('aria-label', 'my facts');
@@ -50,7 +46,7 @@ export function createScrapbook(
   const title = el('div', 'scrapbook-title');
   title.textContent = 'my facts';
   const list = el('div', 'scrapbook-list');
-  const closeButton = el('button', 'scrapbook-close');
+  const closeButton = el('button', 'modal-close');
   closeButton.type = 'button';
   closeButton.textContent = 'close';
 
@@ -77,7 +73,7 @@ export function createScrapbook(
     const profile = opts.profile();
     list.replaceChildren(
       ...collected.map((beat) => {
-        const note = el('div', 'scrapbook-note');
+        const note = el('div', 'modal-fact');
         const noteTitle = el('div', 'scrapbook-note-title');
         noteTitle.textContent = beat.title;
         const noteLine = el('div', 'scrapbook-note-line');

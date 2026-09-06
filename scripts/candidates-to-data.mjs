@@ -247,14 +247,13 @@ function parseMeters(text) {
 }
 
 // "the last woolly mammoths (about 4,000) — 4,000 (already on the stack)"
-// splits into the name, whether it is already on the stack, and the tail
-// holding the authoritative number.
+// strips the "(already on the stack)" annotation and splits the name from
+// the tail holding the authoritative number.
 function splitHead(head) {
-  const already = /\(already on the stack\)/.test(head);
   const cleaned = head.replace(/\(already on the stack\)/, '').trim();
   const [first, ...rest] = cleaned.split('—');
   const name = first.trim().replace(/\s*\([^)]*\)\s*$/, '');
-  return { name, already, tail: rest.join('—').trim() };
+  return { name, tail: rest.join('—').trim() };
 }
 
 function slugify(name) {
@@ -307,17 +306,17 @@ async function main() {
 
   const events = parseChecklist(eventsText)
     .map((item) => {
-      const { name, already, tail } = splitHead(item.head);
+      const { name, tail } = splitHead(item.head);
       const years = parseYears(tail) ?? parseYears(item.fields.bricks ?? '');
-      return { item, name, already, years };
+      return { item, name, years };
     })
     .sort((a, b) => (a.years ?? 0) - (b.years ?? 0));
 
   const things = parseChecklist(heightsText)
     .map((item) => {
-      const { name, already, tail } = splitHead(item.head);
+      const { name, tail } = splitHead(item.head);
       const meters = parseMeters(tail);
-      return { item, name, already, meters };
+      return { item, name, meters };
     })
     .sort((a, b) => (a.meters ?? 0) - (b.meters ?? 0));
 
