@@ -35,7 +35,7 @@ export function createScrapbook(
   // (src/input.ts's data-scroll-ignore). Shares its backdrop/panel/
   // close-tab/fact-note CSS with an opened tag card (src/tags.ts) under
   // common .modal-* class names.
-  const backdrop = el('div', 'scrapbook-backdrop modal-backdrop');
+  const backdrop = el('div', 'modal-backdrop');
   backdrop.hidden = true;
   backdrop.setAttribute('data-scroll-ignore', '');
   const panel = el('div', 'scrapbook-panel modal-panel');

@@ -268,15 +268,52 @@ select {
   top: 0;
 }
 
-/* The stub: a 2px dashed navy line from the stack's edge to the tag. It sits
-   outside the paper (right: 100%) and is not part of the flip, so it stays
-   put while the tag scales out of the tower. */
+/* The stub: an elbow connector back to the fact's true brick, not just a
+   straight line to wherever the tag landed. src/tags.ts sets --stub-w (the
+   total run back to the tower), --stub-out-w (how far the first horizontal
+   leg gets before it turns), --stub-anchor-y (the true brick's height,
+   relative to this box's own top), and --stub-elbow-top/-h (the vertical
+   leg spanning between that anchor and the tag's actual center at 50%). When
+   the collision rule (src/tags.ts's update) hasn't displaced the tag from
+   its anchor, --stub-elbow-h is 0 and the three segments below sit end to
+   end at the same height, reading as the single straight stub this used to
+   always be. The whole thing sits outside the paper (right: 100%) and is not
+   part of the flip, so it stays put while the tag scales out of the tower. */
 .tag-stub {
   position: absolute;
   right: 100%;
-  top: 50%;
+  top: 0;
   width: var(--stub-w, 0px);
+  height: 100%;
+}
+
+.tag-stub-out,
+.tag-stub-in {
+  position: absolute;
   border-top: 2px dashed var(--navy);
+}
+
+/* Leg 1: leaves the tower at the fact's true anchor height. */
+.tag-stub-out {
+  left: 0;
+  top: var(--stub-anchor-y, 50%);
+  width: var(--stub-out-w, 0px);
+}
+
+/* Leg 2: the jog from the anchor to wherever the tag actually landed. */
+.tag-stub-elbow {
+  position: absolute;
+  left: var(--stub-out-w, 0px);
+  top: var(--stub-elbow-top, 0px);
+  height: var(--stub-elbow-h, 0px);
+  border-left: 2px dashed var(--navy);
+}
+
+/* Leg 3: the rest of the way into the tag, at its actual vertical center. */
+.tag-stub-in {
+  left: var(--stub-out-w, 0px);
+  top: 50%;
+  width: calc(var(--stub-w, 0px) - var(--stub-out-w, 0px));
 }
 
 .tag-paper {
@@ -290,7 +327,11 @@ select {
   padding: 8px 12px;
   cursor: pointer;
   pointer-events: auto;
-  transform-origin: left center;
+  /* -14px, not 0 (left center): the paper's left edge already sits
+     STUB_GAP_PX (src/tags.ts) right of the tower, so hinging at the paper's
+     own edge would flip it open in mid-air. Pulling the origin back by that
+     same 14px puts it at the tower's edge instead. */
+  transform-origin: -14px center;
 }
 
 /* The flip: the label leaves the tower and unfolds to the right, overshooting

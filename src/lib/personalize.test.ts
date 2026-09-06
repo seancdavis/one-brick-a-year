@@ -133,8 +133,26 @@ describe('fillTokens', () => {
     expect(fillTokens('{Name} were not born yet.', named)).toBe('Ada were not born yet.');
   });
 
-  it('fills {age} with the profile age', () => {
-    expect(fillTokens('Your whole life is {age} bricks tall.', named)).toBe('Your whole life is 9 bricks tall.');
+  it('fills {age} with the profile age as a plain number outside a brick phrase', () => {
+    expect(fillTokens('You are {age} years old.', named)).toBe('You are 9 years old.');
+  });
+
+  it('spells out an age under 100 in a brick phrase', () => {
+    expect(fillTokens('Your whole life is {age} bricks tall.', named)).toBe('Your whole life is nine bricks tall.');
+  });
+
+  it('singularizes "brick" for an age of one', () => {
+    const oneYearOld: Personalization = { ...named, ageYears: 1 };
+    expect(fillTokens('Your whole life is {age} bricks tall.', oneYearOld)).toBe(
+      'Your whole life is one brick tall.',
+    );
+  });
+
+  it('keeps digits for an age of 100 or more, even in a brick phrase', () => {
+    const centenarian: Personalization = { ...named, ageYears: 100 };
+    expect(fillTokens('Your whole life is {age} bricks tall.', centenarian)).toBe(
+      'Your whole life is 100 bricks tall.',
+    );
   });
 
   it('fills every occurrence of a token', () => {

@@ -51,6 +51,11 @@ const STUB_GAP_PX = 14;
 // rather than a guessed line height.
 const TAG_GAP_PX = 8;
 
+// The stub's first horizontal run, measured out from the tower edge, before
+// it jogs vertically toward the tag — see the elbow-connector comment on
+// .tag-stub in src/style.css.
+const STUB_ELBOW_OUT_PX = 6;
+
 // Never let a tag touch the viewport's edge.
 const VIEWPORT_MARGIN_PX = 8;
 
@@ -104,7 +109,7 @@ export function createTags(
   // backdrop/panel/close-tab/fact-note CSS with the scrapbook
   // (src/scrapbook.ts) under common .modal-* class names — see
   // src/style.css's comment there.
-  const backdrop = el('div', 'tag-card-backdrop modal-backdrop');
+  const backdrop = el('div', 'modal-backdrop');
   backdrop.hidden = true;
   backdrop.setAttribute('data-scroll-ignore', '');
   const card = el('div', 'tag-card modal-panel');
@@ -198,8 +203,18 @@ export function createTags(
 
   function createRecord(model: TagModel, animate: boolean): TagRecord {
     const container = el('div', 'tag');
+    // An elbow connector, not a single straight line: `out` leaves the tower
+    // at the fact's true anchor height, `elbow` jogs vertically to the tag's
+    // actual center (zero-height when the tag sits right at its anchor,
+    // which is what makes an undisplaced tag read as the old straight
+    // stub), and `in` runs the rest of the way into the tag. See
+    // src/style.css's .tag-stub comment.
     const stub = el('span', 'tag-stub');
     stub.setAttribute('aria-hidden', 'true');
+    const stubOut = el('span', 'tag-stub-out');
+    const stubElbow = el('span', 'tag-stub-elbow');
+    const stubIn = el('span', 'tag-stub-in');
+    stub.append(stubOut, stubElbow, stubIn);
 
     const paper = el('button', 'tag-paper');
     paper.type = 'button';
@@ -250,15 +265,8 @@ export function createTags(
         }
       }
 
-      // One pop and one nudge per frame at most, however many tags arrived:
-      // a fast scroll through the dense first century crosses several events
-      // in a single step, and a burst of pops reads as noise. `isNew` reads
-      // directly off newIds — src/main.ts's peakYears high-water mark, via
-      // beatsCrossed — rather than any set of our own: a record with no id
-      // in newIds is either a tag reappearing after an undo (its event
-      // already passed peakYears once) or a bundle newly formed by
-      // compaction out of tags already on the tower, and neither should
-      // animate or announce again.
+      // Coalesce effects to one per frame; only records containing a newly
+      // crossed id animate or announce.
       let popped = false;
       for (const [key, model] of wanted) {
         const existing = records.get(key);
@@ -326,6 +334,21 @@ export function createTags(
         record.el.style.left = `${Math.round(left)}px`;
         record.el.style.top = `${Math.round(top)}px`;
         record.el.style.setProperty('--stub-w', `${Math.round(stubWidth)}px`);
+
+        // The elbow: `anchorY` is the fact's true brick, in the container's
+        // own coordinates (top is always <= anchorY - heightPx/2, so this is
+        // never above the tag's own center); `centerY` is where the tag
+        // actually landed. When the collision rule above hasn't pushed the
+        // tag off its anchor the two are equal, the jog collapses to zero
+        // height, and the three segments read as one straight line.
+        const outW = Math.min(STUB_ELBOW_OUT_PX, stubWidth);
+        const anchorYRel = anchorY - top;
+        const centerYRel = record.heightPx / 2;
+        record.el.style.setProperty('--stub-out-w', `${Math.round(outW)}px`);
+        record.el.style.setProperty('--stub-anchor-y', `${Math.round(anchorYRel)}px`);
+        record.el.style.setProperty('--stub-elbow-top', `${Math.round(Math.min(anchorYRel, centerYRel))}px`);
+        record.el.style.setProperty('--stub-elbow-h', `${Math.round(Math.abs(anchorYRel - centerYRel))}px`);
+
         record.band = crowdsLeft ? { top, bottom: top + record.heightPx } : null;
       }
     },
