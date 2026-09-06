@@ -89,11 +89,26 @@ select {
   color: var(--coral);
 }
 
-/* "Next up" teaser, top-right, under where the sun paints. */
-.hud-teaser {
+/* The HUD's top-right corner: the "next up" teaser over src/menu.ts's single
+   tab, in one right-aligned flex column. Both children are position: static
+   (unlike the old independently-fixed teaser/controls rows) so this
+   fixed-position box's own bounding rect always wraps exactly around
+   whichever of them rendered — that's what makes src/hud.ts's
+   cornerBottoms() a real measurement rather than a guess, feeding
+   src/lib/layout.ts's stageTopFor (round 5's "Stage top clear of the HUD").
+   Same shape at every width; only the menu panel itself (below) changes on
+   a narrow screen. */
+.hud-side {
   position: fixed;
   right: 44px;
   top: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.hud-teaser {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -118,46 +133,78 @@ select {
   color: var(--navy);
 }
 
-.hud-controls {
-  position: fixed;
-  right: 44px;
-  top: 206px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  pointer-events: none;
+/* src/menu.ts's tab and panel: the one trigger the corner now holds for
+   sound, "my facts", restart, and the color chips. */
+.menu {
+  z-index: 7;
 }
 
-.hud-tabs {
-  display: flex;
-  gap: 8px;
-  pointer-events: auto;
-}
-
-.hud-tab {
+.menu-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-hand);
   font-size: 16px;
   color: var(--navy);
   background: var(--cream);
   border: none;
-  box-shadow: 0 2px 0 var(--paper-shadow);
+  box-shadow: 0 3px 0 var(--paper-shadow);
   min-height: 44px;
   padding: 8px 14px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
 }
 
-/* The sound toggle (src/hud.ts) uses aria-pressed to reflect its own state,
-   so it reads as "on" even without hover/focus. */
-.hud-tab[aria-pressed='true'] {
+.menu-glyph {
+  display: block;
+  color: var(--navy);
+}
+
+/* Anchored below the tab: src/menu.ts measures the tab's own rendered
+   bottom at open time and sets `top` from that, so this stays correctly
+   placed regardless of how tall the teaser rendered above it. */
+.menu-panel {
+  position: fixed;
+  right: 44px;
+  width: 220px;
+  background: var(--cream);
+  box-shadow: 0 3px 0 var(--paper-shadow);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 10;
+}
+
+.menu-panel[hidden] {
+  display: none;
+}
+
+.menu-item {
+  font-family: var(--font-hand);
+  font-size: 16px;
+  color: var(--navy);
+  background: var(--paper);
+  border: none;
+  box-shadow: 0 2px 0 var(--paper-shadow);
+  min-height: 44px;
+  padding: 8px 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The sound toggle (src/menu.ts) uses aria-pressed to reflect its own
+   state, so it reads as "on" even without hover/focus. */
+.menu-item[aria-pressed='true'] {
   background: var(--mustard);
 }
 
+.menu-item:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
 /* Color swatch row (src/color-picker.ts): shared by the start screen's 28px
-   version and the HUD's 18px compact version (--swatch-size set inline per
+   version and the menu's 18px compact version (--swatch-size set inline per
    instance) — both drawn as small paper chips. */
 .color-picker {
   display: flex;
@@ -570,18 +617,12 @@ button.popup-paper {
   margin-top: 6px;
 }
 
-/* The scrapbook (src/scrapbook.ts): a paper tab in the HUD controls row
-   ("my facts · N") that opens a panel listing every fact the build has
-   reached, newest first. Same paper-note voice as an opened popup's card
-   (.popup-card above) — a scrapbook note is just a shorter, list-friendly cut
-   of the same card, sharing its modal chrome (.modal-backdrop /
-   .modal-panel / .modal-fact / .modal-close above). */
-.scrapbook-tab[disabled],
-.hud-tab--disabled {
-  color: var(--muted);
-  cursor: default;
-}
-
+/* The scrapbook (src/scrapbook.ts): opened from src/menu.ts's "my facts · N"
+   item, this panel lists every fact the build has reached, newest first.
+   Same paper-note voice as an opened popup's card (.popup-card above) — a
+   scrapbook note is just a shorter, list-friendly cut of the same card,
+   sharing its modal chrome (.modal-backdrop / .modal-panel / .modal-fact /
+   .modal-close above). */
 .scrapbook-panel {
   max-width: 40ch;
 }
@@ -832,24 +873,13 @@ button.popup-paper {
     font-size: 64px;
   }
 
-  /* Below 700px there isn't room for the teaser and the controls at their
-     own fixed positions (206px assumes a one-line teaser; a wrapped one
-     collides with the sun, which paints from 60px to 136px). Instead the two
-     share one right-aligned column, anchored below the sun, so the controls
-     flow beneath however tall the teaser actually rendered. */
-  .hud-side {
-    position: fixed;
-    right: 44px;
-    top: 148px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 8px;
-  }
-
-  .hud-teaser,
-  .hud-controls {
-    position: static;
+  /* The menu panel loses its fixed width and spans the screen (minus a small
+     margin) below the tab, rather than being anchored to the tab's own
+     right edge as it is on a wide screen. */
+  .menu-panel {
+    left: 16px;
+    right: 16px;
+    width: auto;
   }
 
   .hud-footer {

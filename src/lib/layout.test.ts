@@ -7,6 +7,8 @@ import {
   LABEL_MIN_GAP_PX,
   labelRoom,
   placeLandmarks,
+  STAGE_TOP_GAP_PX,
+  stageTopFor,
   type StageBox,
 } from './layout';
 
@@ -173,6 +175,29 @@ describe('labelRoom', () => {
 
     expect(left.textX - left.textMaxWidth).toBeGreaterThanOrEqual(LABEL_MARGIN_PX - 1);
     expect(right.textX + right.textMaxWidth).toBeLessThanOrEqual(width - LABEL_MARGIN_PX + 1);
+  });
+});
+
+describe('stageTopFor', () => {
+  it('sits STAGE_TOP_GAP_PX below the deepest HUD block', () => {
+    expect(stageTopFor([120, 260, 90], 150)).toBe(260 + STAGE_TOP_GAP_PX);
+  });
+
+  it('picks the larger of two corner blocks regardless of order', () => {
+    expect(stageTopFor([300, 180], 150)).toBe(stageTopFor([180, 300], 150));
+    expect(stageTopFor([300, 180], 150)).toBe(300 + STAGE_TOP_GAP_PX);
+  });
+
+  it('never drops below minTop even when every measured block is shallow', () => {
+    expect(stageTopFor([10, 20], 150)).toBe(150);
+  });
+
+  it('is positive on a 768px stage with realistic HUD bottoms', () => {
+    expect(stageTopFor([180, 250], 150)).toBeGreaterThan(0);
+  });
+
+  it('treats an empty list as having no HUD block at all, falling back to minTop', () => {
+    expect(stageTopFor([], 150)).toBe(150);
   });
 });
 

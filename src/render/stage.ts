@@ -79,7 +79,10 @@ const PAPER_DROP_PX = 3;
 // the upper paper hill (see drawPaperHill) — 90px leaves room for both
 // hills to read as hills rather than a sliver.
 const GROUND_MARGIN_PX = 90;
-const TOP_MIN_PX = 150;
+// The floor for the stage's usable top: src/main.ts's real HUD measurement
+// (src/lib/layout.ts's stageTopFor) never pushes it below this, even if a
+// stray zero-height reading came back before the HUD had laid out.
+export const TOP_MIN_PX = 150;
 const TOP_FRACTION = 0.2;
 
 // Sun, top-right: a flat mustard circle with the paper drop. Position is
@@ -182,6 +185,10 @@ function ensureNoiseCanvas(widthCss: number, heightCss: number): HTMLCanvasEleme
   return canvas;
 }
 
+// `top` here is a viewport-fraction fallback; src/main.ts overrides it with
+// the real HUD measurement (src/lib/layout.ts's stageTopFor) before handing
+// a StageBox to placeLandmarks — every other caller only ever reads `ground`
+// off this.
 export function stageBox(view: StageView): StageBox {
   return {
     top: Math.max(TOP_MIN_PX, view.heightCss * TOP_FRACTION),

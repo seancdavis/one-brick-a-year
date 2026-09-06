@@ -4,6 +4,7 @@ import { createAudio } from './audio';
 import { createEndScreen } from './end-screen';
 import { createScrollInput, type ScrollKind } from './input';
 import { createHud } from './hud';
+import { createMenu } from './menu';
 import { createScrapbook } from './scrapbook';
 import { createStartScreen } from './start-screen';
 import { createPopups } from './popups';
@@ -14,7 +15,7 @@ import { pxPerMeter } from './lib/compaction';
 import { BRICK_M } from './lib/constants';
 import { fmtYears } from './lib/format';
 import { buildLandmarks, type Landmark, type ThingLandmark } from './lib/landmarks';
-import { LABEL_MIN_GAP_NARROW_PX, placeLandmarks } from './lib/layout';
+import { LABEL_MIN_GAP_NARROW_PX, placeLandmarks, stageTopFor } from './lib/layout';
 import { popupsFor, type PopupSelection } from './lib/popups';
 import { colorById } from './lib/lego-colors';
 import {
@@ -26,7 +27,7 @@ import {
   type Personalization,
 } from './lib/personalize';
 import { applyScroll, bricksFor, heightM, initialSim, step } from './lib/sim';
-import { drawStage, nudge, nudgeActive, stageBox, stageGeometry, type StageView } from './render/stage';
+import { drawStage, nudge, nudgeActive, stageBox, stageGeometry, TOP_MIN_PX, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -148,7 +149,8 @@ const startScreen = createStartScreen(app, (nextProfile) => {
   timeEvents = timeEventsFrom(landmarks);
   things = thingsFrom(landmarks);
   lastNextKey = null; // force the teaser to recheck against the rebuilt list
-  hud.setColor(profile.colorId);
+  // No explicit push to the menu: its color chips re-read profile.colorId
+  // (src/menu.ts's `colorId` opt) the next time the panel opens.
   startScreen.close();
   needsRender = true;
 });
@@ -158,9 +160,17 @@ let soundEnabled = readStoredSound();
 
 const analytics = createAnalytics();
 
-const hud = createHud(app, {
-  colorId: profile.colorId,
-  onSoundToggle: () => {
+const hud = createHud(app);
+
+// The compact menu: one tab in the HUD's corner (src/hud.ts's menuSlot)
+// holding sound, "my facts", restart, and the color chips — everything the
+// old tabs-and-chips row used to spread across the corner
+// (docs/autopilot/2026-09-06-popups-and-menu.md's "Compact menu"). Forward
+// references to `scrapbook` below are safe: these callbacks only run from a
+// later user interaction, by which point every const here has been assigned
+// (the same pattern createStartScreen's callback already uses for `hud`).
+const menu = createMenu(hud.menuSlot, {
+  onSound: () => {
     soundEnabled = !soundEnabled;
     saveSound(soundEnabled);
     if (soundEnabled) {
@@ -168,16 +178,19 @@ const hud = createHud(app, {
     } else {
       audio.disable();
     }
-    hud.setSound(soundEnabled);
+    menu.setSound(soundEnabled);
   },
   onRestart: () => restart(),
+  onScrapbook: () => scrapbook.open(),
+  colorId: () => profile.colorId,
   onColorSelect: (colorId) => {
     profile = { ...profile, colorId };
     saveProfile(profile);
     needsRender = true;
   },
+  soundOn: () => soundEnabled,
+  factCount: () => scrapbook.count(),
 });
-hud.setSound(soundEnabled);
 
 // Which popup is open on each side. 'latest' — the default, and where a side
 // returns whenever the stack passes something new on it — means "whatever was
@@ -204,12 +217,11 @@ const popups = createPopups(app, {
 
 // The scrapbook: every fact the build has reached, kept even after an undo
 // drops its popup off the tower — fed from peakYears below, never from
-// sim.years itself. Its tab slots into the HUD's tabs row (src/hud.ts's
-// tabsSlot) so it sits alongside sound/restart without src/hud.ts knowing
-// anything about facts; its panel mounts at the app root, same as the popup
-// layer's opened-card backdrop, so neither is trapped under the HUD's own
-// stacking context.
-const scrapbook = createScrapbook(app, hud.tabsSlot, { profile: () => profile });
+// sim.years itself. Opened from the menu's "my facts" item (menu.onScrapbook
+// above); its panel mounts at the app root, same as the popup layer's
+// opened-card backdrop, so neither is trapped under the HUD's own stacking
+// context.
+const scrapbook = createScrapbook(app, { profile: () => profile });
 
 const endScreen = createEndScreen(app, () => resetForReplay());
 
@@ -294,6 +306,7 @@ function resetForReplay(): void {
   endScreen.hide();
   popups.clear();
   scrapbook.clear();
+  menu.setFactCount(scrapbook.count());
   sim = initialSim();
   peakYears = 0;
   peakThingsPassed = 0;
@@ -433,6 +446,20 @@ const NARROW_BREAKPOINT_PX = 700;
 
 let view: StageView = { widthCss: 0, heightCss: 0, dpr: 1, narrow: false };
 
+// The stage's usable top, clear of the HUD's corner blocks
+// (docs/autopilot/2026-09-06-popups-and-menu.md's "Stage top clear of the
+// HUD"): re-measured on resize and whenever the teaser's text changes
+// (measureStageTop below), since either can change how tall the HUD's
+// top-right group renders. TOP_MIN_PX is the floor stageTopFor never drops
+// below, so a stray zero-height reading before the HUD has laid out can't
+// collapse the stage.
+let stageTop = TOP_MIN_PX;
+
+function measureStageTop(): void {
+  stageTop = stageTopFor(hud.cornerBottoms(), TOP_MIN_PX);
+  needsRender = true;
+}
+
 function resize(): void {
   const widthCss = window.innerWidth;
   const heightCss = window.innerHeight;
@@ -441,6 +468,7 @@ function resize(): void {
   view = { widthCss, heightCss, dpr, narrow: widthCss < NARROW_BREAKPOINT_PX };
   canvas.width = Math.round(widthCss * dpr);
   canvas.height = Math.round(heightCss * dpr);
+  measureStageTop();
   needsRender = true;
 }
 
@@ -501,7 +529,10 @@ function frame(timeMs: number): void {
   const prevPeakYears = peakYears;
   peakYears = Math.max(peakYears, sim.years);
   const newlyCrossed = peakYears > prevPeakYears ? beatsCrossed(prevPeakYears, peakYears, beats) : [];
-  if (newlyCrossed.length > 0) scrapbook.add(newlyCrossed);
+  if (newlyCrossed.length > 0) {
+    scrapbook.add(newlyCrossed);
+    menu.setFactCount(scrapbook.count());
+  }
 
   // Something new arriving takes that side back to its latest fact, whatever
   // pin the reader had opened before — the arrival is the page's new thing to
@@ -529,6 +560,9 @@ function frame(timeMs: number): void {
   if (nextKey !== lastNextKey) {
     lastNextKey = nextKey;
     hud.setNext(nextEvent ? `${nextEvent.label} · ${fmtYears(nextEvent.years)}` : null);
+    // The teaser showing or hiding, or wrapping to a different number of
+    // lines, can change how tall the HUD's top-right corner block is.
+    measureStageTop();
   }
 
   // Idle frame: years/done didn't change this step, and no compaction
@@ -571,7 +605,11 @@ function frame(timeMs: number): void {
       landmarks,
       heightM(sim),
       pxPerMeter(sim.compaction),
-      stageBox(view),
+      // stageBox(view).ground is the real ground line; its own `top` is only
+      // a viewport-fraction fallback (src/render/stage.ts's comment on
+      // stageBox) — stageTop is the real HUD-measured one (measureStageTop
+      // above), so every canvas label stays clear of the HUD's corner.
+      { top: stageTop, ground: stageBox(view).ground },
       view.narrow ? LABEL_MIN_GAP_NARROW_PX : undefined,
     );
     drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId), popups.occupiedBoxes());

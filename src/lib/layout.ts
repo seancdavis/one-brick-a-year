@@ -10,6 +10,24 @@ export interface StageBox {
   ground: number;
 }
 
+// The gap kept between the bottom of the HUD's corner block(s) and the stage's
+// usable top (docs/autopilot/2026-09-06-popups-and-menu.md's "Labels next to
+// their icons": "no canvas label is placed under the HUD").
+export const STAGE_TOP_GAP_PX = 16;
+
+// StageBox.top, measured from the real HUD rather than guessed as a fraction
+// of the viewport: src/main.ts hands over the bottom (getBoundingClientRect)
+// of every HUD corner block that could crowd the stage — the top-left number
+// block, the top-right teaser-plus-menu group — and this returns the top
+// clear of the deepest one, so on a narrow screen (where either block can end
+// up the taller one) the larger of the two always wins without the caller
+// having to special-case it. `minTop` is a floor (src/render/stage.ts's
+// TOP_MIN_PX) so a stray zero-height measurement never collapses the stage.
+export function stageTopFor(hudBottoms: readonly number[], minTop: number): number {
+  const deepest = hudBottoms.reduce((max, bottom) => Math.max(max, bottom), 0);
+  return Math.max(minTop, deepest + STAGE_TOP_GAP_PX);
+}
+
 // A rectangle in stage coordinates (CSS px, the same space the canvas draws
 // in and the popup layer is positioned in) that something already occupies:
 // src/popups.ts reports one per open popup, and src/render/stage.ts skips any
