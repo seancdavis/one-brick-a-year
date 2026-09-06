@@ -347,6 +347,7 @@ async function main() {
   things.forEach((entry, i) => {
     const id = idFor(entry.name, THING_IDS, usedThingIds);
     const phrase = entry.item.fields['footer phrase'];
+    const funLine = entry.item.fields['fun line'];
     out.push('  {');
     out.push(sourceComment(entry.item).trimEnd());
     out.push(`    id: ${tsString(id)},`);
@@ -356,6 +357,7 @@ async function main() {
     out.push(`    paper: '${i % 2 === 0 ? 'navy' : 'leaf'}',`);
     out.push(`    orientation: '${entry.item.flat ? 'flat' : 'tall'}',`);
     out.push(`    tallerThanPhrase: ${phrase ? tsString(phrase) : "'TODO'"},`);
+    if (funLine) out.push(`    funLine: ${tsString(funLine)},`);
     out.push(`    ...fromMeters(${entry.meters ?? 'TODO'}),`);
     out.push('  },');
   });

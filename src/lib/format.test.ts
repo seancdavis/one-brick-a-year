@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtInt, fmtMeters, fmtYears, yearsAgo } from './format';
+import { countSentences, fmtInt, fmtMeters, fmtYears, yearsAgo } from './format';
 
 describe('fmtYears', () => {
   it('formats billions', () => {
@@ -60,5 +60,28 @@ describe('yearsAgo', () => {
     expect(yearsAgo(57)).toBe('57 years ago');
     expect(yearsAgo(5000)).toBe('5,000 years ago');
     expect(yearsAgo(4.6e9)).toBe('4.6 billion years ago');
+  });
+});
+
+describe('countSentences', () => {
+  it('counts plain sentence terminators', () => {
+    expect(countSentences('One sentence.')).toBe(1);
+    expect(countSentences('Two sentences. Right here.')).toBe(2);
+  });
+
+  it('does not count a decimal point between digits', () => {
+    expect(countSentences('It weighs 4.6 billion years worth of bricks.')).toBe(1);
+  });
+
+  it('does not count a short-title or single-letter abbreviation', () => {
+    expect(countSentences('T. rex lived here. So did Mrs. Jones.')).toBe(2);
+  });
+
+  it('counts a run of terminators as one sentence end', () => {
+    expect(countSentences('Really?! Yes.')).toBe(2);
+  });
+
+  it('gives zero for a line with no terminator', () => {
+    expect(countSentences('No punctuation here')).toBe(0);
   });
 });

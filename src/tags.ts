@@ -3,16 +3,33 @@
 // (src/render/stage.ts) and a tag flips out of the tower here, with a soft
 // pop and a nudge. Tags are HTML rather than canvas so they can be tapped,
 // focused, and animated with CSS; they are positioned every rendered frame
-// from the models in src/lib/tags.ts and the stage's own geometry
-// (src/render/stage.ts's stageGeometry), so they move with the stack and fold
-// into bundles when it compacts. DOM glue only — the grouping math is pure
-// and lives in src/lib/tags.ts.
+// from the models src/main.ts assembles (from src/lib/popups.ts's
+// popupsFor — right side only, for now: see TagModel below) and the stage's
+// own geometry (src/render/stage.ts's stageGeometry), so they move with the
+// stack and fold into bundles when it compacts. DOM glue only — the grouping
+// math is pure and lives in src/lib/popups.ts.
+//
+// This renderer predates round 5's popups-and-pins lifecycle
+// (docs/autopilot/2026-09-06-popups-and-menu.md): every model it's handed
+// still renders as a plain flipped-out tag (or bundle), with no open/pin
+// distinction — src/popups.ts (slice 2) replaces this file with one that
+// does.
 
 import { yearsAgo } from './lib/format';
 import { fillTokens, type Personalization } from './lib/personalize';
 import type { Beat } from './lib/beats';
-import type { TagModel } from './lib/tags';
 import type { StageGeometry } from './render/stage';
+
+// One flipped-out tag's worth of facts: 'tag' for a single event, 'bundle'
+// for 2 or more sharing one drawn brick. src/main.ts builds this list each
+// frame from popupsFor's right side (its open popup plus its pins) — this
+// module doesn't know about "open" vs "pin" yet, so every model here just
+// renders as a tag.
+export interface TagModel {
+  kind: 'tag' | 'bundle';
+  bricksFromGround: number;
+  events: Beat[];
+}
 
 // The stage numbers a tag needs. Same shape stageGeometry returns, so
 // src/main.ts hands the tag layer exactly what the canvas just drew with.

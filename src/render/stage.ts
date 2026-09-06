@@ -11,7 +11,14 @@ import { courseHeightPx, effectiveRenderUnit, renderCourses, unitLabel } from '.
 import { fmtYears } from '../lib/format';
 import type { IconId } from '../lib/icon-paths';
 import type { PaperColor } from '../lib/landmarks';
-import type { PlacedLandmark, PlacedLandmarks, StageBox } from '../lib/layout';
+import {
+  ICON_LABEL_GAP_PX,
+  LABEL_MARGIN_PX,
+  LEADER_MIN_PX,
+  type PlacedLandmark,
+  type PlacedLandmarks,
+  type StageBox,
+} from '../lib/layout';
 import { shade, type LegoColor } from '../lib/lego-colors';
 import { bricksFor, type SimState } from '../lib/sim';
 
@@ -137,15 +144,14 @@ const ICON_PX = 36;
 const ICON_PX_NARROW = 28;
 const LABEL_FONT_PX = 20;
 const LABEL_FONT_NARROW_PX = 16;
-const LABEL_MARGIN_PX = 24;
-const ICON_LABEL_GAP_PX = 8;
 const CONNECTOR_THRESHOLD_PX = 8;
 const SECOND_LINE_HEIGHT_PX = 16;
 const LEADER_WIDTH_PX = 2;
-// Reserved between the icon's near edge and the stack edge so the dashed
-// leader is always visibly a line, never zero-length with the icon touching
-// the tower.
-const LEADER_MIN_PX = 24;
+// LABEL_MARGIN_PX, ICON_LABEL_GAP_PX, and LEADER_MIN_PX live in
+// src/lib/layout.ts, which also exports labelRoom — the pure per-side room
+// calculation these three feed (round 5's "labels next to their icons").
+// This module still does its own drawing (and, until slice 2, its own
+// margin-anchored placement) with the same numbers.
 
 // Legend beside the tower's base: what one drawn brick is worth right now.
 // On narrow canvases there's no room beside the tower, so instead it's

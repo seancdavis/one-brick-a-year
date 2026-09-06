@@ -39,3 +39,17 @@ export function yearsAgo(years: number): string {
 function trimTrailingZero(n: number): string {
   return n.toString().replace(/\.0$/, '');
 }
+
+// Counts sentence-ending punctuation in a line of copy, ignoring the two
+// kinds of "." that aren't one: a single-letter (or short-title)
+// abbreviation like "T." or "Mr." followed by more text, and a decimal point
+// between digits. A run of terminators ("...", "?!") counts as a single
+// sentence end. Shared by src/lib/beats.test.ts and src/lib/landmarks.test.ts
+// to enforce the "at most two sentences" copy rule (docs/principles.md's
+// "Facts" section) on both a beat's line and a thing's funLine.
+export function countSentences(line: string): number {
+  const stripped = line
+    .replace(/\b(?:[A-Z]|Mr|Mrs|Ms|Dr|Jr|Sr|St)\.(?=\s)/g, '')
+    .replace(/(\d)\.(\d)/g, '$1$2');
+  return stripped.match(/[.!?]+/g)?.length ?? 0;
+}

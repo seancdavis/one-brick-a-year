@@ -6,13 +6,13 @@ import { createScrollInput, type ScrollKind } from './input';
 import { createHud } from './hud';
 import { createScrapbook } from './scrapbook';
 import { createStartScreen } from './start-screen';
-import { createTags } from './tags';
+import { createTags, type TagModel } from './tags';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
 import { beatsCrossed, buildBeats } from './lib/beats';
 import { beforePhraseFor, tallerThan } from './lib/comparisons';
 import { pxPerMeter } from './lib/compaction';
 import { fmtYears } from './lib/format';
-import { buildLandmarks, type Landmark } from './lib/landmarks';
+import { buildLandmarks, type Landmark, type ThingLandmark } from './lib/landmarks';
 import { LABEL_MIN_GAP_NARROW_PX, placeLandmarks } from './lib/layout';
 import { colorById } from './lib/lego-colors';
 import {
@@ -23,8 +23,8 @@ import {
   STORAGE_KEY,
   type Personalization,
 } from './lib/personalize';
+import { popupsFor } from './lib/popups';
 import { applyScroll, heightM, initialSim, step } from './lib/sim';
-import { tagsFor } from './lib/tags';
 import { drawStage, nudge, nudgeActive, stageBox, stageGeometry, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
 
@@ -102,6 +102,11 @@ function timeEventsFrom(list: Landmark[]): Landmark[] {
   return list.filter((l) => l.kind === 'time').sort((a, b) => a.years - b.years);
 }
 
+// The "thing" landmarks, for src/lib/popups.ts's popupsFor (the left side).
+function thingsFrom(list: Landmark[]): ThingLandmark[] {
+  return list.filter((l): l is ThingLandmark => l.kind === 'thing');
+}
+
 let profile = parsePersonalization(params, storedRaw);
 // The time events for this profile: only "your whole life" moves with the
 // age, but everything downstream (landmarks, cards, the footer) reads the
@@ -109,6 +114,7 @@ let profile = parsePersonalization(params, storedRaw);
 let beats = buildBeats(profile);
 let landmarks = buildLandmarks(profile);
 let timeEvents = timeEventsFrom(landmarks);
+let things = thingsFrom(landmarks);
 // The most recently reported "next up" event's identity (id and years, since
 // a profile rebuild can change a landmark's years — e.g. age — without
 // changing its id), so setNext is only called when it actually changes.
@@ -133,12 +139,13 @@ if (hasUrlParams) {
 const startScreen = createStartScreen(app, (nextProfile) => {
   profile = nextProfile;
   saveProfile(profile);
-  // Rebuilds profile-derived content (beats, landmarks, timeEvents) — the
-  // running sim (years, compaction) is left untouched, whether this came
+  // Rebuilds profile-derived content (beats, landmarks, timeEvents, things) —
+  // the running sim (years, compaction) is left untouched, whether this came
   // from the mandatory first-run screen or a Restart.
   beats = buildBeats(profile);
   landmarks = buildLandmarks(profile);
   timeEvents = timeEventsFrom(landmarks);
+  things = thingsFrom(landmarks);
   lastNextKey = null; // force the teaser to recheck against the rebuilt list
   hud.setColor(profile.colorId);
   startScreen.close();
@@ -501,6 +508,30 @@ function frame(timeMs: number): void {
   const compactionActive = sim.compaction.transition !== null || before.compaction.transition !== null;
 
   if (needsRender || simAdvancing || compactionActive || nudgeActive()) {
+    // popupsFor (src/lib/popups.ts) replaces the round 4 tagsFor: it splits
+    // each side into one open popup and the rest as pins, keyed by
+    // `selection`. Slice 2 (docs/autopilot/2026-09-06-popups-and-menu.md)
+    // wires up tap-to-select and a real popups/pins renderer; for now every
+    // group — open or pin — is fed to the round 4 tag layer as a plain tag
+    // or bundle, so nothing visible changes yet, and only the right side
+    // (time events) is rendered at all.
+    const popups = popupsFor({
+      beats,
+      things,
+      years: sim.years,
+      heightM: heightM(sim),
+      compaction: sim.compaction,
+      selection: { right: 'latest', left: 'latest' },
+    });
+    const rightModels: TagModel[] = [
+      ...(popups.right.open ? [popups.right.open] : []),
+      ...popups.right.pins,
+    ].map((g) => ({
+      kind: g.events.length > 1 ? 'bundle' : 'tag',
+      bricksFromGround: g.bricksFromGround,
+      events: g.events,
+    }));
+
     // The tags are laid out before the canvas draws, so their measured boxes
     // are available to the stage below: on a narrow viewport a tag clamped
     // back over the tower can crowd the left side's labels, and those give
@@ -508,11 +539,7 @@ function frame(timeMs: number): void {
     // very frame these models can first include it (peakYears and sim.years
     // advance together), so passing its ids straight through is safe even
     // though tags.update only actually runs on a rendered frame.
-    tags.update(
-      tagsFor(beats, sim.years, sim.compaction),
-      stageGeometry(view, sim),
-      newlyCrossed.map((b) => b.id),
-    );
+    tags.update(rightModels, stageGeometry(view, sim), newlyCrossed.map((b) => b.id));
     const bands = view.narrow ? tags.occupiedBands() : [];
 
     const placed = placeLandmarks(

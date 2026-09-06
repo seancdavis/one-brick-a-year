@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Landmark } from './landmarks';
-import { GROUND_HIDE_PX, LABEL_MIN_GAP_PX, placeLandmarks, type StageBox } from './layout';
+import {
+  GROUND_HIDE_PX,
+  LABEL_MARGIN_PX,
+  LABEL_MIN_GAP_PX,
+  labelRoom,
+  placeLandmarks,
+  type StageBox,
+} from './layout';
 
 // top=150, ground=650 -> a 500px tall stage; pxPerMeter=50.
 const stage: StageBox = { top: 150, ground: 650 };
@@ -108,5 +115,62 @@ describe('placeLandmarks', () => {
     expect(low).toBeDefined();
     expect(high).toBeDefined();
     expect(high!.lineY).toBeLessThan(low!.lineY);
+  });
+});
+
+describe('labelRoom', () => {
+  // A 768px stage with a 60px stack centered: stackLeft=354, stackRight=414.
+  const width = 768;
+  const stackLeft = 354;
+  const stackRight = 414;
+  const iconSize = 36;
+
+  it('gives both sides positive room for their text', () => {
+    const left = labelRoom('left', stackLeft, width, iconSize, false);
+    const right = labelRoom('right', stackRight, width, iconSize, false);
+
+    expect(left.textMaxWidth).toBeGreaterThan(0);
+    expect(right.textMaxWidth).toBeGreaterThan(0);
+  });
+
+  it('sits the icon on the far side of the text from the stack, mirrored on each side', () => {
+    const left = labelRoom('left', stackLeft, width, iconSize, false);
+    const right = labelRoom('right', stackRight, width, iconSize, false);
+
+    // Left: margin ... text ... icon ... stack. Right: stack ... icon ... text ... margin.
+    expect(left.textX).toBeLessThan(left.iconX);
+    expect(right.iconX).toBeLessThan(right.textX);
+  });
+
+  it('is symmetric for a stack centered on the stage', () => {
+    const left = labelRoom('left', stackLeft, width, iconSize, false);
+    const right = labelRoom('right', stackRight, width, iconSize, false);
+
+    expect(right.textMaxWidth).toBe(left.textMaxWidth);
+  });
+
+  it('starts the text within 60px of the stack edge on a wide stage', () => {
+    // A wider stage than the narrow breakpoint, with a small icon: the text
+    // hugs the icon, which hugs the stack — "labels next to their icons"
+    // replaces the old margin-anchored layout, where a wide screen could
+    // leave the label stranded far from its icon.
+    const wideWidth = 1180;
+    const wideStackLeft = 560;
+    const wideStackRight = 620;
+    const smallIcon = 20;
+
+    const left = labelRoom('left', wideStackLeft, wideWidth, smallIcon, false);
+    const right = labelRoom('right', wideStackRight, wideWidth, smallIcon, false);
+
+    expect(wideStackLeft - left.textX).toBeLessThanOrEqual(60);
+    expect(right.textX - wideStackRight).toBeLessThanOrEqual(60);
+  });
+
+  it('keeps the text within the screen margin', () => {
+    const left = labelRoom('left', stackLeft, width, iconSize, false);
+    const right = labelRoom('right', stackRight, width, iconSize, false);
+
+    expect(left.textX - left.textMaxWidth).toBeGreaterThanOrEqual(LABEL_MARGIN_PX - 1);
+    expect(right.textX + right.textMaxWidth).toBeLessThanOrEqual(width - LABEL_MARGIN_PX + 1);
   });
 });

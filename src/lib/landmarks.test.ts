@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { BEATS, timeLabel } from './beats';
 import { BRICK_M } from './constants';
+import { countSentences } from './format';
 import { ICON_IDS } from './icon-paths';
 import { DEFAULT_COLOR_ID } from './lego-colors';
 import { buildLandmarks, type PaperColor } from './landmarks';
+
+// docs/autopilot/2026-09-06-popups-and-menu.md's copy rules for funLine
+// mirror a beat's line (docs/principles.md's "Facts" section).
+const MAX_FUN_LINE_LENGTH = 140;
 
 const PAPER_COLOR_NAMES: readonly PaperColor[] = ['navy', 'leaf', 'mustard', 'coral'];
 const THING_PAPER_NAMES: readonly PaperColor[] = ['navy', 'leaf'];
@@ -110,6 +115,21 @@ describe('buildLandmarks: things', () => {
       'around',
     ]) {
       expect(ids, id).toContain(id);
+    }
+  });
+
+  it('gives at least eighteen things a funLine, each short and true to the copy rules', () => {
+    const withFunLine = things.filter((t) => t.kind === 'thing' && t.funLine);
+    // Every ticked row in docs/content/candidate-heights.md that carries a
+    // "Fun line" — 18 of them, as of this round. Facts are checked, never
+    // invented, so this isn't padded up to a round number.
+    expect(withFunLine.length).toBeGreaterThanOrEqual(18);
+
+    for (const thing of withFunLine) {
+      if (thing.kind !== 'thing' || !thing.funLine) continue;
+      expect(thing.funLine.length, thing.id).toBeGreaterThan(0);
+      expect(thing.funLine.length, thing.id).toBeLessThanOrEqual(MAX_FUN_LINE_LENGTH);
+      expect(countSentences(thing.funLine), thing.id).toBeLessThanOrEqual(2);
     }
   });
 

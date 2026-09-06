@@ -41,6 +41,48 @@ export const LABEL_MIN_GAP_NARROW_PX = 46;
 // crowded against it.
 export const GROUND_HIDE_PX = 24;
 
+// "Labels next to their icons" (docs/autopilot/2026-09-06-popups-and-menu.md):
+// on both sides the icon sits this close to the stack edge — the dashed
+// leader src/render/stage.ts draws spans exactly this gap, so it never reads
+// as zero-length with the icon touching the tower.
+export const LEADER_MIN_PX = 24;
+
+// The gap between a label's icon and where its text starts.
+export const ICON_LABEL_GAP_PX = 8;
+
+// How far a label's text may run before the screen edge — the far boundary
+// labelRoom's textMaxWidth is measured against.
+export const LABEL_MARGIN_PX = 24;
+
+// The room one side's landmark label has to work with, given where its icon
+// sits: "labels next to their icons" replaces the old margin-anchored layout
+// (round 4) — the icon is a fixed LEADER_MIN_PX out from the stack edge, the
+// text starts ICON_LABEL_GAP_PX beyond the icon, and it has textMaxWidth of
+// room from there out to the screen margin (LABEL_MARGIN_PX) to wrap into,
+// which src/render/stage.ts wraps to at most two lines. Both `iconX` and
+// `textX` are the box's near (leading) edge on that side — the edge closest
+// to the stack — so a caller drawing left-aligned or right-aligned text can
+// derive whichever anchor it needs. `narrow` is accepted so a narrow-screen
+// caller's intent is explicit here too, even though — like the desktop
+// layout — none of the three reserved gaps change with width; only iconSize
+// (and the label's own font size, chosen by the renderer) do.
+export function labelRoom(
+  side: 'left' | 'right',
+  stackEdgeX: number,
+  width: number,
+  iconSize: number,
+  narrow: boolean,
+): { iconX: number; textX: number; textMaxWidth: number } {
+  void narrow;
+
+  const isLeft = side === 'left';
+  const iconX = isLeft ? stackEdgeX - LEADER_MIN_PX - iconSize : stackEdgeX + LEADER_MIN_PX;
+  const textX = isLeft ? iconX - ICON_LABEL_GAP_PX : iconX + iconSize + ICON_LABEL_GAP_PX;
+  const textMaxWidth = Math.max(0, isLeft ? textX - LABEL_MARGIN_PX : width - LABEL_MARGIN_PX - textX);
+
+  return { iconX, textX, textMaxWidth };
+}
+
 // Places one side's landmarks independently: ascending meters is descending
 // y, so the nearest landmarks sit low, near the ground, and the farthest sit
 // high, near the top. Walking this order lets each label push up against the
