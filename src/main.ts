@@ -4,6 +4,7 @@ import { createAudio } from './audio';
 import { createEndScreen } from './end-screen';
 import { createScrollInput, type ScrollKind } from './input';
 import { createHud } from './hud';
+import { createScrapbook } from './scrapbook';
 import { createStartScreen } from './start-screen';
 import { createTags } from './tags';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
@@ -181,6 +182,13 @@ const tags = createTags(app, {
   profile: () => profile,
 });
 
+// The scrapbook: every fact the build has reached, kept even after an undo
+// drops its tag off the tower — collected is derived from peakYears below,
+// never from sim.years itself. Slotted into the HUD's tabs row (src/hud.ts's
+// tabsSlot) so it sits alongside sound/restart without src/hud.ts knowing
+// anything about facts.
+const scrapbook = createScrapbook(hud.tabsSlot, { profile: () => profile });
+
 const endScreen = createEndScreen(app, () => resetForReplay());
 
 // Whether this device supports touch, for analytics' device-kind derivation
@@ -196,6 +204,16 @@ let sim = initialSim();
 // starts after returning from a hidden page doesn't inherit an earlier
 // session's peak.
 let sessionPeakYears = 0;
+// The build's own high-water mark, independent of the analytics session:
+// unlike sessionPeakYears it is never reset by a session ending (Restart
+// aside), so it is what the scrapbook collects from — an undo that pulls
+// sim.years back down takes a fact's tag off the tower (src/tags.ts reads
+// sim.years directly) without forgetting that the build once reached it.
+let peakYears = 0;
+// The identity of the collected list last handed to the scrapbook (the
+// joined ids), so setCollected is only called when the set of facts actually
+// changes — every rendered frame otherwise, same reasoning as lastNextKey.
+let lastCollectedKey: string | null = null;
 // Whether the start screen has closed and any scroll has reached the stack
 // — build or undo — since the last replay: the prompt/footer swap responds
 // to either direction, since an undo scroll before anything's built still
@@ -246,7 +264,10 @@ function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void 
 function resetForReplay(): void {
   endScreen.hide();
   tags.clear();
+  scrapbook.clear();
   sim = initialSim();
+  peakYears = 0;
+  lastCollectedKey = null;
   tickAccumulator = 0;
   hasInteracted = false;
   hasScrolledOnce = false;
@@ -441,6 +462,19 @@ function frame(timeMs: number): void {
   // scrolling back really does take a fact off the tower and put its muted
   // label back.
   if (sessionActive) sessionPeakYears = Math.max(sessionPeakYears, sim.years);
+
+  // The build's own peak, independent of any analytics session: collected
+  // facts (the scrapbook) are every beat reached by this high-water mark, so
+  // scrolling back never un-collects one even though its tag leaves the
+  // tower. Cheap enough to check every frame regardless of needsRender — it
+  // only calls into the scrapbook when the collected set actually changes.
+  peakYears = Math.max(peakYears, sim.years);
+  const collected = beats.filter((b) => b.atYears <= peakYears);
+  const collectedKey = collected.map((b) => b.id).join('|');
+  if (collectedKey !== lastCollectedKey) {
+    lastCollectedKey = collectedKey;
+    scrapbook.setCollected(collected);
+  }
 
   if (sim.done && !before.done) {
     endScreen.show(profile);

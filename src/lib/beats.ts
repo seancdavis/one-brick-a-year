@@ -982,6 +982,15 @@ export const BEATS: readonly Beat[] = [
   },
 ];
 
+// "Beyond the stack" (docs/content/candidate-events.md): the two ticked
+// facts that sit past TOTAL_YEARS and so never get a brick or a tag. Shown
+// once, under the end screen's main copy (src/end-screen.ts), in the same
+// present-tense picture-book voice as a beat's line.
+export const BEYOND_THE_STACK: readonly string[] = [
+  'The Sun and the Earth are about the same age.',
+  'The universe is three stacks taller.',
+];
+
 // The profile-aware event list. Only "life" moves: it is the child's own age,
 // so BEATS carries the default and this substitutes the real one and re-sorts
 // (an older child's life can overtake the events just after it).

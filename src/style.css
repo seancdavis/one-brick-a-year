@@ -413,6 +413,93 @@ select {
   cursor: pointer;
 }
 
+/* The scrapbook (src/scrapbook.ts): a paper tab in the HUD controls row
+   ("my facts · N") that opens a panel listing every fact the build has
+   reached, newest first. Same paper-note voice as an opened tag
+   (.tag-card above) — a scrapbook note is just a shorter, list-friendly cut
+   of the same card. */
+.scrapbook-tab[disabled],
+.hud-tab--disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.scrapbook-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(36, 57, 92, 0.25);
+}
+
+.scrapbook-backdrop[hidden] {
+  display: none;
+}
+
+.scrapbook-panel {
+  width: 100%;
+  max-width: 40ch;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--cream);
+  color: var(--navy);
+  box-shadow: 0 3px 0 var(--paper-shadow);
+  padding: 22px 24px;
+}
+
+.scrapbook-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  color: var(--navy);
+  margin-bottom: 14px;
+}
+
+.scrapbook-note + .scrapbook-note {
+  margin-top: 16px;
+  border-top: 2px dashed var(--paper-shadow);
+  padding-top: 16px;
+}
+
+.scrapbook-note-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--navy);
+}
+
+.scrapbook-note-line {
+  font-family: var(--font-hand);
+  font-size: 15px;
+  line-height: 1.3;
+  color: var(--navy);
+  margin-top: 2px;
+}
+
+.scrapbook-note-years {
+  font-family: var(--font-hand);
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* A paper tab, same as the tag card's. */
+.scrapbook-close {
+  font-family: var(--font-hand);
+  font-size: 18px;
+  color: var(--navy);
+  background: var(--mustard);
+  border: none;
+  box-shadow: 0 3px 0 var(--paper-shadow);
+  min-height: 44px;
+  padding: 8px 18px;
+  margin-top: 20px;
+  cursor: pointer;
+}
+
 /* Start screen (src/start-screen.ts): a paper panel shown on first visit (no
    URL params, nothing stored) and reopened from the HUD's "restart" tab.
    Shown/hidden via the `hidden` attribute — an instant toggle, so there's no
@@ -535,6 +622,21 @@ select {
   line-height: 1.5;
   color: var(--navy);
   margin: 0 0 14px;
+}
+
+/* "Beyond the stack" (src/end-screen.ts): the ticked facts past TOTAL_YEARS
+   that never get a brick, shown once under the main copy in a quieter voice
+   than the rest of the panel. */
+.end-beyond {
+  margin: 0 0 14px;
+}
+
+.end-beyond-line {
+  font-family: var(--font-hand);
+  font-size: 18px;
+  line-height: 1.4;
+  color: var(--muted);
+  margin: 0 0 6px;
 }
 
 .end-actions {

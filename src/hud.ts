@@ -20,6 +20,10 @@ export function createHud(
   setColor(colorId: string): void;
   setComparisons(c: { tall: string; ago: string }): void;
   setNext(text: string | null): void;
+  // The tabs row (sound, restart), for src/main.ts to slot the scrapbook's
+  // "my facts" tab into (src/scrapbook.ts) — so the tab sits alongside the
+  // others without src/hud.ts knowing anything about facts.
+  tabsSlot: HTMLElement;
 } {
   const big = document.createElement('div');
   big.className = 'hud-big';
@@ -141,5 +145,6 @@ export function createHud(
       teaser.hidden = text === null;
       teaserValue.textContent = text ?? '';
     },
+    tabsSlot: tabs,
   };
 }

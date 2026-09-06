@@ -39,6 +39,37 @@ always describes the effective render unit actually on screen — nothing is
 ever drawn that the legend doesn't account for — and sits beside the tower's
 base on wide layouts, below it on narrow ones.
 
+## Facts
+
+Time events — everything the stack passes on its way back through 4.6 billion
+years — have one source of truth: `src/lib/beats.ts`'s `BEATS` array, a
+`Beat` per event. `src/lib/landmarks.ts` derives the right-side "time"
+landmarks from that same list, so a beat's title, line, and years reach the
+landmark label, the paper tag, and the footer's "before" phrase without being
+written twice.
+
+Copy rules for a beat: `title` is 2 to 5 words with no period; `line` is at
+most two short sentences, present tense, second person where natural, under
+140 characters, with no dates and no "BCE" (the tag shows the years, not the
+line). A line may use the tokens `{age}` and `{name}` (`{Name}` at a
+sentence's start), filled in by `src/lib/personalize.ts`'s `fillTokens`;
+`beats.test.ts` fails on any other token. Where the candidate list gave no
+line, the developer writes one in this voice and sets `needsReview: true` so
+Sean can find and check it.
+
+Tag lifecycle: an upcoming time event is a muted canvas label with a dashed
+leader (`src/render/stage.ts`). The moment the stack passes it, that label
+leaves the canvas and a paper tag flips out of the tower in its place
+(`src/tags.ts`, modeled by `src/lib/tags.ts`'s `tagsFor`). When compaction
+draws several events' years into one brick, their tags fold into a single
+bundle tag; expanding the tower splits the bundle back. Scrolling back below
+an event's year turns its tag back into the muted upcoming label — undo
+really takes it off the tower. The scrapbook (`src/scrapbook.ts`) sits outside
+that lifecycle: it lists every beat the build's peak years has ever reached
+(`atYears <= peakYears`, a high-water mark `src/main.ts` tracks independently
+of the current, undo-able `sim.years`), so a fact stays collected even after
+undo drops its tag. Restart empties it.
+
 ## Facts have a source
 
 Scientific and historical facts carry a named source in their comment;
