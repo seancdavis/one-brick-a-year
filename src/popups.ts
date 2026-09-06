@@ -1,10 +1,7 @@
 // Popups and pins: the facts, hanging off the bricks they belong to. At most
-// one popup is open per side — the latest time event on the right, the latest
-// physical thing on the left — and everything older is collapsed to a small
-// paper pin on its own brick that reopens on tap
-// (docs/autopilot/2026-09-06-popups-and-menu.md's "Popups and pins"). This
-// replaces round 4's tag layer: a popup is the same flipped-out paper note a
-// tag was, the pin is what a tag becomes once the next one arrives.
+// one popup is open per side — one time event on the right, one physical
+// thing on the left — and everything older is collapsed to a small paper pin
+// on its own brick that reopens on tap.
 //
 // HTML rather than canvas so a popup or pin can be tapped, focused, and
 // animated with CSS; everything is positioned every rendered frame from the
@@ -16,7 +13,7 @@
 import { fmtInt, fmtMeters, yearsAgo } from './lib/format';
 import type { Beat } from './lib/beats';
 import { ICON_PATHS, type IconId } from './lib/icon-paths';
-import type { PaperColor } from './lib/landmarks';
+import type { PaperColor, ThingLandmark } from './lib/landmarks';
 import { boxesIntersect, type OccupiedBox } from './lib/layout';
 import { fillTokens, type Personalization } from './lib/personalize';
 import type { PinModel, PopupModel, PopupSide } from './lib/popups';
@@ -37,16 +34,26 @@ export interface PopupSides {
 export type PopupGeometry = StageGeometry;
 
 export interface Popups {
-  update(models: PopupSides, geometry: PopupGeometry): void;
+  // `newIds` is every fact or thing the stack crossed upward this frame
+  // (src/main.ts derives it from the frame's own before/after state). It is
+  // the sole arrival signal: an open popup whose item is in it has genuinely
+  // just been passed, which earns the flip, the pop, and the tower's nudge.
+  // Reopening a pin, a compaction regrouping bricks, and an undo dropping
+  // back to an earlier fact all leave it empty.
+  update(models: PopupSides, geometry: PopupGeometry, newIds: ReadonlySet<string>): void;
   // The open popups' paper boxes, in stage coordinates — src/main.ts passes
   // these to drawStage, which skips any upcoming landmark label that would
-  // land inside one (round 5's overlap rule).
+  // land inside one.
   occupiedBoxes(): OccupiedBox[];
   clear(): void;
 }
 
 const POPUP_WIDTH_PX = 220;
 const POPUP_WIDTH_NARROW_PX = 160;
+// Below this a popup is too cramped to read, so the side gives up on one
+// altogether and shows its open item as a pin instead — which is what keeps
+// the two sides' popups off each other and off the tower on a narrow screen.
+const POPUP_MIN_WIDTH_PX = 120;
 
 // A 28 px paper square holding the landmark's icon at 20 px, or — for a
 // bundle — a count badge in its place.
@@ -84,8 +91,8 @@ interface PopupRecord {
   model: PopupModel;
   // Cached offsetHeight, plus what it was measured against: a popup's content
   // never changes once built, so it is measured once rather than every frame
-  // — but it has to be measured again if the width changed (a resize across
-  // the narrow breakpoint) or if the hand-lettered fonts hadn't loaded yet
+  // — but it has to be measured again if the width changed (a resize, or a
+  // side's room shrinking) or if the hand-lettered fonts hadn't loaded yet
   // when it was first built.
   heightPx: number;
   measuredWidthPx: number;
@@ -100,6 +107,14 @@ interface PinRecord {
   model: PinModel;
 }
 
+// One paper note's worth of copy, shared by a popup and by a line of a bundle
+// pin's list, so an event and a thing read the same way wherever they appear.
+interface Note {
+  title: string;
+  line: string;
+  meta: string;
+}
+
 function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
@@ -110,38 +125,51 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): H
   return node;
 }
 
-// One element per group, so it survives from frame to frame exactly as long
-// as its group does: on a compaction two keys vanish and the merged bundle's
-// key appears, which is what makes the bundle show up in place. The side is
-// part of the key so the two sides can never collide.
-function keyOf(side: Side, model: { events: Beat[]; thing?: { id: string } }): string {
-  const inner = model.events.length > 0 ? model.events.map((e) => e.id).join('|') : (model.thing?.id ?? '');
-  return `${side}|${inner}`;
+// The one item an open popup stands for: an event on the right, a thing on
+// the left.
+function popupId(model: PopupModel): string {
+  return model.event?.id ?? model.thing?.id ?? '';
 }
 
-// Every fact (or thing) id a group stands for — what "has this ever been on
-// the tower before?" is asked of, so a bundle newly formed by a compaction
-// out of facts already on the tower doesn't read as an arrival.
-function idsOf(model: { events: Beat[]; thing?: { id: string } }): string[] {
-  if (model.events.length > 0) return model.events.map((e) => e.id);
-  return model.thing ? [model.thing.id] : [];
+// One element per open item, so it survives from frame to frame exactly as
+// long as that item stays open: a different fact opening replaces the
+// element, which is what plays the collapse and the flip. The side is part of
+// the key so the two sides can never collide.
+function popupKey(side: Side, model: PopupModel): string {
+  return `${side}|${popupId(model)}`;
 }
 
-// The id src/main.ts stores as this side's selection when a pin is tapped —
-// the first event's id (a bundle reopens as its whole group) or the thing's.
-function selectionIdOf(model: { events: Beat[]; thing?: { id: string } }): string | null {
-  if (model.events.length > 0) return model.events[0].id;
-  return model.thing?.id ?? null;
+// Every member of a pin's brick: its events (right) or its things (left),
+// ascending, exactly as src/lib/popups.ts grouped them.
+function pinMembers(model: PinModel): (Beat | ThingLandmark)[] {
+  return model.events.length > 0 ? model.events : model.things;
 }
 
-function iconOf(model: { events: Beat[]; thing?: { icon: IconId } }): IconId | null {
-  if (model.events.length > 0) return model.events[0].icon;
-  return model.thing?.icon ?? null;
+// Every id a pin stands for, sorted. This is the pin's DOM key, so a
+// compaction that changes which facts share a brick rebuilds the pin — an
+// icon becoming a count badge, or back — while a pin whose membership is
+// unchanged keeps its element and merely moves.
+function pinKey(side: Side, model: PinModel): string {
+  return `${side}|${pinMembers(model)
+    .map((m) => m.id)
+    .sort()
+    .join('|')}`;
 }
 
-function paperOf(model: { events: Beat[]; thing?: { paper: PaperColor } }): PaperColor {
-  if (model.events.length > 0) return model.events[0].paper;
-  return model.thing?.paper ?? 'navy';
+// A pin's representative: the most recently passed event, or the tallest
+// thing — both lists arrive ascending, so both are the last entry. It is what
+// a single pin wears as its icon and answers to by name.
+function pinLead(model: PinModel): Beat | ThingLandmark | null {
+  const members = pinMembers(model);
+  return members[members.length - 1] ?? null;
+}
+
+function paperOf(model: PinModel): PaperColor {
+  return pinLead(model)?.paper ?? 'navy';
+}
+
+function iconOf(model: PinModel): IconId | null {
+  return pinLead(model)?.icon ?? null;
 }
 
 // A landmark icon as a flat, single-color silhouette, from the same 24×24
@@ -178,6 +206,18 @@ function setStub(node: HTMLElement, towerEdgeX: number, stubW: number, anchorYRe
   node.style.setProperty('--stub-elbow-h', `${Math.round(Math.abs(anchorYRel - centerYRel))}px`);
 }
 
+// The open item, rendered as a pin instead: what a side falls back to when it
+// has no room for a readable popup (see POPUP_MIN_WIDTH_PX).
+function openAsPin(model: PopupModel): PinModel {
+  return {
+    side: model.side,
+    bricksFromGround: model.bricksFromGround,
+    events: model.event ? [model.event] : [],
+    things: model.thing ? [model.thing] : [],
+    count: 1,
+  };
+}
+
 export function createPopups(
   root: HTMLElement,
   opts: {
@@ -190,12 +230,11 @@ export function createPopups(
   const layer = el('div', 'popup-layer');
   root.append(layer);
 
-  // The opened fact, centered: the same paper note, listing one fact for a
-  // single popup and every fact in the brick for a bundle — the right side's
-  // "bundle list". Marked data-scroll-ignore (src/input.ts) so a wheel or
-  // drag over it scrolls the card's own content instead of building or
-  // undoing the tower. Shares its backdrop/panel/close-tab/fact-note CSS with
-  // the scrapbook (src/scrapbook.ts) under common .modal-* class names — see
+  // A bundle pin's list, centered: every fact sharing that brick, on the same
+  // paper notes. Marked data-scroll-ignore (src/input.ts) so a wheel or drag
+  // over it scrolls the card's own content instead of building or undoing the
+  // tower. Shares its backdrop/panel/close-tab/fact-note CSS with the
+  // scrapbook (src/scrapbook.ts) under common .modal-* class names — see
   // src/style.css's comment there.
   const backdrop = el('div', 'modal-backdrop');
   backdrop.hidden = true;
@@ -203,7 +242,7 @@ export function createPopups(
   const card = el('div', 'popup-card modal-panel');
   card.setAttribute('role', 'dialog');
   card.setAttribute('aria-modal', 'true');
-  card.setAttribute('aria-label', 'fact');
+  card.setAttribute('aria-label', 'facts');
   const cardFacts = el('div', 'popup-card-facts');
   const cardClose = el('button', 'modal-close');
   cardClose.type = 'button';
@@ -230,21 +269,38 @@ export function createPopups(
 
   const open: Record<Side, PopupRecord | null> = { left: null, right: null };
   const pins = new Map<string, PinRecord>();
-  // Every id currently on the tower, as of the last update: an open popup
-  // holding an id that isn't in here has genuinely just been passed, which is
-  // what earns the pop, the nudge, and the tower's flip — reopening a pin, or
-  // a compaction rebuilding a bundle out of facts already up there, does not.
-  let knownIds = new Set<string>();
   // Outgoing popups still playing their collapse, so clear() can take them
   // with it rather than leaving one mid-animation over a fresh build.
   const collapsing = new Set<HTMLElement>();
   // Sides whose pin was tapped since the last update. A popup opened by a tap
   // flips out of the tower just as an arriving one does; one that merely
-  // changed group underneath us — a compaction folding facts into a bundle,
-  // an undo dropping back to the previous fact — appears in place instead.
+  // changed underneath us — a compaction folding facts into a bundle, an undo
+  // dropping back to the previous fact — appears in place instead.
   const tapped = new Set<Side>();
 
   let returnFocus: HTMLElement | null = null;
+
+  function eventNote(beat: Beat): Note {
+    return { title: beat.title, line: fillTokens(beat.line, opts.profile()), meta: yearsAgo(beat.atYears) };
+  }
+
+  function thingNote(thing: ThingLandmark): Note {
+    return {
+      title: thing.label,
+      line: thing.funLine ?? thing.tallerThanPhrase,
+      meta: `${fmtMeters(thing.meters)} · ${fmtInt(bricksFor(thing.years))} bricks`,
+    };
+  }
+
+  // A bundle pin's whole list, in the order its members are stacked.
+  function pinNotes(model: PinModel): Note[] {
+    return pinMembers(model).map((member) => ('title' in member ? eventNote(member) : thingNote(member)));
+  }
+
+  function popupNote(model: PopupModel): Note | null {
+    if (model.event) return eventNote(model.event);
+    return model.thing ? thingNote(model.thing) : null;
+  }
 
   function closeCard(): void {
     if (backdrop.hidden) return;
@@ -262,18 +318,17 @@ export function createPopups(
     }
   }
 
-  function openCard(events: Beat[], source: HTMLElement): void {
-    const profile = opts.profile();
+  function openCard(notes: Note[], source: HTMLElement): void {
     cardFacts.replaceChildren(
-      ...events.map((beat: Beat) => {
+      ...notes.map((note) => {
         const fact = el('div', 'modal-fact');
         const title = el('div', 'popup-card-title');
-        title.textContent = beat.title;
+        title.textContent = note.title;
         const line = el('div', 'popup-card-line');
-        line.textContent = fillTokens(beat.line, profile);
-        const years = el('div', 'popup-card-years');
-        years.textContent = yearsAgo(beat.atYears);
-        fact.append(title, line, years);
+        line.textContent = note.line;
+        const meta = el('div', 'popup-card-years');
+        meta.textContent = note.meta;
+        fact.append(title, line, meta);
         return fact;
       }),
     );
@@ -289,48 +344,37 @@ export function createPopups(
     if (event.target === backdrop) closeCard();
   });
 
-  // The open popup: title, one line, and a muted third line — "N years ago"
-  // for a time event, the thing's own height and brick count for a physical
-  // comparison, which is the context the left side exists to give.
+  function buildStub(): HTMLElement {
+    const stub = el('span', 'stub');
+    stub.setAttribute('aria-hidden', 'true');
+    stub.append(el('span', 'stub-out'), el('span', 'stub-elbow'), el('span', 'stub-in'));
+    return stub;
+  }
+
+  // The open popup: one fact's title, its line, and a muted third line — "N
+  // years ago" for a time event, the thing's own height and brick count for a
+  // physical comparison, which is the context the left side exists to give.
+  // Not interactive: it is already showing everything it has.
   function createPopup(side: Side, model: PopupModel, animate: boolean): PopupRecord {
     const container = el('div', `popup hangs--${side}`);
     container.append(buildStub());
 
-    const isBundle = model.events.length > 1;
-    const paper = side === 'right' ? el('button', 'popup-paper') : el('div', 'popup-paper');
+    const paper = el('div', 'popup-paper');
+    const note = popupNote(model);
     const title = el('span', 'popup-title');
+    title.textContent = note?.title ?? '';
     const line = el('span', 'popup-line');
+    line.textContent = note?.line ?? '';
     const meta = el('span', 'popup-meta');
+    meta.textContent = note?.meta ?? '';
     paper.append(title, line, meta);
-
-    if (model.events.length > 0) {
-      // Ascending by years, so events[0] is the newest fact in this brick —
-      // the one a bundle is named after.
-      const newest = model.events[0];
-      title.textContent = newest.title;
-      line.textContent = isBundle ? `and ${model.events.length - 1} more` : fillTokens(newest.line, opts.profile());
-      meta.textContent = yearsAgo(newest.atYears);
-      if (isBundle) container.classList.add('popup--bundle');
-      const button = paper as HTMLButtonElement;
-      button.type = 'button';
-      button.setAttribute(
-        'aria-label',
-        isBundle ? `${newest.title} and ${model.events.length - 1} more facts` : newest.title,
-      );
-      button.addEventListener('click', () => openCard(model.events, button));
-    } else if (model.thing) {
-      const thing = model.thing;
-      title.textContent = thing.label;
-      line.textContent = thing.funLine ?? thing.tallerThanPhrase;
-      meta.textContent = `${fmtMeters(thing.meters)} · ${fmtInt(bricksFor(thing.years))} bricks`;
-    }
 
     container.append(paper);
     if (animate) container.classList.add('popup--enter');
     layer.append(container);
 
     return {
-      key: keyOf(side, model),
+      key: popupKey(side, model),
       side,
       el: container,
       model,
@@ -341,15 +385,10 @@ export function createPopups(
     };
   }
 
-  function buildStub(): HTMLElement {
-    const stub = el('span', 'stub');
-    stub.setAttribute('aria-hidden', 'true');
-    stub.append(el('span', 'stub-out'), el('span', 'stub-elbow'), el('span', 'stub-in'));
-    return stub;
-  }
-
   // A pin: the same paper and drop as a popup, shrunk to a square holding the
   // landmark's icon — or, for a bundle, how many facts share the brick.
+  // Tapping a single pin opens its popup; tapping a bundle opens its whole
+  // list in that one tap, since there is no single fact to open.
   function createPin(side: Side, model: PinModel): PinRecord {
     const container = el('div', `pin hangs--${side}`);
     container.append(buildStub());
@@ -365,18 +404,23 @@ export function createPopups(
       paper.append(iconSvg(icon));
     }
 
-    const name = model.events.length > 0 ? model.events[0].title : (model.thing?.label ?? 'fact');
+    const lead = pinLead(model);
+    const name = lead && 'title' in lead ? lead.title : (lead?.label ?? 'fact');
     paper.setAttribute('aria-label', model.count > 1 ? `${name} and ${model.count - 1} more facts` : name);
 
     container.append(paper);
     layer.append(container);
 
-    const record: PinRecord = { key: keyOf(side, model), side, el: container, model };
+    const record: PinRecord = { key: pinKey(side, model), side, el: container, model };
     paper.addEventListener('click', () => {
-      const id = selectionIdOf(record.model);
-      if (!id) return;
+      if (record.model.count > 1) {
+        openCard(pinNotes(record.model), paper);
+        return;
+      }
+      const single = pinLead(record.model);
+      if (!single) return;
       tapped.add(side);
-      opts.onSelect(side, id);
+      opts.onSelect(side, single.id);
     });
     return record;
   }
@@ -405,56 +449,86 @@ export function createPopups(
   }
 
   return {
-    update(models: PopupSides, geometry: PopupGeometry) {
-      const widthPx = geometry.narrow ? POPUP_WIDTH_NARROW_PX : POPUP_WIDTH_PX;
+    update(models: PopupSides, geometry: PopupGeometry, newIds: ReadonlySet<string>) {
       const reduced = prefersReducedMotion();
       const layerWidth = layer.clientWidth || window.innerWidth;
 
+      // How much clear room a side has between the stack's edge (plus the
+      // connector gap) and the viewport margin. A popup never takes more than
+      // this, so the two sides' popups can neither overlap each other nor sit
+      // over the tower; a side with less than POPUP_MIN_WIDTH_PX of it shows
+      // its open item as a pin instead. Phone widths are best-effort — 768 px
+      // portrait comfortably fits both.
+      const roomFor = (side: Side) =>
+        side === 'right'
+          ? layerWidth - VIEWPORT_MARGIN_PX - (geometry.stackRightX + STUB_GAP_PX)
+          : geometry.stackLeftX - STUB_GAP_PX - VIEWPORT_MARGIN_PX;
+      const preferredWidth = geometry.narrow ? POPUP_WIDTH_NARROW_PX : POPUP_WIDTH_PX;
+      // null means "no popup on this side, however much it wants one".
+      const widthFor = (side: Side): number | null => {
+        const room = roomFor(side);
+        return room < POPUP_MIN_WIDTH_PX ? null : Math.min(preferredWidth, room);
+      };
+
       // A pin hanging off a brick that has scrolled off the top of the
-      // viewport is dropped rather than drawn where nobody can see it. The
-      // open popup never is: it's the thing the page is currently saying, so
-      // on a short viewport it clamps to the top edge and lets its connector
-      // run off the screen to its true brick instead of disappearing.
+      // viewport is dropped rather than drawn where nobody can see it. An open
+      // popup never is: it's the thing the page is currently saying, so on a
+      // short viewport it clamps to the top edge and lets its connector run
+      // off the screen to its true brick instead of disappearing.
       const anchorFor = (bricksFromGround: number) => geometry.groundY - bricksFromGround * geometry.courseHeightPx;
       const visible = (m: { bricksFromGround: number }) => anchorFor(m.bricksFromGround) >= 0;
 
-      const nextIds = new Set<string>();
       const openedTitles: string[] = [];
+      const widths: Record<Side, number | null> = { left: null, right: null };
       let arrived = false;
 
-      // One open popup per side, and every other group a pin.
+      // One open popup per side (room permitting), and every other brick a pin.
       for (const side of ['right', 'left'] as Side[]) {
         const sideModels = models[side];
-        const wantOpen = sideModels.open;
-        const wantKey = wantOpen ? keyOf(side, wantOpen) : null;
-        const wantPins = sideModels.pins.filter(visible);
-        for (const model of [...(wantOpen ? [wantOpen] : []), ...wantPins]) {
-          for (const id of idsOf(model)) nextIds.add(id);
-        }
+        const width = sideModels.open ? widthFor(side) : null;
+        widths[side] = width;
+        // Whether the fact this side is showing crossed the stack this frame:
+        // asked of the model, not of the element, so it reads the same whether
+        // the side renders a popup or falls back to a pin.
+        const isArrival = sideModels.open !== null && newIds.has(popupId(sideModels.open));
+        arrived = arrived || isArrival;
+
+        const wantOpen = width === null ? null : sideModels.open;
+        const wantKey = wantOpen ? popupKey(side, wantOpen) : null;
+        const wantPins = [
+          ...sideModels.pins,
+          ...(sideModels.open && width === null ? [openAsPin(sideModels.open)] : []),
+        ].filter(visible);
 
         const current = open[side];
         if (current && current.key !== wantKey) {
-          retire(current, wantPins.some((p) => keyOf(side, p) === current.key), reduced);
+          // Only animate the collapse when the outgoing fact really does live
+          // on as a member of one of this side's pins; an undo that drops it
+          // off the tower altogether takes it immediately.
+          const outgoingId = popupId(current.model);
+          const becomesPin = wantPins.some((p) => pinMembers(p).some((m) => m.id === outgoingId));
+          retire(current, becomesPin, reduced);
           open[side] = null;
         }
 
         if (wantOpen && wantKey) {
           const existing = open[side];
           if (existing) {
-            // Same group, new frame: only its brick can have moved.
+            // Same item, new frame: only its brick can have moved.
             existing.model = wantOpen;
           } else {
-            const isArrival = idsOf(wantOpen).some((id) => !knownIds.has(id));
-            const flip = (isArrival || tapped.has(side)) && !reduced;
-            open[side] = createPopup(side, wantOpen, flip);
-            openedTitles.push(wantOpen.events[0]?.title ?? wantOpen.thing?.label ?? '');
-            arrived = arrived || isArrival;
+            open[side] = createPopup(side, wantOpen, (isArrival || tapped.has(side)) && !reduced);
+            openedTitles.push(popupNote(wantOpen)?.title ?? '');
           }
+        } else if (isArrival && sideModels.open) {
+          // No room for a popup on this side, so the arrival shows as a pin —
+          // still worth announcing, since it is what the page just said.
+          openedTitles.push(popupNote(sideModels.open)?.title ?? '');
         }
 
-        // Pins: reconcile against the map, keyed the same way, so a pin only
-        // ever churns when its group really changes.
-        const wantedPins = new Map(wantPins.map((p) => [keyOf(side, p), p] as const));
+        // Pins: reconcile against the map, keyed by membership, so a pin only
+        // ever churns when the facts sharing its brick really change.
+        const wantedPins = new Map(wantPins.map((p) => [pinKey(side, p), p] as const));
         for (const [key, record] of pins) {
           if (record.side !== side) continue;
           if (!wantedPins.has(key)) {
@@ -472,7 +546,7 @@ export function createPopups(
         }
       }
 
-      // Coalesced to one of each per frame, however many popups changed:
+      // Coalesced to one of each per frame, however many sides changed:
       // arriving at a fact pops and nudges the tower, reopening a pin doesn't.
       if (arrived) {
         opts.onPop();
@@ -480,7 +554,6 @@ export function createPopups(
       }
       if (openedTitles.length > 0) liveRegion.textContent = openedTitles.filter(Boolean).join(', ');
 
-      knownIds = nextIds;
       tapped.clear();
 
       // Width first, then the height reads, then the positions: the rendered
@@ -488,27 +561,31 @@ export function createPopups(
       // at its final width before it can be measured.
       for (const side of ['right', 'left'] as Side[]) {
         const record = open[side];
-        if (!record) continue;
-        if (record.measuredWidthPx !== widthPx) record.el.style.width = `${widthPx}px`;
+        const width = widths[side];
+        if (!record || width === null) continue;
+        if (record.measuredWidthPx !== width) record.el.style.width = `${width}px`;
       }
       for (const side of ['right', 'left'] as Side[]) {
         const record = open[side];
-        if (!record) continue;
-        if (record.measuredWidthPx !== widthPx || record.measuredFontsReady !== fontsReady) {
+        const width = widths[side];
+        if (!record || width === null) continue;
+        if (record.measuredWidthPx !== width || record.measuredFontsReady !== fontsReady) {
           record.heightPx = record.el.offsetHeight;
-          record.measuredWidthPx = widthPx;
+          record.measuredWidthPx = width;
           record.measuredFontsReady = fontsReady;
         }
       }
 
       // Right side: near edge STUB_GAP_PX right of the stack. Left side: the
-      // mirror image, the paper's right edge that far left of it. Either can
-      // be pulled back toward the tower when the viewport is too narrow to
-      // fit the whole thing there; the stub keeps it connected to its true
-      // brick regardless.
+      // mirror image, the paper's right edge that far left of it. Widths are
+      // already capped to each side's room, so neither has to be pulled back
+      // over the tower.
       const nearLeftFor = (side: Side, width: number) =>
         side === 'right'
-          ? Math.max(VIEWPORT_MARGIN_PX, Math.min(geometry.stackRightX + STUB_GAP_PX, layerWidth - VIEWPORT_MARGIN_PX - width))
+          ? Math.max(
+              VIEWPORT_MARGIN_PX,
+              Math.min(geometry.stackRightX + STUB_GAP_PX, layerWidth - VIEWPORT_MARGIN_PX - width),
+            )
           : Math.min(
               layerWidth - VIEWPORT_MARGIN_PX - width,
               Math.max(VIEWPORT_MARGIN_PX, geometry.stackLeftX - STUB_GAP_PX - width),
@@ -525,9 +602,10 @@ export function createPopups(
 
       for (const side of ['right', 'left'] as Side[]) {
         const record = open[side];
-        if (!record) continue;
+        const width = widths[side];
+        if (!record || width === null) continue;
 
-        const left = nearLeftFor(side, widthPx);
+        const left = nearLeftFor(side, width);
         const anchorY = anchorFor(record.model.bricksFromGround);
         // Centered on its own brick, but never sunk into the hill, and never
         // pushed off the top: the one open popup per side is the thing the
@@ -540,8 +618,8 @@ export function createPopups(
 
         record.el.style.left = `${Math.round(left)}px`;
         record.el.style.top = `${Math.round(top)}px`;
-        setStub(record.el, towerEdgeX, stubWidthFor(side, towerEdgeX, widthPx), anchorY - top, record.heightPx);
-        record.box = { side, x: left, y: top, w: widthPx, h: record.heightPx };
+        setStub(record.el, towerEdgeX, stubWidthFor(side, towerEdgeX, width), anchorY - top, record.heightPx);
+        record.box = { side, x: left, y: top, w: width, h: record.heightPx };
       }
 
       // Pins stack per side from the ground up, each pushing against the one
@@ -570,8 +648,7 @@ export function createPopups(
 
           // A popup takes precedence over the pins in its own band: rather
           // than shoving them aside, it simply covers them until it closes.
-          record.el.hidden =
-            box !== null && boxesIntersect({ x: left, y: top, w: PIN_SIZE_PX, h: PIN_SIZE_PX }, box);
+          record.el.hidden = box !== null && boxesIntersect({ x: left, y: top, w: PIN_SIZE_PX, h: PIN_SIZE_PX }, box);
         }
       }
     },
@@ -594,7 +671,6 @@ export function createPopups(
       }
       for (const record of pins.values()) record.el.remove();
       pins.clear();
-      knownIds = new Set<string>();
       tapped.clear();
       liveRegion.textContent = '';
     },

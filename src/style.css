@@ -134,8 +134,10 @@ select {
 }
 
 /* src/menu.ts's tab and panel: the one trigger the corner now holds for
-   sound, "my facts", restart, and the color chips. */
+   sound, "my facts", restart, and the color chips. Positioned so the panel
+   below can hang off it — src/menu.ts never measures or writes a position. */
 .menu {
+  position: relative;
   z-index: 7;
 }
 
@@ -159,13 +161,17 @@ select {
   color: var(--navy);
 }
 
-/* Anchored below the tab: src/menu.ts measures the tab's own rendered
-   bottom at open time and sets `top` from that, so this stays correctly
-   placed regardless of how tall the teaser rendered above it. */
+/* Anchored below the tab, in CSS alone: the panel is absolutely positioned
+   inside .menu, whose own box is exactly the tab's, so `top: 100%` follows the
+   tab wherever src/hud.ts's right-hand column reflows it under however tall
+   the teaser rendered. The width never exceeds the room left of the column's
+   own right offset (.hud-side's right: 44px) plus a matching margin on the far
+   side, so it can't run off a narrow screen. */
 .menu-panel {
-  position: fixed;
-  right: 44px;
-  width: 220px;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(220px, calc(100vw - 88px));
   background: var(--cream);
   box-shadow: 0 3px 0 var(--paper-shadow);
   padding: 14px;
@@ -416,12 +422,6 @@ select {
   transform-origin: var(--tower-edge-x, 0px) center;
 }
 
-/* Only a right-side popup opens a card (its brick's whole list of facts); a
-   left-side one is already showing everything it has. */
-button.popup-paper {
-  cursor: pointer;
-}
-
 .popup-paper > * + * {
   margin-top: 2px;
 }
@@ -487,16 +487,10 @@ button.popup-paper {
   color: var(--muted);
 }
 
-/* A bundle stands for several facts folded into one drawn brick: its "and N
-   more" line is the invitation to open it, so it reads as a count rather than
-   as the fact itself. */
-.popup--bundle .popup-line {
-  color: var(--muted);
-}
-
 /* A pin: the same paper and drop as a popup, shrunk to a square holding the
    landmark's own icon at 20px — or, for a bundle, how many facts share its
-   brick. Tapping one reopens its popup. */
+   brick. Tapping a single pin reopens its popup; tapping a bundle opens its
+   whole list in that one tap. */
 .pin-paper {
   display: flex;
   align-items: center;
@@ -871,15 +865,6 @@ button.popup-paper {
 @media (max-width: 699px) {
   .hud-years {
     font-size: 64px;
-  }
-
-  /* The menu panel loses its fixed width and spans the screen (minus a small
-     margin) below the tab, rather than being anchored to the tab's own
-     right edge as it is on a wide screen. */
-  .menu-panel {
-    left: 16px;
-    right: 16px;
-    width: auto;
   }
 
   .hud-footer {

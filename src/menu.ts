@@ -8,11 +8,6 @@
 import { createColorPicker } from './color-picker';
 
 const MENU_SWATCH_SIZE_PX = 18;
-// How far the panel hangs below the tab's own bottom edge — measured once,
-// at open time, from the tab's actual rendered position (src/hud.ts's
-// "hud-side" column reflows the tab under however tall the teaser rendered,
-// so a fixed guessed offset would drift).
-const PANEL_GAP_PX = 8;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -56,9 +51,12 @@ export function createMenu(
     colorId: () => string;
     onColorSelect: (colorId: string) => void;
     soundOn: () => boolean;
+    // Read only when the panel opens, never while the menu is being built:
+    // src/main.ts's scrapbook is what answers it, and nothing here may reach
+    // for a collaborator before every module has been constructed.
     factCount: () => number;
   },
-): { setSound(on: boolean): void; setFactCount(n: number): void; close(): void } {
+): { setSound(on: boolean): void; close(): void } {
   const wrap = el('div', 'menu');
 
   const tab = el('button', 'menu-tab');
@@ -98,21 +96,23 @@ export function createMenu(
   root.append(wrap);
 
   let soundOn = opts.soundOn();
-  let factCount = opts.factCount();
 
   function paintSound(): void {
     soundButton.setAttribute('aria-pressed', String(soundOn));
     soundButton.textContent = soundOn ? 'sound on' : 'sound off';
   }
 
+  // The count is asked for at open time rather than mirrored here: the panel
+  // is the only place it shows, so there is nothing to keep in sync between
+  // opens and no second copy of the scrapbook's own tally.
   function paintFacts(): void {
-    factsButton.textContent = `my facts · ${factCount}`;
-    factsButton.disabled = factCount === 0;
-    factsButton.classList.toggle('menu-item--disabled', factCount === 0);
+    const count = opts.factCount();
+    factsButton.textContent = `my facts · ${count}`;
+    factsButton.disabled = count === 0;
+    factsButton.classList.toggle('menu-item--disabled', count === 0);
   }
 
   paintSound();
-  paintFacts();
 
   function onDocPointerDown(event: PointerEvent): void {
     if (wrap.contains(event.target as Node)) return;
@@ -128,11 +128,13 @@ export function createMenu(
 
   function open(): void {
     if (!panel.hidden) return;
-    // Re-sync to whatever changed while the panel was closed — a Restart
-    // trip through the start screen can change the color without this menu
-    // ever hearing about it directly.
+    // Re-sync to whatever changed while the panel was closed — a Restart trip
+    // through the start screen can change the color, and the build can have
+    // collected more facts, without this menu ever hearing about it directly.
+    // The panel's own position is CSS's job (.menu-panel in src/style.css
+    // hangs it off the .menu container), so nothing is measured here.
     colorPicker.setSelected(opts.colorId());
-    panel.style.top = `${Math.round(tab.getBoundingClientRect().bottom + PANEL_GAP_PX)}px`;
+    paintFacts();
     panel.hidden = false;
     tab.setAttribute('aria-expanded', 'true');
     document.addEventListener('pointerdown', onDocPointerDown);
@@ -174,10 +176,6 @@ export function createMenu(
     setSound(on: boolean) {
       soundOn = on;
       paintSound();
-    },
-    setFactCount(n: number) {
-      factCount = n;
-      paintFacts();
     },
     close,
   };

@@ -80,6 +80,29 @@ export const LABEL_MIN_GAP_PX = 30;
 // per landmark.
 export const LABEL_MIN_GAP_NARROW_PX = 46;
 
+// How far a label unit's box reaches above its baseline: the taller of the
+// text's own ascent and half the icon (the icon is centered on the first
+// line, so it never reaches higher than the text does at these sizes). Mirrors
+// src/render/stage.ts's LABEL_FONT_PX / ICON_PX and their narrow counterparts,
+// which is what a unit is actually drawn at — the two must move together.
+export const LABEL_RISE_PX = 20;
+export const LABEL_RISE_NARROW_PX = 16;
+
+// What one side's label units cost vertically: how much clear room to keep
+// between two of them, and how far each reaches above its own baseline. The
+// second is what StageBox.top is enforced against, so a label unit is never
+// placed with any part of itself under the HUD's corner block.
+export interface LabelMetrics {
+  minGapPx: number;
+  risePx: number;
+}
+
+export const LABEL_METRICS: LabelMetrics = { minGapPx: LABEL_MIN_GAP_PX, risePx: LABEL_RISE_PX };
+export const LABEL_METRICS_NARROW: LabelMetrics = {
+  minGapPx: LABEL_MIN_GAP_NARROW_PX,
+  risePx: LABEL_RISE_NARROW_PX,
+};
+
 // A landmark whose line sits within this many px of the ground line reads as
 // indistinguishable from the ground itself, so it's dropped instead of drawn
 // crowded against it.
@@ -143,7 +166,7 @@ function placeSide(
   heightM: number,
   pxPerM: number,
   stage: StageBox,
-  minGapPx: number,
+  metrics: LabelMetrics,
   excludePassed: boolean,
 ): PlacedLandmark[] {
   const placed: PlacedLandmark[] = [];
@@ -156,9 +179,17 @@ function placeSide(
     if (excludePassed && passed) continue;
 
     const lineY = stage.ground - landmark.meters * pxPerM;
-    if (lineY < stage.top - 30 || lineY > stage.ground - GROUND_HIDE_PX) continue;
+    if (lineY > stage.ground - GROUND_HIDE_PX) continue;
 
-    const labelY = Math.min(lineY - LABEL_LINE_OFFSET_PX, previousLabelY - minGapPx);
+    const labelY = Math.min(lineY - LABEL_LINE_OFFSET_PX, previousLabelY - metrics.minGapPx);
+    // The whole label unit — the icon and its text lines, not just the dashed
+    // line — has to clear the stage's usable top, which is the bottom of the
+    // HUD's corner block. A unit that would reach above it is dropped rather
+    // than drawn under the HUD, whether it got there from its own height or
+    // from being pushed up by the labels stacked below it. Dropping leaves
+    // previousLabelY where it was, so the chain closes over the gap.
+    if (labelY - metrics.risePx < stage.top) continue;
+
     previousLabelY = labelY;
 
     placed.push({
@@ -177,7 +208,7 @@ export function placeLandmarks(
   heightM: number,
   pxPerMeter: number,
   stage: StageBox,
-  minGapPx: number = LABEL_MIN_GAP_PX,
+  metrics: LabelMetrics = LABEL_METRICS,
 ): PlacedLandmarks {
   return {
     // Things (left) stay in the stack after the stack passes them, unlike
@@ -190,7 +221,7 @@ export function placeLandmarks(
       heightM,
       pxPerMeter,
       stage,
-      minGapPx,
+      metrics,
       false,
     ),
     right: placeSide(
@@ -198,7 +229,7 @@ export function placeLandmarks(
       heightM,
       pxPerMeter,
       stage,
-      minGapPx,
+      metrics,
       true,
     ),
   };

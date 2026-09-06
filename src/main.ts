@@ -12,10 +12,9 @@ import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from
 import { beatsCrossed, buildBeats } from './lib/beats';
 import { beforePhraseFor, tallerThan } from './lib/comparisons';
 import { pxPerMeter } from './lib/compaction';
-import { BRICK_M } from './lib/constants';
 import { fmtYears } from './lib/format';
 import { buildLandmarks, type Landmark, type ThingLandmark } from './lib/landmarks';
-import { LABEL_MIN_GAP_NARROW_PX, placeLandmarks, stageTopFor } from './lib/layout';
+import { LABEL_METRICS, LABEL_METRICS_NARROW, placeLandmarks, stageTopFor } from './lib/layout';
 import { popupsFor, type PopupSelection } from './lib/popups';
 import { colorById } from './lib/lego-colors';
 import {
@@ -26,7 +25,7 @@ import {
   STORAGE_KEY,
   type Personalization,
 } from './lib/personalize';
-import { applyScroll, bricksFor, heightM, initialSim, step } from './lib/sim';
+import { applyScroll, heightM, initialSim, step } from './lib/sim';
 import { drawStage, nudge, nudgeActive, stageBox, stageGeometry, TOP_MIN_PX, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
 
@@ -162,13 +161,25 @@ const analytics = createAnalytics();
 
 const hud = createHud(app);
 
+// The scrapbook: every fact the build has reached, kept even after an undo
+// drops its popup off the tower — fed from peakYears below, never from
+// sim.years itself. Opened from the menu's "my facts" item (menu.onScrapbook
+// below); its panel mounts at the app root, same as the popup layer's
+// bundle-pin card, so neither is trapped under the HUD's own stacking
+// context.
+//
+// Constructed before the menu because the menu reads its count. Ordering rule
+// for this file, guarded by src/main.order.test.ts: anything a create… call's
+// arguments name must already be constructed above it. A callback that only
+// ever runs from a later user interaction would survive a forward reference,
+// but a callback a constructor invokes while building would hit the temporal
+// dead zone — so the whole file keeps to construction order rather than
+// asking which kind each callback is.
+const scrapbook = createScrapbook(app, { profile: () => profile });
+
 // The compact menu: one tab in the HUD's corner (src/hud.ts's menuSlot)
 // holding sound, "my facts", restart, and the color chips — everything the
-// old tabs-and-chips row used to spread across the corner
-// (docs/autopilot/2026-09-06-popups-and-menu.md's "Compact menu"). Forward
-// references to `scrapbook` below are safe: these callbacks only run from a
-// later user interaction, by which point every const here has been assigned
-// (the same pattern createStartScreen's callback already uses for `hud`).
+// old tabs-and-chips row used to spread across the corner.
 const menu = createMenu(hud.menuSlot, {
   onSound: () => {
     soundEnabled = !soundEnabled;
@@ -195,8 +206,8 @@ const menu = createMenu(hud.menuSlot, {
 // Which popup is open on each side. 'latest' — the default, and where a side
 // returns whenever the stack passes something new on it — means "whatever was
 // passed most recently"; an id means a pin was tapped and that fact is being
-// read instead. src/lib/popups.ts's popupsFor turns this into one open popup
-// and a pin for everything else, per side.
+// read instead. src/lib/popups.ts's popupsFor turns this into one open item
+// per side, with pins for everything else on it.
 let selection: PopupSelection = { right: 'latest', left: 'latest' };
 
 // The facts themselves: a popup flips out of the tower for every time event
@@ -215,14 +226,6 @@ const popups = createPopups(app, {
   },
 });
 
-// The scrapbook: every fact the build has reached, kept even after an undo
-// drops its popup off the tower — fed from peakYears below, never from
-// sim.years itself. Opened from the menu's "my facts" item (menu.onScrapbook
-// above); its panel mounts at the app root, same as the popup layer's
-// opened-card backdrop, so neither is trapped under the HUD's own stacking
-// context.
-const scrapbook = createScrapbook(app, { profile: () => profile });
-
 const endScreen = createEndScreen(app, () => resetForReplay());
 
 // Whether this device supports touch, for analytics' device-kind derivation
@@ -240,20 +243,18 @@ let sim = initialSim();
 let sessionPeakYears = 0;
 // The build's own high-water mark, independent of the analytics session:
 // unlike sessionPeakYears it is never reset by a session ending (Restart
-// aside), and it is the sole source of "what has this build reached" —
-// nothing else keeps its own copy. Whenever it advances, beatsCrossed
-// (src/lib/beats.ts) between the previous peak and the new one is every beat
-// newly reached this step, handed to the scrapbook to collect and used to
-// send the right side's popup selection back to 'latest'.
-// An undo that pulls sim.years back down takes a fact's popup off the tower
-// (src/popups.ts is fed from sim.years directly) without forgetting that the
-// build once reached it, since peakYears itself never drops.
+// aside). It feeds the scrapbook and nothing else — whenever it advances,
+// beatsCrossed (src/lib/beats.ts) between the previous peak and the new one
+// is every beat the build has newly reached for the first time, which is
+// exactly what the scrapbook collects. An undo that pulls sim.years back down
+// takes a fact's popup off the tower (src/popups.ts is fed from sim.years
+// directly) without forgetting that the build once reached it, since
+// peakYears itself never drops.
+//
+// What the popups key off is deliberately *not* this: an arrival is an upward
+// crossing this frame (see the frame loop below), so re-passing a fact after
+// an undo opens it again, high-water mark or no.
 let peakYears = 0;
-// How many physical things the build has ever reached — the left side's
-// equivalent of newlyCrossed, since things are passed by height rather than
-// by year. When it rises, the left side has something new to say, so its
-// popup selection returns to 'latest' just as the right's does.
-let peakThingsPassed = 0;
 // Whether the start screen has closed and any scroll has reached the stack
 // — build or undo — since the last replay: the prompt/footer swap responds
 // to either direction, since an undo scroll before anything's built still
@@ -306,10 +307,8 @@ function resetForReplay(): void {
   endScreen.hide();
   popups.clear();
   scrapbook.clear();
-  menu.setFactCount(scrapbook.count());
   sim = initialSim();
   peakYears = 0;
-  peakThingsPassed = 0;
   selection = { right: 'latest', left: 'latest' };
   tickAccumulator = 0;
   hasInteracted = false;
@@ -522,29 +521,34 @@ function frame(timeMs: number): void {
   if (sessionActive) sessionPeakYears = Math.max(sessionPeakYears, sim.years);
 
   // The build's own peak, independent of any analytics session: whenever it
-  // advances, beatsCrossed is every beat newly reached this step — handed to
-  // the scrapbook to collect right away. Scrolling back never un-collects a
+  // advances, beatsCrossed is every beat the build has newly reached — handed
+  // to the scrapbook to collect right away. Scrolling back never un-collects a
   // beat, even though its popup leaves the tower, since peakYears itself
   // never drops.
   const prevPeakYears = peakYears;
   peakYears = Math.max(peakYears, sim.years);
-  const newlyCrossed = peakYears > prevPeakYears ? beatsCrossed(prevPeakYears, peakYears, beats) : [];
-  if (newlyCrossed.length > 0) {
-    scrapbook.add(newlyCrossed);
-    menu.setFactCount(scrapbook.count());
-  }
+  if (peakYears > prevPeakYears) scrapbook.add(beatsCrossed(prevPeakYears, peakYears, beats));
+
+  // What arrived *this frame*, on each side: the events the stack crossed
+  // upward between the previous frame's years and this one's, and the things
+  // it grew past between the two heights. Derived from the frame's own
+  // before/after state rather than from peakYears, so undoing below a fact and
+  // building back up to it opens, pops, and nudges all over again — which is
+  // what a child scrolling back and forth expects.
+  const beforeHeightM = heightM(before);
+  const nowHeightM = heightM(sim);
+  const arrivedEvents = sim.years > before.years ? beatsCrossed(before.years, sim.years, beats) : [];
+  const arrivedThings =
+    nowHeightM > beforeHeightM ? things.filter((t) => t.meters > beforeHeightM && t.meters <= nowHeightM) : [];
+  // The arrival ids src/popups.ts reads as "this is genuinely new", which is
+  // what earns the flip, the pop, and the tower's nudge.
+  const newIds = new Set<string>([...arrivedEvents.map((e) => e.id), ...arrivedThings.map((t) => t.id)]);
 
   // Something new arriving takes that side back to its latest fact, whatever
   // pin the reader had opened before — the arrival is the page's new thing to
-  // say. The two sides are counted separately: events by year (newlyCrossed),
-  // things by the height the build has ever reached.
-  if (newlyCrossed.length > 0) selection = { ...selection, right: 'latest' };
-  if (peakYears > prevPeakYears) {
-    const peakHeightM = bricksFor(peakYears) * BRICK_M;
-    const passedThings = things.reduce((n, t) => (t.meters <= peakHeightM ? n + 1 : n), 0);
-    if (passedThings > peakThingsPassed) selection = { ...selection, left: 'latest' };
-    peakThingsPassed = Math.max(peakThingsPassed, passedThings);
-  }
+  // say.
+  if (arrivedEvents.length > 0) selection = { ...selection, right: 'latest' };
+  if (arrivedThings.length > 0) selection = { ...selection, left: 'latest' };
 
   if (sim.done && !before.done) {
     endScreen.show(profile);
@@ -579,7 +583,7 @@ function frame(timeMs: number): void {
       beats,
       things,
       years: sim.years,
-      heightM: heightM(sim),
+      heightM: nowHeightM,
       compaction: sim.compaction,
     };
     let models = popupsFor({ ...popupArgs, selection });
@@ -599,23 +603,23 @@ function frame(timeMs: number): void {
     // The popups are laid out before the canvas draws, so their measured
     // boxes are available to the stage below: an open popup owns its band,
     // and any upcoming label that would land inside it gives way.
-    popups.update(models, stageGeometry(view, sim));
+    popups.update(models, stageGeometry(view, sim), newIds);
 
     const placed = placeLandmarks(
       landmarks,
-      heightM(sim),
+      nowHeightM,
       pxPerMeter(sim.compaction),
       // stageBox(view).ground is the real ground line; its own `top` is only
       // a viewport-fraction fallback (src/render/stage.ts's comment on
       // stageBox) — stageTop is the real HUD-measured one (measureStageTop
       // above), so every canvas label stays clear of the HUD's corner.
       { top: stageTop, ground: stageBox(view).ground },
-      view.narrow ? LABEL_MIN_GAP_NARROW_PX : undefined,
+      view.narrow ? LABEL_METRICS_NARROW : LABEL_METRICS,
     );
     drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId), popups.occupiedBoxes());
     hud.update(sim);
     hud.setComparisons({
-      tall: tallerThan(heightM(sim), landmarks),
+      tall: tallerThan(nowHeightM, landmarks),
       ago: beforePhraseFor(sim.years, beats, profile.ageYears),
     });
     needsRender = false;

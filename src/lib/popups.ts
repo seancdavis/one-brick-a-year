@@ -1,15 +1,24 @@
-// Which popups and pins are hanging off the tower right now, on each side.
-// A popup is the one open fact (or comparison) per side — the paper tag a
-// child can read; a pin is everything older, collapsed to a small tappable
-// square (docs/autopilot/2026-09-06-popups-and-menu.md's "Popups and pins").
-// The fact (or thing) is part of the brick: the moment the stack passes a
-// time event or a physical thing, it leaves the canvas label and joins the
-// tower's course for its year, exactly as round 4's retired tags module worked —
-// this module adds the "only one open per side" lifecycle and the left
-// side's things on top of that.
+// Which popup and pins are hanging off the tower right now, on each side.
+// A popup is the one open fact (right) or comparison (left) per side — the
+// paper note a child reads; a pin is everything older on that side, collapsed
+// to a small tappable square on the brick it belongs to.
 //
-// Pure math only — src/popups.ts turns these models into DOM, and
-// src/main.ts recomputes them every rendered frame. No DOM here.
+// Invariants:
+// - The open popup is exactly one event (right) or one thing (left) — never a
+//   bundle. 'latest' means the most recently passed one: the highest atYears
+//   on the right, the tallest passed thing on the left. An id means a pin was
+//   tapped and that one fact is being read instead.
+// - Which item is open is chosen before anything is grouped, so a compaction
+//   regrouping the bricks underneath can never change it. The open item's own
+//   brick may still carry a pin — for the rest of that brick's members.
+// - A pin carries every member of its brick, ascending (by atYears on the
+//   right, by meters on the left), so src/popups.ts can key its DOM element on
+//   the membership and rebuild it when that changes.
+// - Pins are ascending by bricksFromGround; every passed item appears exactly
+//   once across the open popup and the pins.
+//
+// Pure math only — src/popups.ts turns these models into DOM, and src/main.ts
+// recomputes them every rendered frame. No DOM here.
 
 import type { Beat } from './beats';
 import { effectiveRenderUnit, type Compaction } from './compaction';
@@ -19,36 +28,35 @@ import { bricksFor } from './sim';
 export interface PopupModel {
   side: 'left' | 'right';
   // The drawn course this popup hangs from, counted from the ground at the
-  // current effective render unit — see round 4's retired TagModel for the
-  // same convention: bricksFromGround course-heights above the
+  // current effective render unit: bricksFromGround course-heights above the
   // ground line is exactly where the canvas draws this landmark's dashed
   // leader (src/render/stage.ts), so a popup never floats above the tower.
   bricksFromGround: number;
-  // The right side's events, ascending by atYears — exactly one for an
-  // un-bundled brick, 2 or more once compaction folds several into one
-  // drawn course. Empty for a left-side (thing) popup.
-  events: Beat[];
-  // The left side's thing. Ordinarily exactly one thing shares a drawn
-  // brick, so this is that thing; if compaction ever bundles two or more
-  // things into the same course, this is the tallest of them (see
-  // popupsFor's leftSide). Undefined for a right-side (event) popup.
+  // The right side's open event. Undefined for a left-side popup.
+  event?: Beat;
+  // The left side's open thing. Undefined for a right-side popup.
   thing?: ThingLandmark;
 }
 
 export interface PinModel {
   side: 'left' | 'right';
   bricksFromGround: number;
+  // Every event this pin's brick holds, ascending by atYears — so the last is
+  // the most recently passed, the one the pin is named and iconed after.
+  // Empty on the left side.
   events: Beat[];
-  thing?: ThingLandmark;
-  // How many facts (right) or things (left) this pin's brick holds — 1 for
-  // an un-bundled brick, 2 or more for a bundle, shown as a small count
-  // badge instead of an icon (round 5's "Popups and pins").
+  // Every thing this pin's brick holds, ascending by meters — the last is the
+  // tallest. Empty on the right side.
+  things: ThingLandmark[];
+  // How many members this pin stands for: 1 for a lone fact, 2 or more for a
+  // bundle, which shows a count badge instead of an icon.
   count: number;
 }
 
-// Which popup is open on each side: a string is the id of an event or thing
-// most recently tapped; 'latest' means the most recently passed one (the
-// default, before anything has been tapped); null means nothing open at all.
+// Which popup is open on each side: an id (an event's or a thing's),
+// 'latest' for the most recently passed one — the default, and where a side
+// returns whenever the stack passes something new on it — or null for nothing
+// open at all.
 export interface PopupSelection {
   right: string | 'latest' | null;
   left: string | 'latest' | null;
@@ -59,151 +67,110 @@ export interface PopupSide {
   pins: PinModel[];
 }
 
-interface EventGroup {
-  bricksFromGround: number;
-  events: Beat[];
+// The drawn brick an item lands in: Math.floor(years / unit) at the unit
+// actually being drawn (src/lib/compaction.ts's effectiveRenderUnit), so a
+// compaction that merges ten courses into one merges their items into one
+// pin, and an expansion splits them back.
+function brickOf(years: number, unit: number): number {
+  return Math.floor(years / unit);
 }
 
-interface ThingGroup {
-  bricksFromGround: number;
-  // Ascending by meters, so the last entry is the tallest — the group's
-  // "newest" thing, the same convention round 4's retired tags module used for a bundle's
-  // newest event.
-  things: ThingLandmark[];
-}
-
-// Groups passed events by the drawn brick they land in — Math.floor(atYears
-// / unit) at the unit actually being drawn (src/lib/compaction.ts's
-// effectiveRenderUnit) — so a compaction that merges ten courses into one
-// merges their events into one group, and an expansion splits them back.
-// Ascending by brick; every passed event appears exactly once. Ported
-// verbatim from round 4's retired tagsFor.
-function groupEvents(beats: readonly Beat[], years: number, unit: number): EventGroup[] {
-  const groups = new Map<number, Beat[]>();
-  for (const beat of beats) {
-    if (beat.atYears > years) continue;
-    const brick = Math.floor(beat.atYears / unit);
+// The leftovers of every brick once the open item has been taken out of it,
+// as pins ascending by brick. `years` is how each member is placed on the
+// tower — atYears for an event, the thing's own derived years for a thing.
+function pinsFrom<T>(
+  members: readonly T[],
+  yearsOf: (member: T) => number,
+  unit: number,
+  toPin: (bricksFromGround: number, group: T[]) => PinModel,
+): PinModel[] {
+  const groups = new Map<number, T[]>();
+  for (const member of members) {
+    const brick = brickOf(yearsOf(member), unit);
     const group = groups.get(brick);
-    if (group) {
-      group.push(beat);
-    } else {
-      groups.set(brick, [beat]);
-    }
+    if (group) group.push(member);
+    else groups.set(brick, [member]);
   }
 
-  return [...groups.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([bricksFromGround, events]) => ({
-      bricksFromGround,
-      events: [...events].sort((a, b) => a.atYears - b.atYears),
-    }));
+  return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([brick, group]) => toPin(brick, group));
 }
 
-// The same grouping as groupEvents, keyed off a thing's own `years` (derived
-// from its height, src/lib/landmarks.ts's fromMeters) so a thing and an
-// event that land in the same real year still land in the same-numbered
-// brick — the two sides just never share a group, since they're stacked
-// independently (src/lib/layout.ts).
-function groupThings(things: readonly ThingLandmark[], heightM: number, unit: number): ThingGroup[] {
-  const groups = new Map<number, ThingLandmark[]>();
-  for (const thing of things) {
-    if (thing.meters > heightM) continue;
-    const brick = Math.floor(thing.years / unit);
-    const group = groups.get(brick);
-    if (group) {
-      group.push(thing);
-    } else {
-      groups.set(brick, [thing]);
-    }
-  }
-
-  return [...groups.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([bricksFromGround, list]) => ({
-      bricksFromGround,
-      things: [...list].sort((a, b) => a.meters - b.meters),
-    }));
-}
-
-// Right side (time events): the open popup is the group holding `selection`,
-// or the latest-passed group (the highest brick — groups are ascending) for
-// 'latest', or nothing for null. Every other group becomes a pin, its count
-// the number of events it bundles.
+// Right side (time events): everything the stack has passed, with the
+// selected event — or, for 'latest', the one with the highest atYears — open
+// on its own, and every other passed event grouped into its brick's pin.
 function rightSide(beats: readonly Beat[], years: number, unit: number, selection: PopupSelection['right']): PopupSide {
-  const groups = groupEvents(beats, years, unit);
-  if (groups.length === 0) return { open: null, pins: [] };
+  const passed = beats.filter((beat) => beat.atYears <= years).sort((a, b) => a.atYears - b.atYears);
+  if (passed.length === 0) return { open: null, pins: [] };
 
-  const openIndex =
+  // A selected id the stack no longer holds leaves this side with nothing
+  // open; src/main.ts notices and falls back to 'latest'.
+  const openEvent =
     selection === null
-      ? -1
+      ? null
       : selection === 'latest'
-        ? groups.length - 1
-        : groups.findIndex((g) => g.events.some((e) => e.id === selection));
+        ? passed[passed.length - 1]
+        : (passed.find((b) => b.id === selection) ?? null);
 
-  const open: PopupModel | null =
-    openIndex >= 0
-      ? { side: 'right', bricksFromGround: groups[openIndex].bricksFromGround, events: groups[openIndex].events }
-      : null;
+  const open: PopupModel | null = openEvent
+    ? { side: 'right', bricksFromGround: brickOf(openEvent.atYears, unit), event: openEvent }
+    : null;
 
-  const pins: PinModel[] = groups
-    .filter((_, i) => i !== openIndex)
-    .map((g) => ({ side: 'right', bricksFromGround: g.bricksFromGround, events: g.events, count: g.events.length }));
+  const rest = openEvent ? passed.filter((b) => b.id !== openEvent.id) : passed;
+  const pins = pinsFrom(rest, (b) => b.atYears, unit, (bricksFromGround, events) => ({
+    side: 'right',
+    bricksFromGround,
+    events,
+    things: [],
+    count: events.length,
+  }));
 
   return { open, pins };
 }
 
-// Left side (physical things): the same lifecycle as the right side, keyed
-// off `thing.meters <= heightM` (the whole-brick height actually drawn,
+// Left side (physical things): the same lifecycle, keyed off
+// `thing.meters <= heightM` (the whole-brick height actually drawn,
 // src/lib/sim.ts's heightM) rather than years, since a thing's height is the
-// honest comparison (docs/content/candidate-heights.md). No bundling by
-// default — a group ordinarily holds one thing — but if two things ever
-// share a drawn brick under heavy compaction, they bundle exactly like the
-// right side, and the group's popup/pin carries its tallest member: "when
-// several things pass in one step, latest is the tallest" is then just the
-// same "pick the highest-brick group" rule as the right side, since ascending
-// brick order tracks ascending height.
+// honest comparison (docs/content/candidate-heights.md). 'latest' is the
+// tallest passed thing, which is what makes "when several things pass in one
+// step, only the tallest opens" fall out for free.
 function leftSide(
   things: readonly ThingLandmark[],
   heightM: number,
   unit: number,
   selection: PopupSelection['left'],
 ): PopupSide {
-  const groups = groupThings(things, heightM, unit);
-  if (groups.length === 0) return { open: null, pins: [] };
+  const passed = things.filter((thing) => thing.meters <= heightM).sort((a, b) => a.meters - b.meters);
+  if (passed.length === 0) return { open: null, pins: [] };
 
-  const openIndex =
+  const openThing =
     selection === null
-      ? -1
+      ? null
       : selection === 'latest'
-        ? groups.length - 1
-        : groups.findIndex((g) => g.things.some((t) => t.id === selection));
+        ? passed[passed.length - 1]
+        : (passed.find((t) => t.id === selection) ?? null);
 
-  const tallest = (g: ThingGroup) => g.things[g.things.length - 1];
+  const open: PopupModel | null = openThing
+    ? { side: 'left', bricksFromGround: brickOf(openThing.years, unit), thing: openThing }
+    : null;
 
-  const open: PopupModel | null =
-    openIndex >= 0
-      ? { side: 'left', bricksFromGround: groups[openIndex].bricksFromGround, events: [], thing: tallest(groups[openIndex]) }
-      : null;
-
-  const pins: PinModel[] = groups
-    .filter((_, i) => i !== openIndex)
-    .map((g) => ({
-      side: 'left',
-      bricksFromGround: g.bricksFromGround,
-      events: [],
-      thing: tallest(g),
-      count: g.things.length,
-    }));
+  const rest = openThing ? passed.filter((t) => t.id !== openThing.id) : passed;
+  const pins = pinsFrom(rest, (t) => t.years, unit, (bricksFromGround, group) => ({
+    side: 'left',
+    bricksFromGround,
+    events: [],
+    things: group,
+    count: group.length,
+  }));
 
   return { open, pins };
 }
 
-// The popups and pins for a build that has reached `years` (right side) and
-// `heightM` (left side), given the compaction state and which popup, if any,
-// is open on each side. The whole-brick unit both sides bundle at is derived
-// once from `years` with src/lib/sim.ts's bricksFor, the same function the
-// drawn tower and the HUD's own count key off, so this can never disagree
-// with what's on screen.
+// The popup and pins for a build that has reached `years` (right side) and
+// `heightM` (left side), given the compaction state and which item is open on
+// each side. The whole-brick unit both sides bundle at is derived once from
+// `years` with src/lib/sim.ts's bricksFor, the same function the drawn tower
+// and the HUD's own count key off, so this can never disagree with what's on
+// screen.
 export function popupsFor(args: {
   beats: readonly Beat[];
   things: readonly ThingLandmark[];

@@ -5,6 +5,7 @@ import {
   GROUND_HIDE_PX,
   LABEL_MARGIN_PX,
   LABEL_MIN_GAP_PX,
+  LABEL_RISE_PX,
   labelRoom,
   placeLandmarks,
   STAGE_TOP_GAP_PX,
@@ -68,11 +69,31 @@ describe('placeLandmarks', () => {
   });
 
   it('excludes landmarks above the top margin', () => {
-    // meters=11 -> lineY=100, which is above top-30=120: excluded.
+    // meters=11 -> lineY=100, so the whole label unit would sit well above
+    // top=150: excluded.
     const landmarks = [mark('too-high', 11), mark('visible', 5)];
     const placed = placeLandmarks(landmarks, 0, pxPerMeter, stage);
 
     expect(placed.left.map((p) => p.landmark.id)).toEqual(['visible']);
+  });
+
+  it('never places a label unit above the stage top, however hard stacking pushes', () => {
+    // A stage whose usable top is only 150px above the ground: a cluster this
+    // tight would otherwise stack its labels straight up past it and under the
+    // HUD's corner block.
+    const lowStage: StageBox = { top: 500, ground: 650 };
+    const landmarks = Array.from({ length: 12 }, (_, i) => mark(`m-${i}`, 1 + i * 0.05));
+
+    const placed = placeLandmarks(landmarks, 0, pxPerMeter, lowStage);
+
+    expect(placed.left.length).toBeGreaterThan(0);
+    for (const p of placed.left) {
+      expect(p.labelY - LABEL_RISE_PX).toBeGreaterThanOrEqual(lowStage.top);
+      expect(p.lineY).toBeGreaterThan(lowStage.top);
+    }
+    // And it really is the top doing the work: the same cluster on the normal
+    // stage keeps every one of them.
+    expect(placed.left.length).toBeLessThan(placeLandmarks(landmarks, 0, pxPerMeter, stage).left.length);
   });
 
   it("flips passed as heightM crosses a landmark's meters", () => {
@@ -101,11 +122,14 @@ describe('placeLandmarks', () => {
   });
 
   it('keeps a passed thing (left side) in the stack, unlike a passed time event', () => {
-    const passedThings = Array.from({ length: 20 }, (_, i) => mark(`thing-${i}`, 1 + i * 0.05, 'thing'));
+    // Eight is as many as this stage's usable top has room for once they
+    // stack — enough to show they are kept, few enough that none is dropped
+    // for reaching above stage.top.
+    const passedThings = Array.from({ length: 8 }, (_, i) => mark(`thing-${i}`, 1 + i * 0.05, 'thing'));
 
     const placed = placeLandmarks(passedThings, 5, pxPerMeter, stage);
 
-    expect(placed.left).toHaveLength(20);
+    expect(placed.left).toHaveLength(8);
     expect(placed.left.every((p) => p.passed)).toBe(true);
   });
 
