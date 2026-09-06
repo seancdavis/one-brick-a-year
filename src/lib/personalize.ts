@@ -117,6 +117,30 @@ export function serialize(p: Personalization): string {
   return JSON.stringify(p);
 }
 
+// The tokens a beat's line (src/lib/beats.ts) may contain. `{name}` is the
+// child's name, or the default "you" — so "older than {name}" reads "older
+// than you" until a name is typed in. `{Name}` is the same value at the
+// start of a sentence, where the default has to become "You". `{age}` is the
+// profile age as a number. A line's tokens are checked against this list in
+// beats.test.ts, so a typo can never ship as literal braces on screen.
+//
+// No substitution changes the verb after it, so lines keep the token out of
+// the subject slot ("older than {name}", never "{Name} is eight") — that
+// would need "You are" for the default name and "Ada is" for a real one.
+export const LINE_TOKENS = ['{age}', '{name}', '{Name}'] as const;
+
+// Fills a beat's line in for one child. Unknown braces are left alone —
+// there is a test that no line has any.
+export function fillTokens(line: string, profile: Personalization): string {
+  const name = profile.name.trim() === '' ? DEFAULT_PROFILE.name : profile.name;
+  const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+
+  return line
+    .replaceAll('{age}', String(profile.ageYears))
+    .replaceAll('{Name}', capitalized)
+    .replaceAll('{name}', name);
+}
+
 // The URL keys this page recognizes for personalization. Anything else on
 // the query string or in the fragment (tracking params, a stray "#about"
 // anchor) is not a personalization source and gets dropped.

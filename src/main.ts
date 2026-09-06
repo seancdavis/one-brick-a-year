@@ -7,7 +7,7 @@ import { createScrollInput, type ScrollKind } from './input';
 import { createHud } from './hud';
 import { createStartScreen } from './start-screen';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
-import { BEATS, beatsCrossed } from './lib/beats';
+import { buildBeats, beatsCrossed } from './lib/beats';
 import { beforePhraseFor, tallerThan } from './lib/comparisons';
 import { pxPerMeter } from './lib/compaction';
 import { fmtYears } from './lib/format';
@@ -15,6 +15,7 @@ import { buildLandmarks, type Landmark } from './lib/landmarks';
 import { LABEL_MIN_GAP_NARROW_PX, placeLandmarks } from './lib/layout';
 import { colorById } from './lib/lego-colors';
 import {
+  fillTokens,
   hasPersonalizationKeys,
   mergeParams,
   parsePersonalization,
@@ -101,6 +102,10 @@ function timeEventsFrom(list: Landmark[]): Landmark[] {
 }
 
 let profile = parsePersonalization(params, storedRaw);
+// The time events for this profile: only "your whole life" moves with the
+// age, but everything downstream (landmarks, cards, the footer) reads the
+// same list so there is one source of truth per profile.
+let beats = buildBeats(profile);
 let landmarks = buildLandmarks(profile);
 let timeEvents = timeEventsFrom(landmarks);
 // The most recently reported "next up" event's identity (id and years, since
@@ -130,6 +135,7 @@ const startScreen = createStartScreen(app, (nextProfile) => {
   // Rebuild landmarks only — the running sim (years, compaction) is left
   // untouched, whether this came from the mandatory first-run screen or a
   // Restart.
+  beats = buildBeats(profile);
   landmarks = buildLandmarks(profile);
   timeEvents = timeEventsFrom(landmarks);
   lastNextKey = null; // force the teaser to recheck against the rebuilt list
@@ -432,8 +438,8 @@ function frame(timeMs: number): void {
   const prevPeak = peakYears;
   peakYears = Math.max(peakYears, sim.years);
   if (sessionActive) sessionPeakYears = Math.max(sessionPeakYears, sim.years);
-  for (const beat of beatsCrossed(prevPeak, peakYears)) {
-    beatCards.show(beat);
+  for (const beat of beatsCrossed(prevPeak, peakYears, beats)) {
+    beatCards.show({ ...beat, line: fillTokens(beat.line, profile) });
     audio.chime();
   }
 
@@ -473,7 +479,7 @@ function frame(timeMs: number): void {
     hud.update(sim);
     hud.setComparisons({
       tall: tallerThan(heightM(sim), landmarks),
-      ago: beforePhraseFor(sim.years, BEATS, profile.ageYears),
+      ago: beforePhraseFor(sim.years, beats, profile.ageYears),
     });
     needsRender = false;
   }

@@ -8,7 +8,9 @@ const pxPerMeter = 50;
 
 function mark(id: string, meters: number, kind: Landmark['kind'] = 'thing'): Landmark {
   const base = { id, meters, years: meters * 100, label: id, icon: 'bricks' as const, paper: 'navy' as const };
-  return kind === 'thing' ? { ...base, kind, tallerThanPhrase: `taller than ${id}!` } : { ...base, kind };
+  return kind === 'thing'
+    ? { ...base, kind, orientation: 'tall', tallerThanPhrase: `taller than ${id}!` }
+    : { ...base, kind };
 }
 
 describe('placeLandmarks', () => {
