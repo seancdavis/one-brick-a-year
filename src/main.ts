@@ -1,13 +1,14 @@
 import './style.css';
 import { createAnalytics, deriveBrowserFamily, deriveDeviceKind } from './analytics';
 import { createAudio } from './audio';
-import { createBeatCards } from './beats';
 import { createEndScreen } from './end-screen';
 import { createScrollInput, type ScrollKind } from './input';
 import { createHud } from './hud';
+import { createScrapbook } from './scrapbook';
 import { createStartScreen } from './start-screen';
+import { createTags } from './tags';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
-import { BEATS, beatsCrossed } from './lib/beats';
+import { beatsCrossed, buildBeats } from './lib/beats';
 import { beforePhraseFor, tallerThan } from './lib/comparisons';
 import { pxPerMeter } from './lib/compaction';
 import { fmtYears } from './lib/format';
@@ -23,7 +24,8 @@ import {
   type Personalization,
 } from './lib/personalize';
 import { applyScroll, heightM, initialSim, step } from './lib/sim';
-import { drawStage, stageBox, type StageView } from './render/stage';
+import { tagsFor } from './lib/tags';
+import { drawStage, nudge, nudgeActive, stageBox, stageGeometry, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -101,6 +103,10 @@ function timeEventsFrom(list: Landmark[]): Landmark[] {
 }
 
 let profile = parsePersonalization(params, storedRaw);
+// The time events for this profile: only "your whole life" moves with the
+// age, but everything downstream (landmarks, cards, the footer) reads the
+// same list so there is one source of truth per profile.
+let beats = buildBeats(profile);
 let landmarks = buildLandmarks(profile);
 let timeEvents = timeEventsFrom(landmarks);
 // The most recently reported "next up" event's identity (id and years, since
@@ -127,9 +133,10 @@ if (hasUrlParams) {
 const startScreen = createStartScreen(app, (nextProfile) => {
   profile = nextProfile;
   saveProfile(profile);
-  // Rebuild landmarks only — the running sim (years, compaction) is left
-  // untouched, whether this came from the mandatory first-run screen or a
-  // Restart.
+  // Rebuilds profile-derived content (beats, landmarks, timeEvents) — the
+  // running sim (years, compaction) is left untouched, whether this came
+  // from the mandatory first-run screen or a Restart.
+  beats = buildBeats(profile);
   landmarks = buildLandmarks(profile);
   timeEvents = timeEventsFrom(landmarks);
   lastNextKey = null; // force the teaser to recheck against the rebuilt list
@@ -164,7 +171,26 @@ const hud = createHud(app, {
 });
 hud.setSound(soundEnabled);
 
-const beatCards = createBeatCards(app);
+// The facts themselves: a tag flips out of the tower for every time event
+// the stack passes, pops once, and nudges the tower as it goes.
+const tags = createTags(app, {
+  onPop: () => audio.pop(),
+  onNudge: () => {
+    nudge();
+    needsRender = true;
+  },
+  profile: () => profile,
+});
+
+// The scrapbook: every fact the build has reached, kept even after an undo
+// drops its tag off the tower — fed from peakYears below, never from
+// sim.years itself. Its tab slots into the HUD's tabs row (src/hud.ts's
+// tabsSlot) so it sits alongside sound/restart without src/hud.ts knowing
+// anything about facts; its panel mounts at the app root, same as the tags
+// layer's opened-card backdrop, so neither is trapped under the HUD's own
+// stacking context.
+const scrapbook = createScrapbook(app, hud.tabsSlot, { profile: () => profile });
+
 const endScreen = createEndScreen(app, () => resetForReplay());
 
 // Whether this device supports touch, for analytics' device-kind derivation
@@ -173,19 +199,24 @@ const endScreen = createEndScreen(app, () => resetForReplay());
 const hasTouch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
 
 let sim = initialSim();
-// The build attempt's high-water mark, used for beat dedup: only ever
-// rises, even while an undo pulls `sim.years` back down, so beats fire once
-// each on the way past and are never replayed by a later undo-then-rebuild.
-// Reset only on replay (resetForReplay()), so it spans every analytics
-// session within one build attempt.
-let peakYears = 0;
 // The current analytics session's own high-water mark, used for
-// `yearsReached` in that session's end() payload. Set to the sim's current
-// years whenever a session starts (see createScrollInput below) and raised
-// alongside peakYears while the session is active, so a session that starts
-// after returning from a hidden page doesn't inherit an earlier session's
-// peak.
+// `yearsReached` in that session's end() payload: only ever rises, even
+// while an undo pulls `sim.years` back down. Set to the sim's current years
+// whenever a session starts (see createScrollInput below), so a session that
+// starts after returning from a hidden page doesn't inherit an earlier
+// session's peak.
 let sessionPeakYears = 0;
+// The build's own high-water mark, independent of the analytics session:
+// unlike sessionPeakYears it is never reset by a session ending (Restart
+// aside), and it is the sole source of "what has this build reached" —
+// nothing else keeps its own copy. Whenever it advances, beatsCrossed
+// (src/lib/beats.ts) between the previous peak and the new one is every
+// beat newly reached this step, handed to the scrapbook to collect and to
+// the tags layer as "new this frame" for its flip animation, pop, and nudge.
+// An undo that pulls sim.years back down takes a fact's tag off the tower
+// (src/tags.ts reads sim.years directly) without forgetting that the build
+// once reached it, since peakYears itself never drops.
+let peakYears = 0;
 // Whether the start screen has closed and any scroll has reached the stack
 // — build or undo — since the last replay: the prompt/footer swap responds
 // to either direction, since an undo scroll before anything's built still
@@ -226,15 +257,18 @@ function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void 
 }
 
 // Shared by "Build it again" (end screen) and Restart (HUD): back to a
-// fresh, unstarted sim, with the prompt and card queue reset to match. The
-// analytics session itself is not ended here — "Build it again" only runs
-// after finish, which already ended it (see the frame loop below), and
-// Restart ends it itself before calling this. Clearing firstInputKind means
-// the next session's first scroll gets its own input_kind, not a leftover
-// from this one.
+// fresh, unstarted sim, with the prompt, the tags, and the scrapbook reset to
+// match — resetting peakYears to 0 is what makes the next build's facts flip
+// out (and pop, and collect) again: the very next peak advance finds every
+// beat newly crossed. The analytics session itself is not ended here —
+// "Build it again" only runs after finish, which already ended it (see the
+// frame loop below), and Restart ends it itself before calling this.
+// Clearing firstInputKind means the next session's first scroll gets its own
+// input_kind, not a leftover from this one.
 function resetForReplay(): void {
   endScreen.hide();
-  beatCards.clear();
+  tags.clear();
+  scrapbook.clear();
   sim = initialSim();
   peakYears = 0;
   tickAccumulator = 0;
@@ -426,19 +460,24 @@ function frame(timeMs: number): void {
     audio.hum(0, humFor(rate).hz);
   }
 
-  // The peak only ever rises, even while an undo pulls sim.years back down,
-  // so beats fire once each on the way past and are never replayed by a
-  // later undo-then-rebuild.
-  const prevPeak = peakYears;
-  peakYears = Math.max(peakYears, sim.years);
+  // The session's peak only ever rises, even while an undo pulls sim.years
+  // back down. Nothing else keys off it: the tags read sim.years itself, so
+  // scrolling back really does take a fact off the tower and put its muted
+  // label back.
   if (sessionActive) sessionPeakYears = Math.max(sessionPeakYears, sim.years);
-  for (const beat of beatsCrossed(prevPeak, peakYears)) {
-    beatCards.show(beat);
-    audio.chime();
-  }
+
+  // The build's own peak, independent of any analytics session: whenever it
+  // advances, beatsCrossed is every beat newly reached this step — handed to
+  // the scrapbook to collect right away, and to the tags layer below as
+  // "new this frame" once the render gate decides whether this frame draws.
+  // Scrolling back never un-collects a beat, even though its tag leaves the
+  // tower, since peakYears itself never drops.
+  const prevPeakYears = peakYears;
+  peakYears = Math.max(peakYears, sim.years);
+  const newlyCrossed = peakYears > prevPeakYears ? beatsCrossed(prevPeakYears, peakYears, beats) : [];
+  if (newlyCrossed.length > 0) scrapbook.add(newlyCrossed);
 
   if (sim.done && !before.done) {
-    beatCards.clear();
     endScreen.show(profile);
     audio.finish();
     endSession(true);
@@ -461,7 +500,21 @@ function frame(timeMs: number): void {
   const simAdvancing = sim.years !== before.years || sim.done !== before.done;
   const compactionActive = sim.compaction.transition !== null || before.compaction.transition !== null;
 
-  if (needsRender || simAdvancing || compactionActive) {
+  if (needsRender || simAdvancing || compactionActive || nudgeActive()) {
+    // The tags are laid out before the canvas draws, so their measured boxes
+    // are available to the stage below: on a narrow viewport a tag clamped
+    // back over the tower can crowd the left side's labels, and those give
+    // way rather than the tag moving. newlyCrossed is always computed on the
+    // very frame these models can first include it (peakYears and sim.years
+    // advance together), so passing its ids straight through is safe even
+    // though tags.update only actually runs on a rendered frame.
+    tags.update(
+      tagsFor(beats, sim.years, sim.compaction),
+      stageGeometry(view, sim),
+      newlyCrossed.map((b) => b.id),
+    );
+    const bands = view.narrow ? tags.occupiedBands() : [];
+
     const placed = placeLandmarks(
       landmarks,
       heightM(sim),
@@ -469,11 +522,14 @@ function frame(timeMs: number): void {
       stageBox(view),
       view.narrow ? LABEL_MIN_GAP_NARROW_PX : undefined,
     );
+    if (bands.length > 0) {
+      placed.left = placed.left.filter((p) => !bands.some((b) => p.labelY >= b.top && p.labelY <= b.bottom));
+    }
     drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId));
     hud.update(sim);
     hud.setComparisons({
       tall: tallerThan(heightM(sim), landmarks),
-      ago: beforePhraseFor(sim.years, BEATS, profile.ageYears),
+      ago: beforePhraseFor(sim.years, beats, profile.ageYears),
     });
     needsRender = false;
   }

@@ -117,6 +117,75 @@ export function serialize(p: Personalization): string {
   return JSON.stringify(p);
 }
 
+// The tokens a beat's line (src/lib/beats.ts) may contain. `{name}` is the
+// child's name, or the default "you" — so "older than {name}" reads "older
+// than you" until a name is typed in. `{Name}` is the same value at the
+// start of a sentence, where the default has to become "You". `{age}` is the
+// profile age as a plain number. `{brickAge}` is the complete "N brick(s)"
+// phrase ("one brick", "nine bricks", "100 bricks"), for a line that wants
+// the picture-book brick count rather than a bare number. A line's tokens
+// are checked against this list in beats.test.ts, so a typo can never ship
+// as literal braces on screen.
+//
+// No substitution changes the verb after it, so lines keep the token out of
+// the subject slot ("older than {name}", never "{Name} is eight") — that
+// would need "You are" for the default name and "Ada is" for a real one.
+export const LINE_TOKENS = ['{age}', '{brickAge}', '{name}', '{Name}'] as const;
+
+const ONES = [
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+  'eleven',
+  'twelve',
+  'thirteen',
+  'fourteen',
+  'fifteen',
+  'sixteen',
+  'seventeen',
+  'eighteen',
+  'nineteen',
+];
+
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+// Spells out an age under 100 ("nine", "twenty-one") so a brick phrase reads
+// as a picture-book sentence rather than a number; 100 and up stay digits —
+// see fillTokens' {age} handling below.
+function spellAge(age: number): string {
+  if (age < 20) return ONES[age];
+  const tens = Math.floor(age / 10);
+  const ones = age % 10;
+  return ones === 0 ? TENS[tens] : `${TENS[tens]}-${ONES[ones]}`;
+}
+
+// Fills a beat's line in for one child. Unknown braces are left alone —
+// there is a test that no line has any.
+export function fillTokens(line: string, profile: Personalization): string {
+  const name = profile.name.trim() === '' ? DEFAULT_PROFILE.name : profile.name;
+  const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+  const age = profile.ageYears;
+
+  // The complete "N brick(s)" phrase reads like a picture book — "nine
+  // bricks", "one brick" (singular) — below 100; a life that long spelled
+  // out would be unreadable, so 100 and up stay digits.
+  const brickAge = age < 100 ? `${spellAge(age)} brick${age === 1 ? '' : 's'}` : `${age} bricks`;
+
+  return line
+    .replaceAll('{brickAge}', brickAge)
+    .replaceAll('{age}', String(age))
+    .replaceAll('{Name}', capitalized)
+    .replaceAll('{name}', name);
+}
+
 // The URL keys this page recognizes for personalization. Anything else on
 // the query string or in the fragment (tracking params, a stray "#about"
 // anchor) is not a personalization source and gets dropped.

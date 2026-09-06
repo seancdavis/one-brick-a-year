@@ -83,6 +83,112 @@ export const ICON_PATHS = {
     'M16,13A4,4 0 1 1 8,13A4,4 0 1 1 16,13Z' +
     'M20.5,13A8.5,5.5 0 1 1 3.5,13A8.5,5.5 0 1 1 20.5,13Z' +
     'M19,13A7,4.8 0 1 1 5,13A7,4.8 0 1 1 19,13Z',
+
+  // A rounded slab with the screen punched out.
+  phone: 'M7,1H17A2,2 0 0 1 19,3V21A2,2 0 0 1 17,23H7A2,2 0 0 1 5,21V3A2,2 0 0 1 7,1ZM7,5H17V19H7Z',
+
+  // A screen box with the picture punched out, on a stem and a foot.
+  tv: 'M2,3H22V17H2ZM5,6H19V14H5ZM11,17H13V20H11ZM7,20H17V22H7Z',
+
+  // A glass bulb over a screw base of two bands.
+  bulb: 'M18.5,9A6.5,6.5 0 1 1 5.5,9A6.5,6.5 0 1 1 18.5,9ZM9,15.5H15V18.5H9ZM9.5,19.5H14.5V21.5H9.5Z',
+
+  // A camera body with the lens punched out and the viewfinder bump on top.
+  camera: 'M2,7H22V21H2ZM16,14A4,4 0 1 1 8,14A4,4 0 1 1 16,14ZM8,4H14V7H8Z',
+
+  // Two hollow wheels under a triangular frame.
+  bicycle:
+    'M11,18A5,5 0 1 1 1,18A5,5 0 1 1 11,18ZM9,18A3,3 0 1 1 3,18A3,3 0 1 1 9,18Z' +
+    'M23,18A5,5 0 1 1 13,18A5,5 0 1 1 23,18ZM21,18A3,3 0 1 1 15,18A3,3 0 1 1 21,18Z' +
+    'M7,13L12,4L17,13Z',
+
+  // An open book: two pages tilting away from a center gutter.
+  book: 'M2,5L11,7V21L2,19ZM13,7L22,5V19L13,21Z',
+
+  // A tire band with a hub floating in its hole.
+  wheel:
+    'M22,12A10,10 0 1 1 2,12A10,10 0 1 1 22,12ZM19,12A7,7 0 1 1 5,12A7,7 0 1 1 19,12Z' +
+    'M15,12A3,3 0 1 1 9,12A3,3 0 1 1 15,12Z',
+
+  // A battlemented wall with mortar lines cut into it.
+  wall: 'M2,8H22V20H2ZM2,5H6V8H2ZM10,5H14V8H10ZM18,5H22V8H18ZM7,9H8V13H7ZM16,9H17V13H16ZM11,14H12V19H11Z',
+
+  // A loaf: a domed top on a flat base.
+  bread: 'M3,12A9,7 0 0 1 21,12V20H3Z',
+
+  // A cat head: two pointed ears, a round chin, two eyes punched out.
+  cat: 'M4,3L8,8H16L20,3V14A8,8 0 0 1 4,14ZM10,12A1,1 0 1 1 8,12A1,1 0 1 1 10,12ZM16,12A1,1 0 1 1 14,12A1,1 0 1 1 16,12Z',
+
+  // A dog in side view: tail, body, two legs, head, muzzle, and an ear.
+  dog: 'M1,10H14V17H1ZM1,5H3V10H1ZM3,17H5V21H3ZM10,17H12V21H10ZM14,7H20V13H14ZM20,9H23V12H20ZM14,4H17V7H14Z',
+
+  // A mammoth: domed body on two legs, with a trunk and a tusk.
+  mammoth: 'M4,16V11A6,5 0 0 1 16,11V16ZM5,16H8V21H5ZM12,16H15V21H12ZM16,8H21V15H16ZM18,15H20V21H18ZM21,12L23,17L21,16Z',
+
+  // A conifer: a triangular canopy over a trunk.
+  tree: 'M12,2L20,14H4ZM11,14H13V22H11Z',
+
+  // A pyramid on a strip of desert, with the near edge cut as a seam.
+  pyramid: 'M12,3L22,20H2ZM11.6,6H12.4V19H11.6ZM1,20H23V22H1Z',
+
+  // A gull in flight: two wings meeting at a shallow body.
+  bird: 'M2,13Q7,5 12,12Q17,5 22,13Q17,9 12,15Q7,9 2,13Z',
+
+  // A fish in side view with a straight tail fin and an eye punched out.
+  fish:
+    'M22,12C22,16 17,19 12,19C8,19 5,17 4,15L1,19V5L4,9C5,7 8,5 12,5C17,5 22,8 22,12Z' +
+    'M18,10A1.2,1.2 0 1 1 15.6,10A1.2,1.2 0 1 1 18,10Z',
+
+  // A beetle: round shell with a wing seam, a head, and three pairs of legs.
+  bug:
+    'M19,15A7,7 0 1 1 5,15A7,7 0 1 1 19,15ZM11.6,9H12.4V21H11.6Z' +
+    'M15,5A3,3 0 1 1 9,5A3,3 0 1 1 15,5Z' +
+    'M1,10H5V11.5H1ZM1,14H5V15.5H1ZM1,18H5V19.5H1Z' +
+    'M19,10H23V11.5H19ZM19,14H23V15.5H19ZM19,18H23V19.5H19Z',
+
+  // Three bars crossed at sixty degrees. Only the center is covered by all
+  // three, so it stays filled where any two alone would cancel to a hole.
+  snowflake: 'M11,2H13V22H11ZM6.13,3.84L16.13,21.16L17.87,20.16L7.87,2.84ZM16.13,2.84L6.13,20.16L7.87,21.16L17.87,3.84Z',
+
+  // A teardrop flame with a smaller flame cut out of its middle.
+  flame:
+    'M12,2C15,6 18,9 18,14A6,6 0 1 1 6,14C6,9 9,6 12,2Z' +
+    'M12,10C13.5,12 15,13.5 15,15.5A3,3 0 1 1 9,15.5C9,13.5 10.5,12 12,10Z',
+
+  // A whale: rounded body, notched fluke, and an eye punched out.
+  whale:
+    'M2,14C2,9 7,6 13,6C18,6 21,9 21,12L23,9V19L21,16C21,18 18,19 13,19C7,19 2,18 2,14Z' +
+    'M7,11A1,1 0 1 1 5,11A1,1 0 1 1 7,11Z',
+
+  // Four petals tangent to a center disc, on a stem with one leaf.
+  flower:
+    'M14.5,8A2.5,2.5 0 1 1 9.5,8A2.5,2.5 0 1 1 14.5,8Z' +
+    'M14.5,3A2.5,2.5 0 1 1 9.5,3A2.5,2.5 0 1 1 14.5,3Z' +
+    'M19.5,8A2.5,2.5 0 1 1 14.5,8A2.5,2.5 0 1 1 19.5,8Z' +
+    'M14.5,13A2.5,2.5 0 1 1 9.5,13A2.5,2.5 0 1 1 14.5,13Z' +
+    'M9.5,8A2.5,2.5 0 1 1 4.5,8A2.5,2.5 0 1 1 9.5,8Z' +
+    'M11.3,15.5H12.7V22H11.3Z' +
+    'M12.7,17.5C15,16 18,16.5 19.5,17C18.5,19.5 15,20 12.7,19.5Z',
+
+  // Two ribbons of water, the lower one offset from the upper.
+  wave:
+    'M1,8C4,4 8,12 12,8C16,4 20,12 23,8V11C20,15 16,7 12,11C8,15 4,7 1,11Z' +
+    'M1,15C4,11 8,19 12,15C16,11 20,19 23,15V18C20,22 16,14 12,18C8,22 4,14 1,18Z',
+
+  // A pencil: eraser, shaft with a band cut out of it, and a sharpened point.
+  pencil: 'M8,4H16V19H8ZM8,6H16V7H8ZM8,19L12,23L16,19ZM8,1H16V4H8Z',
+
+  // A ball with two seams cut across it.
+  ball: 'M22,12A10,10 0 1 1 2,12A10,10 0 1 1 22,12ZM11.5,2.2H12.5V21.8H11.5ZM2.2,11.5H21.8V12.5H2.2Z',
+
+  // A crescent, the two tips tapering.
+  banana: 'M3,5C3,14 9,21 20,21C21,21 22,20 22,19C12,19 6,13 6,5C5,4.5 4,4.5 3,5Z',
+
+  // A bus: windows and a door punched out of the body, on two wheels.
+  bus:
+    'M2,4H22V17H2ZM4,6H9V10H4ZM11,6H16V10H11ZM18,6H21V10H18ZM18,12H21V16H18Z' +
+    'M9,19.5A2.5,2.5 0 1 1 4,19.5A2.5,2.5 0 1 1 9,19.5Z' +
+    'M20,19.5A2.5,2.5 0 1 1 15,19.5A2.5,2.5 0 1 1 20,19.5Z',
 } as const;
 
 export type IconId = keyof typeof ICON_PATHS;

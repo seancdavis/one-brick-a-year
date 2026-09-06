@@ -5,19 +5,26 @@
 // into the deltaPx this takes, and src/main.ts wires the two together. No
 // velocity, no decay, no ramp-up: the years-per-pixel rate itself grows with
 // progress, so a sustained scroll still finishes the full 4.6 billion years
-// in about a minute and a half.
+// in about three minutes.
 
 import { TOTAL_YEARS } from './constants';
 
-// Years added per pixel of build scroll at years = 0. A short 100 px flick
-// at the start adds about 10 bricks (see scroll-coupling.test.ts).
-export const BASE_YEARS_PER_PX = 0.1;
+// BASE_YEARS_PER_PX and PROGRESS_K are solved together (see
+// scroll-coupling.test.ts) to hit two targets on the closed form in
+// advance(), starting from years = 0:
+//   1. a sustained scroll reaches TOTAL_YEARS between 150,000 and 210,000 px
+//      of cumulative scroll (aim ~180,000 — about three minutes of hard
+//      scrolling).
+//   2. the first 100 years take at least 3,000 px (aim ~3,500 — roughly
+//      35 px per brick at the start, so the first bricks arrive one at a
+//      time under a gentle scroll).
+
+// Years added per pixel of build scroll at years = 0.
+export const BASE_YEARS_PER_PX = 0.024;
 
 // How fast the years-per-pixel rate grows with years already stacked (see
-// yearsPerPx). Tuned so a sustained scroll covers all 4.6e9 years in
-// roughly 50,000 to 80,000 px (see scroll-coupling.test.ts) — the distance a
-// vigorous, sustained real scroll covers in about a minute and a half.
-export const PROGRESS_K = 0.0027;
+// yearsPerPx).
+export const PROGRESS_K = 0.0038;
 
 // The instantaneous rate: years added per pixel of build scroll, at a given
 // years already stacked. Grows linearly with years — smooth and strictly

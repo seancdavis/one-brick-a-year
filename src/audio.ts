@@ -25,12 +25,18 @@ const FINISH_NOTES_HZ = [329.63, 493.88, 659.25]; // E4, B4, E5
 const FINISH_HOLD_S = 1.5;
 const FINISH_PEAK_GAIN = 0.22;
 
+// A tag flipping out of its brick (src/tags.ts): one short, soft blip, not a
+// chime — it fires often enough that anything longer would crowd the ticks.
+const POP_HZ = 880; // A5
+const POP_DECAY_S = 0.06;
+const POP_PEAK_GAIN = 0.3;
+
 export interface Audio {
   enable(): Promise<boolean>;
   disable(): void;
   tick(): void;
   hum(gain: number, hz: number): void;
-  chime(): void;
+  pop(): void;
   finish(): void;
 }
 
@@ -56,7 +62,7 @@ function buildNoiseBuffer(ctx: AudioContext): AudioBuffer {
 }
 
 // A sine note that ramps in fast and decays exponentially — the shared
-// shape behind chime() and finish().
+// shape behind playChime and finish().
 function playNote(ctx: AudioContext, destination: AudioNode, hz: number, startAt: number, duration: number, peakGain: number): void {
   const osc = ctx.createOscillator();
   osc.type = 'sine';
@@ -73,9 +79,9 @@ function playNote(ctx: AudioContext, destination: AudioNode, hz: number, startAt
   osc.stop(startAt + duration + 0.05);
 }
 
-// The two-note "sound is on" confirmation. Shared by chime() (a landmark was
-// just crossed) and enable() (the user just turned sound on) so there is
-// exactly one definition of what a chime sounds like.
+// The two-note "sound is on" confirmation, played by enable() the moment
+// sound actually becomes audible. Facts arriving on the stack get pop()
+// instead — a chime per event would be far too much at the dense start.
 function playChime(ctx: AudioContext, destination: AudioNode): void {
   const now = ctx.currentTime;
   playNote(ctx, destination, CHIME_NOTES_HZ[0], now, CHIME_NOTE_S, CHIME_PEAK_GAIN);
@@ -254,9 +260,24 @@ export function createAudio(): Audio {
       gainNode.gain.linearRampToValueAtTime(gain, now + HUM_RAMP_S);
     },
 
-    chime() {
+    pop() {
       if (!enabled || !ctx || !master) return;
-      playChime(ctx, master);
+      const now = ctx.currentTime;
+
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = POP_HZ;
+
+      // Straight into the decay with no attack ramp: the instant onset is
+      // what makes it read as a pop rather than a note.
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(POP_PEAK_GAIN, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + POP_DECAY_S);
+
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start(now);
+      osc.stop(now + POP_DECAY_S + 0.02);
     },
 
     finish() {

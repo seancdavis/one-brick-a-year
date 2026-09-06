@@ -8,7 +8,9 @@ const pxPerMeter = 50;
 
 function mark(id: string, meters: number, kind: Landmark['kind'] = 'thing'): Landmark {
   const base = { id, meters, years: meters * 100, label: id, icon: 'bricks' as const, paper: 'navy' as const };
-  return kind === 'thing' ? { ...base, kind, tallerThanPhrase: `taller than ${id}!` } : { ...base, kind };
+  return kind === 'thing'
+    ? { ...base, kind, orientation: 'tall', tallerThanPhrase: `taller than ${id}!` }
+    : { ...base, kind };
 }
 
 describe('placeLandmarks', () => {
@@ -71,6 +73,30 @@ describe('placeLandmarks', () => {
 
     const after = placeLandmarks(landmarks, 5, pxPerMeter, stage);
     expect(after.left[0].passed).toBe(true);
+  });
+
+  it('excludes passed time landmarks from stacking so an upcoming label keeps its natural line', () => {
+    // 20 passed time events, all below heightM, followed by one upcoming
+    // event well above the stack. If the passed ones still counted toward
+    // the stacking chain, the upcoming label would get pushed up away from
+    // its own line by their (invisible) presence.
+    const passedEvents = Array.from({ length: 20 }, (_, i) => mark(`passed-${i}`, 1 + i * 0.05, 'time'));
+    const upcoming = mark('upcoming', 8, 'time');
+
+    const withPassed = placeLandmarks([...passedEvents, upcoming], 5, pxPerMeter, stage);
+    const aloneUpcoming = placeLandmarks([upcoming], 5, pxPerMeter, stage);
+
+    expect(withPassed.right.map((p) => p.landmark.id)).toEqual(['upcoming']);
+    expect(withPassed.right[0].labelY).toBe(aloneUpcoming.right[0].labelY);
+  });
+
+  it('keeps a passed thing (left side) in the stack, unlike a passed time event', () => {
+    const passedThings = Array.from({ length: 20 }, (_, i) => mark(`thing-${i}`, 1 + i * 0.05, 'thing'));
+
+    const placed = placeLandmarks(passedThings, 5, pxPerMeter, stage);
+
+    expect(placed.left).toHaveLength(20);
+    expect(placed.left.every((p) => p.passed)).toBe(true);
   });
 
   it('decreases lineY as meters increases', () => {

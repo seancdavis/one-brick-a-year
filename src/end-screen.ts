@@ -2,6 +2,7 @@
 // look and copy is docs/prototype/brick-stack.html's `.done` overlay. DOM
 // glue only — src/main.ts decides when to show/hide it.
 
+import { BEYOND_THE_STACK } from './lib/beats';
 import { DEFAULT_PROFILE, type Personalization } from './lib/personalize';
 
 const COPY_LABEL_RESET_MS = 2000;
@@ -44,6 +45,18 @@ export function createEndScreen(
   const youLine = document.createElement('p');
   youLine.className = 'end-line';
 
+  // "Beyond the stack" (docs/content/candidate-events.md): facts past
+  // TOTAL_YEARS that never get a brick or a tag, shown once here under the
+  // main copy. Built once — the list is static, not profile-dependent.
+  const beyond = document.createElement('div');
+  beyond.className = 'end-beyond';
+  for (const line of BEYOND_THE_STACK) {
+    const p = document.createElement('p');
+    p.className = 'end-beyond-line';
+    p.textContent = line;
+    beyond.append(p);
+  }
+
   const actions = document.createElement('div');
   actions.className = 'end-actions';
 
@@ -60,7 +73,7 @@ export function createEndScreen(
   copyButton.addEventListener('click', handleCopy);
 
   actions.append(againButton, copyButton);
-  panel.append(big, aroundLine, youLine, actions);
+  panel.append(big, aroundLine, youLine, beyond, actions);
   overlay.append(panel);
   root.append(overlay);
 

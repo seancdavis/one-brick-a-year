@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_COLOR_ID } from './lego-colors';
 import {
   DEFAULT_PROFILE,
+  fillTokens,
   hasPersonalizationKeys,
+  LINE_TOKENS,
   mergeParams,
   parsePersonalization,
   serialize,
@@ -112,6 +114,68 @@ describe('mergeParams', () => {
     const fragment = new URLSearchParams('foo=bar');
     const merged = mergeParams(query, fragment);
     expect(Array.from(merged.keys())).toEqual(['name']);
+  });
+});
+
+describe('fillTokens', () => {
+  const named: Personalization = { name: 'Ada', ageYears: 9, homeMeters: 8, colorId: DEFAULT_COLOR_ID };
+
+  it('fills {name} with the profile name', () => {
+    expect(fillTokens('Minecraft is older than {name}.', named)).toBe('Minecraft is older than Ada.');
+  });
+
+  it('reads naturally with the default name', () => {
+    expect(fillTokens('Minecraft is older than {name}.', DEFAULT_PROFILE)).toBe('Minecraft is older than you.');
+  });
+
+  it('capitalizes {Name}, so the default reads "You"', () => {
+    expect(fillTokens('{Name} were not born yet.', DEFAULT_PROFILE)).toBe('You were not born yet.');
+    expect(fillTokens('{Name} were not born yet.', named)).toBe('Ada were not born yet.');
+  });
+
+  it('fills {age} with the profile age as a plain number', () => {
+    expect(fillTokens('You are {age} years old.', named)).toBe('You are 9 years old.');
+  });
+
+  it('spells out an age under 100 for {brickAge}', () => {
+    expect(fillTokens('Your whole life is {brickAge} tall.', named)).toBe('Your whole life is nine bricks tall.');
+  });
+
+  it('singularizes "brick" for an age of one', () => {
+    const oneYearOld: Personalization = { ...named, ageYears: 1 };
+    expect(fillTokens('Your whole life is {brickAge} tall.', oneYearOld)).toBe(
+      'Your whole life is one brick tall.',
+    );
+  });
+
+  it('keeps digits for an age of 100 or more, even for {brickAge}', () => {
+    const centenarian: Personalization = { ...named, ageYears: 100 };
+    expect(fillTokens('Your whole life is {brickAge} tall.', centenarian)).toBe(
+      'Your whole life is 100 bricks tall.',
+    );
+  });
+
+  it('fills every occurrence of a token', () => {
+    expect(fillTokens('{name} and {name}, aged {age} and {age}.', named)).toBe('Ada and Ada, aged 9 and 9.');
+  });
+
+  it('leaves a line with no tokens alone', () => {
+    expect(fillTokens('No jaws.', named)).toBe('No jaws.');
+  });
+
+  it('leaves an unknown token alone rather than mangling the line', () => {
+    expect(fillTokens('Hello {nope}.', named)).toBe('Hello {nope}.');
+  });
+
+  it('falls back to "you" for a blank name', () => {
+    const blank: Personalization = { ...named, name: '   ' };
+    expect(fillTokens('older than {name}', blank)).toBe('older than you');
+  });
+
+  it('replaces every token it advertises', () => {
+    for (const token of LINE_TOKENS) {
+      expect(fillTokens(token, named)).not.toContain('{');
+    }
   });
 });
 

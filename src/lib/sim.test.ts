@@ -15,19 +15,19 @@ function settle(s: SimState, frames: number): SimState {
 }
 
 describe('applyScroll + step', () => {
-  it('a sustained build scroll in 200 px chunks, with frames between, reaches done between 50,000 and 80,000 px', () => {
+  it('a sustained build scroll in 200 px chunks, with frames between, reaches done between 150,000 and 210,000 px', () => {
     let s = initialSim();
     let pxApplied = 0;
 
-    while (!s.done && pxApplied < 200000) {
+    while (!s.done && pxApplied < 400000) {
       s = applyScroll(s, BUILD_CHUNK_PX);
       pxApplied += Math.abs(BUILD_CHUNK_PX);
       s = settle(s, 6);
     }
 
     expect(s.done).toBe(true);
-    expect(pxApplied).toBeGreaterThanOrEqual(50000);
-    expect(pxApplied).toBeLessThanOrEqual(80000);
+    expect(pxApplied).toBeGreaterThanOrEqual(150000);
+    expect(pxApplied).toBeLessThanOrEqual(210000);
   });
 
   it('an undo of 300 px after 300 px of building returns toward 0', () => {
