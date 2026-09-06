@@ -204,6 +204,71 @@ export function stageBox(view: StageView): StageBox {
   };
 }
 
+// Where the tower stands: a fixed width, centered. drawStage and
+// stageGeometry both read it from here, so the canvas and the HTML tag layer
+// over it can never disagree about where the stack's edges are.
+function stackBox(view: StageView): { sx: number; sw: number } {
+  const sw = view.narrow ? BRICK_WIDTH_NARROW_PX : BRICK_WIDTH_PX;
+  return { sx: Math.round(view.widthCss / 2 - sw / 2), sw };
+}
+
+// The handful of numbers src/tags.ts needs to hang paper tags off the drawn
+// tower: where its right edge is, where the ground line is, and how tall one
+// drawn course is right now (BRICK_PX at rest, squished mid-compaction — see
+// src/lib/compaction.ts). Exported so those numbers come from one place
+// rather than being re-derived in src/main.ts.
+export interface StageGeometry {
+  stackRightX: number;
+  groundY: number;
+  courseHeightPx: number;
+  narrow: boolean;
+}
+
+export function stageGeometry(view: StageView, sim: SimState): StageGeometry {
+  const { sx, sw } = stackBox(view);
+  return {
+    stackRightX: sx + sw,
+    groundY: stageBox(view).ground,
+    courseHeightPx: courseHeightPx(bricksFor(sim.years), sim.compaction),
+    narrow: view.narrow,
+  };
+}
+
+// The tower nudge: a tag flipping out of a brick gives the whole drawn stack
+// a short scale about its base, so the fact reads as having come out of the
+// tower rather than appearing beside it. State lives here (rather than in the
+// sim) because it is pure presentation — src/main.ts calls nudge() when a tag
+// pops and keeps rendering while nudgeActive() is true.
+const NUDGE_MS = 120;
+const NUDGE_SCALE = 1.02;
+
+let nudgeStartMs: number | null = null;
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+export function nudge(): void {
+  if (prefersReducedMotion()) return;
+  nudgeStartMs = performance.now();
+}
+
+export function nudgeActive(): boolean {
+  return nudgeStartMs !== null && performance.now() - nudgeStartMs < NUDGE_MS;
+}
+
+// 1 at both ends, NUDGE_SCALE at the midpoint: the stack swells and settles
+// back within NUDGE_MS, so nothing is left permanently off-scale.
+function nudgeScale(): number {
+  if (nudgeStartMs === null) return 1;
+  const p = (performance.now() - nudgeStartMs) / NUDGE_MS;
+  if (p >= 1 || p < 0) {
+    nudgeStartMs = null;
+    return 1;
+  }
+  return 1 + (NUDGE_SCALE - 1) * Math.sin(p * Math.PI);
+}
+
 function line(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number): void {
   ctx.beginPath();
   ctx.moveTo(x1, y1);
@@ -469,8 +534,7 @@ export function drawStage(
 ): void {
   const { widthCss: W, heightCss: H, dpr, narrow } = view;
   const { ground } = stageBox(view);
-  const sw = narrow ? BRICK_WIDTH_NARROW_PX : BRICK_WIDTH_PX;
-  const sx = Math.round(W / 2 - sw / 2);
+  const { sx, sw } = stackBox(view);
   const tokens = ensureTokens(W, H);
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -494,12 +558,24 @@ export function drawStage(
 
   // Landmark lines, icons, and labels: things (physical comparisons) on the
   // left, time events (history milestones) on the right, mirrored around
-  // the centered stack.
+  // the centered stack. A time event the stack has already passed is not
+  // drawn here at all — its paper tag (src/tags.ts) has taken the label's
+  // place, hanging off the very brick for its year.
   ctx.font = `${narrow ? LABEL_FONT_NARROW_PX : LABEL_FONT_PX}px ${tokens.fonts.hand}`;
   ctx.textBaseline = 'alphabetic';
   const iconSize = narrow ? ICON_PX_NARROW : ICON_PX;
   drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, icons, tokens);
-  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, icons, tokens);
+  drawLandmarkLabels(
+    ctx,
+    placed.right.filter((p) => !p.passed),
+    'right',
+    sx,
+    sx + sw,
+    W,
+    iconSize,
+    icons,
+    tokens,
+  );
 
   // The stack: always the whole, visible courses renderCourses says to draw
   // (never zero while bricks > 0, never a single course growing to fill the
@@ -507,7 +583,20 @@ export function drawStage(
   const bricks = bricksFor(sim.years);
   const drawn = renderCourses(bricks, sim.compaction);
   const pxPerBrick = courseHeightPx(bricks, sim.compaction);
-  drawBrickTower(ctx, sx, sw, ground, drawn, pxPerBrick, color, tokens.shadow);
+  // The nudge scales the whole drawn stack about its base — the point where
+  // it meets the ground — so it swells in place rather than lifting off.
+  const scale = nudgeScale();
+  if (scale === 1) {
+    drawBrickTower(ctx, sx, sw, ground, drawn, pxPerBrick, color, tokens.shadow);
+  } else {
+    const cx = sx + sw / 2;
+    ctx.save();
+    ctx.translate(cx, ground);
+    ctx.scale(scale, scale);
+    ctx.translate(-cx, -ground);
+    drawBrickTower(ctx, sx, sw, ground, drawn, pxPerBrick, color, tokens.shadow);
+    ctx.restore();
+  }
 
   // Legend: what one drawn brick is worth right now — describes the bricks
   // effectiveRenderUnit says are actually on screen (the same unit

@@ -1,13 +1,13 @@
 import './style.css';
 import { createAnalytics, deriveBrowserFamily, deriveDeviceKind } from './analytics';
 import { createAudio } from './audio';
-import { createBeatCards } from './beats';
 import { createEndScreen } from './end-screen';
 import { createScrollInput, type ScrollKind } from './input';
 import { createHud } from './hud';
 import { createStartScreen } from './start-screen';
+import { createTags } from './tags';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
-import { buildBeats, beatsCrossed } from './lib/beats';
+import { buildBeats } from './lib/beats';
 import { beforePhraseFor, tallerThan } from './lib/comparisons';
 import { pxPerMeter } from './lib/compaction';
 import { fmtYears } from './lib/format';
@@ -15,7 +15,6 @@ import { buildLandmarks, type Landmark } from './lib/landmarks';
 import { LABEL_MIN_GAP_NARROW_PX, placeLandmarks } from './lib/layout';
 import { colorById } from './lib/lego-colors';
 import {
-  fillTokens,
   hasPersonalizationKeys,
   mergeParams,
   parsePersonalization,
@@ -23,8 +22,9 @@ import {
   STORAGE_KEY,
   type Personalization,
 } from './lib/personalize';
-import { applyScroll, heightM, initialSim, step } from './lib/sim';
-import { drawStage, stageBox, type StageView } from './render/stage';
+import { bricksFor, applyScroll, heightM, initialSim, step } from './lib/sim';
+import { tagsFor } from './lib/tags';
+import { drawStage, nudge, nudgeActive, stageBox, stageGeometry, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -170,7 +170,17 @@ const hud = createHud(app, {
 });
 hud.setSound(soundEnabled);
 
-const beatCards = createBeatCards(app);
+// The facts themselves: a tag flips out of the tower for every time event
+// the stack passes, pops once, and nudges the tower as it goes.
+const tags = createTags(app, {
+  onPop: () => audio.pop(),
+  onNudge: () => {
+    nudge();
+    needsRender = true;
+  },
+  profile: () => profile,
+});
+
 const endScreen = createEndScreen(app, () => resetForReplay());
 
 // Whether this device supports touch, for analytics' device-kind derivation
@@ -179,18 +189,12 @@ const endScreen = createEndScreen(app, () => resetForReplay());
 const hasTouch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
 
 let sim = initialSim();
-// The build attempt's high-water mark, used for beat dedup: only ever
-// rises, even while an undo pulls `sim.years` back down, so beats fire once
-// each on the way past and are never replayed by a later undo-then-rebuild.
-// Reset only on replay (resetForReplay()), so it spans every analytics
-// session within one build attempt.
-let peakYears = 0;
 // The current analytics session's own high-water mark, used for
-// `yearsReached` in that session's end() payload. Set to the sim's current
-// years whenever a session starts (see createScrollInput below) and raised
-// alongside peakYears while the session is active, so a session that starts
-// after returning from a hidden page doesn't inherit an earlier session's
-// peak.
+// `yearsReached` in that session's end() payload: only ever rises, even
+// while an undo pulls `sim.years` back down. Set to the sim's current years
+// whenever a session starts (see createScrollInput below), so a session that
+// starts after returning from a hidden page doesn't inherit an earlier
+// session's peak.
 let sessionPeakYears = 0;
 // Whether the start screen has closed and any scroll has reached the stack
 // — build or undo — since the last replay: the prompt/footer swap responds
@@ -232,17 +236,17 @@ function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void 
 }
 
 // Shared by "Build it again" (end screen) and Restart (HUD): back to a
-// fresh, unstarted sim, with the prompt and card queue reset to match. The
-// analytics session itself is not ended here — "Build it again" only runs
-// after finish, which already ended it (see the frame loop below), and
-// Restart ends it itself before calling this. Clearing firstInputKind means
-// the next session's first scroll gets its own input_kind, not a leftover
-// from this one.
+// fresh, unstarted sim, with the prompt and the collected tags reset to
+// match — clearing the tags also empties the "already popped" set, so the
+// next build's facts flip out again. The analytics session itself is not
+// ended here — "Build it again" only runs after finish, which already ended
+// it (see the frame loop below), and Restart ends it itself before calling
+// this. Clearing firstInputKind means the next session's first scroll gets
+// its own input_kind, not a leftover from this one.
 function resetForReplay(): void {
   endScreen.hide();
-  beatCards.clear();
+  tags.clear();
   sim = initialSim();
-  peakYears = 0;
   tickAccumulator = 0;
   hasInteracted = false;
   hasScrolledOnce = false;
@@ -432,19 +436,13 @@ function frame(timeMs: number): void {
     audio.hum(0, humFor(rate).hz);
   }
 
-  // The peak only ever rises, even while an undo pulls sim.years back down,
-  // so beats fire once each on the way past and are never replayed by a
-  // later undo-then-rebuild.
-  const prevPeak = peakYears;
-  peakYears = Math.max(peakYears, sim.years);
+  // The session's peak only ever rises, even while an undo pulls sim.years
+  // back down. Nothing else keys off it: the tags read sim.years itself, so
+  // scrolling back really does take a fact off the tower and put its muted
+  // label back.
   if (sessionActive) sessionPeakYears = Math.max(sessionPeakYears, sim.years);
-  for (const beat of beatsCrossed(prevPeak, peakYears, beats)) {
-    beatCards.show({ ...beat, line: fillTokens(beat.line, profile) });
-    audio.chime();
-  }
 
   if (sim.done && !before.done) {
-    beatCards.clear();
     endScreen.show(profile);
     audio.finish();
     endSession(true);
@@ -467,7 +465,15 @@ function frame(timeMs: number): void {
   const simAdvancing = sim.years !== before.years || sim.done !== before.done;
   const compactionActive = sim.compaction.transition !== null || before.compaction.transition !== null;
 
-  if (needsRender || simAdvancing || compactionActive) {
+  if (needsRender || simAdvancing || compactionActive || nudgeActive()) {
+    // The tags are laid out before the canvas draws, so their measured boxes
+    // are available to the stage below: on a narrow viewport a tag clamped
+    // back over the tower can crowd the left side's labels, and those give
+    // way rather than the tag moving.
+    const bricks = bricksFor(sim.years);
+    tags.update(tagsFor(beats, sim.years, sim.compaction, bricks), stageGeometry(view, sim));
+    const bands = view.narrow ? tags.occupiedBands() : [];
+
     const placed = placeLandmarks(
       landmarks,
       heightM(sim),
@@ -475,6 +481,9 @@ function frame(timeMs: number): void {
       stageBox(view),
       view.narrow ? LABEL_MIN_GAP_NARROW_PX : undefined,
     );
+    if (bands.length > 0) {
+      placed.left = placed.left.filter((p) => !bands.some((b) => p.labelY >= b.top && p.labelY <= b.bottom));
+    }
     drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId));
     hud.update(sim);
     hud.setComparisons({
