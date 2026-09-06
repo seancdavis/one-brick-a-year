@@ -95,9 +95,7 @@ select {
    fixed-position box's own bounding rect always wraps exactly around
    whichever of them rendered — that's what makes src/hud.ts's
    cornerBottoms() a real measurement rather than a guess, feeding
-   src/lib/layout.ts's stageTopFor (round 5's "Stage top clear of the HUD").
-   Same shape at every width; only the menu panel itself (below) changes on
-   a narrow screen. */
+   src/lib/layout.ts's stageTopFor. Same shape at every width. */
 .hud-side {
   position: fixed;
   right: 44px;
@@ -530,7 +528,7 @@ select {
   color: var(--navy);
 }
 
-/* Shared modal chrome between an opened popup's card (src/popups.ts) and the
+/* Shared modal chrome between a bundle pin's card (src/popups.ts) and the
    scrapbook panel (src/scrapbook.ts): the backdrop, the panel box, the
    divider between stacked facts/notes, and the close tab. Both backdrops
    carry data-scroll-ignore (src/input.ts) so a wheel or drag over them

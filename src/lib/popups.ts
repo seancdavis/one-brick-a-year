@@ -53,13 +53,12 @@ export interface PinModel {
   count: number;
 }
 
-// Which popup is open on each side: an id (an event's or a thing's),
+// Which popup is open on each side: an id (an event's or a thing's), or
 // 'latest' for the most recently passed one — the default, and where a side
-// returns whenever the stack passes something new on it — or null for nothing
-// open at all.
+// returns whenever the stack passes something new on it.
 export interface PopupSelection {
-  right: string | 'latest' | null;
-  left: string | 'latest' | null;
+  right: string | 'latest';
+  left: string | 'latest';
 }
 
 export interface PopupSide {
@@ -104,12 +103,7 @@ function rightSide(beats: readonly Beat[], years: number, unit: number, selectio
 
   // A selected id the stack no longer holds leaves this side with nothing
   // open; src/main.ts notices and falls back to 'latest'.
-  const openEvent =
-    selection === null
-      ? null
-      : selection === 'latest'
-        ? passed[passed.length - 1]
-        : (passed.find((b) => b.id === selection) ?? null);
+  const openEvent = selection === 'latest' ? passed[passed.length - 1] : (passed.find((b) => b.id === selection) ?? null);
 
   const open: PopupModel | null = openEvent
     ? { side: 'right', bricksFromGround: brickOf(openEvent.atYears, unit), event: openEvent }
@@ -142,12 +136,7 @@ function leftSide(
   const passed = things.filter((thing) => thing.meters <= heightM).sort((a, b) => a.meters - b.meters);
   if (passed.length === 0) return { open: null, pins: [] };
 
-  const openThing =
-    selection === null
-      ? null
-      : selection === 'latest'
-        ? passed[passed.length - 1]
-        : (passed.find((t) => t.id === selection) ?? null);
+  const openThing = selection === 'latest' ? passed[passed.length - 1] : (passed.find((t) => t.id === selection) ?? null);
 
   const open: PopupModel | null = openThing
     ? { side: 'left', bricksFromGround: brickOf(openThing.years, unit), thing: openThing }

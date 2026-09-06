@@ -10,14 +10,7 @@
 import { courseHeightPx, effectiveRenderUnit, renderCourses, unitLabel } from '../lib/compaction';
 import { fmtYears } from '../lib/format';
 import type { IconId } from '../lib/icon-paths';
-import {
-  boxesIntersect,
-  labelRoom,
-  type OccupiedBox,
-  type PlacedLandmark,
-  type PlacedLandmarks,
-  type StageBox,
-} from '../lib/layout';
+import { boxesIntersect, labelRoom, type OccupiedBox, type PlacedLandmark, type PlacedLandmarks } from '../lib/layout';
 import { shade, type LegoColor } from '../lib/lego-colors';
 import { bricksFor, type SimState } from '../lib/sim';
 
@@ -83,7 +76,6 @@ const GROUND_MARGIN_PX = 90;
 // (src/lib/layout.ts's stageTopFor) never pushes it below this, even if a
 // stray zero-height reading came back before the HUD had laid out.
 export const TOP_MIN_PX = 150;
-const TOP_FRACTION = 0.2;
 
 // Sun, top-right: a flat mustard circle with the paper drop. Position is
 // expressed the way the artboard's CSS box is (right/top margins to the
@@ -124,6 +116,10 @@ const STUD_BOTTOM_DARKEN = -0.15;
 
 // Landmark cut-paper icons and labels — see drawLandmarkLabels for how
 // these lay out a side.
+// A label unit's above-baseline reach is the taller of the font size and half
+// the icon; src/lib/layout.ts mirrors these as LABEL_RISE_PX /
+// LABEL_RISE_NARROW_PX to keep every unit clear of the stage's usable top, so
+// the two must move together.
 const ICON_PX = 36;
 const ICON_PX_NARROW = 20;
 const LABEL_FONT_PX = 20;
@@ -132,8 +128,8 @@ const CONNECTOR_THRESHOLD_PX = 8;
 const SECOND_LINE_HEIGHT_PX = 16;
 const LEADER_WIDTH_PX = 2;
 // Where a label's icon and text sit relative to the stack is pure math and
-// lives in src/lib/layout.ts's labelRoom (round 5's "labels next to their
-// icons"); this module only draws what it returns.
+// lives in src/lib/layout.ts's labelRoom; this module only draws what it
+// returns.
 
 // Legend beside the tower's base: what one drawn brick is worth right now.
 // On narrow canvases there's no room beside the tower, so instead it's
@@ -185,20 +181,17 @@ function ensureNoiseCanvas(widthCss: number, heightCss: number): HTMLCanvasEleme
   return canvas;
 }
 
-// `top` here is a viewport-fraction fallback; src/main.ts overrides it with
-// the real HUD measurement (src/lib/layout.ts's stageTopFor) before handing
-// a StageBox to placeLandmarks — every other caller only ever reads `ground`
-// off this.
-export function stageBox(view: StageView): StageBox {
-  return {
-    top: Math.max(TOP_MIN_PX, view.heightCss * TOP_FRACTION),
-    ground: view.heightCss - GROUND_MARGIN_PX,
-  };
+// The ground line: where the tower stands and the upper hill crests. The
+// stage's usable *top* is not derived here — it is the real HUD measurement
+// src/main.ts takes each resize (src/lib/layout.ts's stageTopFor) and pairs
+// with this to make the StageBox it hands placeLandmarks.
+export function groundY(view: StageView): number {
+  return view.heightCss - GROUND_MARGIN_PX;
 }
 
 // Where the tower stands: a fixed width, centered. drawStage and
-// stageGeometry both read it from here, so the canvas and the HTML tag layer
-// over it can never disagree about where the stack's edges are.
+// stageGeometry both read it from here, so the canvas and the HTML popup
+// layer over it can never disagree about where the stack's edges are.
 function stackBox(view: StageView): { sx: number; sw: number } {
   const sw = view.narrow ? BRICK_WIDTH_NARROW_PX : BRICK_WIDTH_PX;
   return { sx: Math.round(view.widthCss / 2 - sw / 2), sw };
@@ -223,7 +216,7 @@ export function stageGeometry(view: StageView, sim: SimState): StageGeometry {
   return {
     stackLeftX: sx,
     stackRightX: sx + sw,
-    groundY: stageBox(view).ground,
+    groundY: groundY(view),
     courseHeightPx: courseHeightPx(bricksFor(sim.years), sim.compaction),
     narrow: view.narrow,
   };
@@ -387,7 +380,7 @@ function wrapToTwoLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: n
 // icon on the left — with the icon LEADER_MIN_PX out from the stack edge (the
 // dashed leader spans exactly that gap) and the text immediately beside it,
 // wrapped within the room labelRoom leaves before the screen margin
-// (src/lib/layout.ts, round 5's "labels next to their icons"). A label that
+// (src/lib/layout.ts). A label that
 // fits `${label} · ${years}` within that room draws on one line; otherwise
 // the years drop to their own second line, and if the label alone still
 // doesn't fit, it's ellipsized (years never are). A vertical connector
@@ -408,14 +401,13 @@ function drawLandmarkLabels(
   width: number,
   iconSize: number,
   fontPx: number,
-  narrow: boolean,
   icons: Record<IconId, Path2D>,
   tokens: Tokens,
   occupied: OccupiedBox[],
 ): void {
   const isLeft = side === 'left';
   const stackEdgeX = isLeft ? stackLeft : stackRight;
-  const { iconX, textX, textMaxWidth } = labelRoom(side, stackEdgeX, width, iconSize, narrow);
+  const { iconX, textX, textMaxWidth } = labelRoom(side, stackEdgeX, width, iconSize);
   // The edge of the label unit nearest the stack — where the dashed leader
   // from the tower lands, and where a displaced label's connector runs.
   const nearEdgeX = isLeft ? iconX + iconSize : iconX;
@@ -564,7 +556,7 @@ export function drawStage(
   occupied: OccupiedBox[],
 ): void {
   const { widthCss: W, heightCss: H, dpr, narrow } = view;
-  const { ground } = stageBox(view);
+  const ground = groundY(view);
   const { sx, sw } = stackBox(view);
   const tokens = ensureTokens(W, H);
 
@@ -596,8 +588,8 @@ export function drawStage(
   ctx.font = `${fontPx}px ${tokens.fonts.hand}`;
   ctx.textBaseline = 'alphabetic';
   const iconSize = narrow ? ICON_PX_NARROW : ICON_PX;
-  drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, fontPx, narrow, icons, tokens, occupied);
-  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, fontPx, narrow, icons, tokens, occupied);
+  drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, fontPx, icons, tokens, occupied);
+  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, fontPx, icons, tokens, occupied);
 
   // The stack: always the whole, visible courses renderCourses says to draw
   // (never zero while bricks > 0, never a single course growing to fill the

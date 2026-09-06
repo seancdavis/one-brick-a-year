@@ -26,7 +26,7 @@ import {
   type Personalization,
 } from './lib/personalize';
 import { applyScroll, heightM, initialSim, step } from './lib/sim';
-import { drawStage, nudge, nudgeActive, stageBox, stageGeometry, TOP_MIN_PX, type StageView } from './render/stage';
+import { drawStage, groundY, nudge, nudgeActive, stageGeometry, TOP_MIN_PX, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -609,11 +609,10 @@ function frame(timeMs: number): void {
       landmarks,
       nowHeightM,
       pxPerMeter(sim.compaction),
-      // stageBox(view).ground is the real ground line; its own `top` is only
-      // a viewport-fraction fallback (src/render/stage.ts's comment on
-      // stageBox) — stageTop is the real HUD-measured one (measureStageTop
-      // above), so every canvas label stays clear of the HUD's corner.
-      { top: stageTop, ground: stageBox(view).ground },
+      // The ground line comes from the stage; the top is the real HUD
+      // measurement (measureStageTop above), so no canvas label is ever
+      // placed under the HUD's corner.
+      { top: stageTop, ground: groundY(view) },
       view.narrow ? LABEL_METRICS_NARROW : LABEL_METRICS,
     );
     drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId), popups.occupiedBoxes());

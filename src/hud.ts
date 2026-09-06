@@ -21,7 +21,8 @@ export function createHud(root: HTMLElement): {
   // The bottom (in viewport px) of every HUD block that could crowd the
   // stage's usable top: the top-left number block and the top-right
   // teaser-plus-menu group. src/main.ts feeds these straight into
-  // src/lib/layout.ts's stageTopFor (round 5's "Stage top clear of the HUD").
+  // src/lib/layout.ts's stageTopFor, which keeps every canvas label clear of
+  // them.
   cornerBottoms(): number[];
 } {
   const big = document.createElement('div');

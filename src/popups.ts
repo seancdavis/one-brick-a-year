@@ -17,7 +17,6 @@ import type { PaperColor, ThingLandmark } from './lib/landmarks';
 import { boxesIntersect, type OccupiedBox } from './lib/layout';
 import { fillTokens, type Personalization } from './lib/personalize';
 import type { PinModel, PopupModel, PopupSide } from './lib/popups';
-import { bricksFor } from './lib/sim';
 import type { StageGeometry } from './render/stage';
 
 type Side = 'left' | 'right';
@@ -284,11 +283,14 @@ export function createPopups(
     return { title: beat.title, line: fillTokens(beat.line, opts.profile()), meta: yearsAgo(beat.atYears) };
   }
 
+  // A thing's own brick count is rounded, not floored: the stack passes a
+  // thing the moment it is tall enough, so the honest count is the nearest
+  // whole brick to its height (a 5.5 m giraffe is 573 bricks, not 572).
   function thingNote(thing: ThingLandmark): Note {
     return {
       title: thing.label,
       line: thing.funLine ?? thing.tallerThanPhrase,
-      meta: `${fmtMeters(thing.meters)} · ${fmtInt(bricksFor(thing.years))} bricks`,
+      meta: `${fmtMeters(thing.meters)} · ${fmtInt(Math.round(thing.years))} bricks`,
     };
   }
 

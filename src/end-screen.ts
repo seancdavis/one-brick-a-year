@@ -46,7 +46,7 @@ export function createEndScreen(
   youLine.className = 'end-line';
 
   // "Beyond the stack" (docs/content/candidate-events.md): facts past
-  // TOTAL_YEARS that never get a brick or a tag, shown once here under the
+  // TOTAL_YEARS that never get a brick or a popup, shown once here under the
   // main copy. Built once — the list is static, not profile-dependent.
   const beyond = document.createElement('div');
   beyond.className = 'end-beyond';

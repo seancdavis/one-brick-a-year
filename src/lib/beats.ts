@@ -1,12 +1,12 @@
 // The one source of truth for time events: every moment the stack passes on
 // its way back through 4.6 billion years. src/lib/landmarks.ts derives the
 // right-side "time" landmarks from this list, so an event is authored once
-// and shows up as a label, a tag, and a footer phrase from the same row.
+// and shows up as a label, a popup, and a footer phrase from the same row.
 //
 // Copy rules (docs/principles.md's "Facts" section): `title` is 2 to 5 words
 // with no period; `line` is at most two short sentences and 140 characters,
 // present tense for things still true, past tense for one-off happenings,
-// second person where natural, no dates and no "BCE" (the tag shows the
+// second person where natural, no dates and no "BCE" (the popup shows the
 // years). `{age}`, `{brickAge}`, and `{name}` are filled in by
 // src/lib/personalize.ts's fillTokens. `needsReview: true` marks a line
 // written by the developer
@@ -985,7 +985,7 @@ export const BEATS: readonly Beat[] = [
 ];
 
 // "Beyond the stack" (docs/content/candidate-events.md): the two ticked
-// facts that sit past TOTAL_YEARS and so never get a brick or a tag. Shown
+// facts that sit past TOTAL_YEARS and so never get a brick or a popup. Shown
 // once, under the end screen's main copy (src/end-screen.ts), in the same
 // present-tense picture-book voice as a beat's line.
 export const BEYOND_THE_STACK: readonly string[] = [

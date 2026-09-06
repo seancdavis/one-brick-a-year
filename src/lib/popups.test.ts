@@ -108,14 +108,6 @@ describe('popupsFor: right side (time events)', () => {
     expect(pinBricks).toEqual([30, 90]);
   });
 
-  it('opens nothing when the selection is null, even with events passed', () => {
-    const beats = [beat('a', 12), beat('b', 30)];
-    const result = popupsFor({ beats, things: [], years: 40, heightM: 0, compaction: at(1), selection: sel(null) });
-
-    expect(result.right.open).toBeNull();
-    expect(result.right.pins).toHaveLength(2);
-  });
-
   it('opens nothing when the selected id is no longer passed, leaving src/main.ts to fall back', () => {
     const beats = [beat('a', 12), beat('b', 30)];
     const result = popupsFor({ beats, things: [], years: 20, heightM: 0, compaction: at(1), selection: sel('b') });

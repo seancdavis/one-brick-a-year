@@ -153,16 +153,16 @@ describe('labelRoom', () => {
   const iconSize = 36;
 
   it('gives both sides positive room for their text', () => {
-    const left = labelRoom('left', stackLeft, width, iconSize, false);
-    const right = labelRoom('right', stackRight, width, iconSize, false);
+    const left = labelRoom('left', stackLeft, width, iconSize);
+    const right = labelRoom('right', stackRight, width, iconSize);
 
     expect(left.textMaxWidth).toBeGreaterThan(0);
     expect(right.textMaxWidth).toBeGreaterThan(0);
   });
 
   it('sits the icon on the far side of the text from the stack, mirrored on each side', () => {
-    const left = labelRoom('left', stackLeft, width, iconSize, false);
-    const right = labelRoom('right', stackRight, width, iconSize, false);
+    const left = labelRoom('left', stackLeft, width, iconSize);
+    const right = labelRoom('right', stackRight, width, iconSize);
 
     // Left: margin ... text ... icon ... stack. Right: stack ... icon ... text ... margin.
     expect(left.textX).toBeLessThan(left.iconX);
@@ -170,8 +170,8 @@ describe('labelRoom', () => {
   });
 
   it('is symmetric for a stack centered on the stage', () => {
-    const left = labelRoom('left', stackLeft, width, iconSize, false);
-    const right = labelRoom('right', stackRight, width, iconSize, false);
+    const left = labelRoom('left', stackLeft, width, iconSize);
+    const right = labelRoom('right', stackRight, width, iconSize);
 
     expect(right.textMaxWidth).toBe(left.textMaxWidth);
   });
@@ -186,16 +186,16 @@ describe('labelRoom', () => {
     const wideStackRight = 620;
     const smallIcon = 20;
 
-    const left = labelRoom('left', wideStackLeft, wideWidth, smallIcon, false);
-    const right = labelRoom('right', wideStackRight, wideWidth, smallIcon, false);
+    const left = labelRoom('left', wideStackLeft, wideWidth, smallIcon);
+    const right = labelRoom('right', wideStackRight, wideWidth, smallIcon);
 
     expect(wideStackLeft - left.textX).toBeLessThanOrEqual(60);
     expect(right.textX - wideStackRight).toBeLessThanOrEqual(60);
   });
 
   it('keeps the text within the screen margin', () => {
-    const left = labelRoom('left', stackLeft, width, iconSize, false);
-    const right = labelRoom('right', stackRight, width, iconSize, false);
+    const left = labelRoom('left', stackLeft, width, iconSize);
+    const right = labelRoom('right', stackRight, width, iconSize);
 
     expect(left.textX - left.textMaxWidth).toBeGreaterThanOrEqual(LABEL_MARGIN_PX - 1);
     expect(right.textX + right.textMaxWidth).toBeLessThanOrEqual(width - LABEL_MARGIN_PX + 1);
