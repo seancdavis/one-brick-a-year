@@ -203,12 +203,6 @@ export function createTags(
 
   function createRecord(model: TagModel, animate: boolean): TagRecord {
     const container = el('div', 'tag');
-    // An elbow connector, not a single straight line: `out` leaves the tower
-    // at the fact's true anchor height, `elbow` jogs vertically to the tag's
-    // actual center (zero-height when the tag sits right at its anchor,
-    // which is what makes an undisplaced tag read as the old straight
-    // stub), and `in` runs the rest of the way into the tag. See
-    // src/style.css's .tag-stub comment.
     const stub = el('span', 'tag-stub');
     stub.setAttribute('aria-hidden', 'true');
     const stubOut = el('span', 'tag-stub-out');
@@ -302,19 +296,25 @@ export function createTags(
         }
       }
 
-      // Left edge 14px right of the stack, pulled back in when the viewport
-      // is too narrow to fit the whole tag there.
+      // Left edge STUB_GAP_PX right of the stack, pulled back in when the
+      // viewport is too narrow to fit the whole tag there.
       const layerWidth = layer.clientWidth || window.innerWidth;
       const left = Math.max(
         VIEWPORT_MARGIN_PX,
         Math.min(geometry.stackRightX + STUB_GAP_PX, layerWidth - VIEWPORT_MARGIN_PX - widthPx),
       );
-      const stubWidth = Math.max(0, left - geometry.stackRightX);
+
+      // Signed offset back to the tower's edge — a displaced tag stays
+      // connected to its true brick. Negative in the normal case (the tag
+      // sits clear of the tower); zero or positive once a narrow viewport
+      // has clamped it back over the tower.
+      const towerEdgeX = geometry.stackRightX - left;
+      const stubRun = Math.max(0, -towerEdgeX);
 
       // Only a tag that had to be clamped back over the tower can reach the
       // left side's labels; one sitting clear of the stack never does, so it
       // reports no band and the left labels stay put.
-      const crowdsLeft = left < geometry.stackRightX;
+      const crowdsLeft = towerEdgeX > 0;
 
       // Ascending bricks is descending y, so walking from the ground up lets
       // each tag push against the one just placed below it — placeLandmarks'
@@ -333,15 +333,10 @@ export function createTags(
 
         record.el.style.left = `${Math.round(left)}px`;
         record.el.style.top = `${Math.round(top)}px`;
-        record.el.style.setProperty('--stub-w', `${Math.round(stubWidth)}px`);
+        record.el.style.setProperty('--tower-edge-x', `${Math.round(towerEdgeX)}px`);
+        record.el.style.setProperty('--stub-w', `${Math.round(stubRun)}px`);
 
-        // The elbow: `anchorY` is the fact's true brick, in the container's
-        // own coordinates (top is always <= anchorY - heightPx/2, so this is
-        // never above the tag's own center); `centerY` is where the tag
-        // actually landed. When the collision rule above hasn't pushed the
-        // tag off its anchor the two are equal, the jog collapses to zero
-        // height, and the three segments read as one straight line.
-        const outW = Math.min(STUB_ELBOW_OUT_PX, stubWidth);
+        const outW = Math.min(STUB_ELBOW_OUT_PX, stubRun);
         const anchorYRel = anchorY - top;
         const centerYRel = record.heightPx / 2;
         record.el.style.setProperty('--stub-out-w', `${Math.round(outW)}px`);

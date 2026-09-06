@@ -7,8 +7,9 @@
 // with no period; `line` is at most two short sentences and 140 characters,
 // present tense for things still true, past tense for one-off happenings,
 // second person where natural, no dates and no "BCE" (the tag shows the
-// years). `{age}` and `{name}` are filled in by src/lib/personalize.ts's
-// fillTokens. `needsReview: true` marks a line written by the developer
+// years). `{age}`, `{brickAge}`, and `{name}` are filled in by
+// src/lib/personalize.ts's fillTokens. `needsReview: true` marks a line
+// written by the developer
 // rather than taken from the candidate list, so Sean can find them. Every
 // row keeps a one-line source comment; facts are checked, never invented.
 //
@@ -25,7 +26,8 @@ export interface Beat {
   // 2 to 5 words, no period. Also the source of the right-side landmark
   // label (see timeLabel) and of beforePhraseFor's fallback.
   title: string;
-  // At most two short sentences, 140 characters. May contain {age}/{name}.
+  // At most two short sentences, 140 characters. May contain
+  // {age}/{brickAge}/{name}.
   line: string;
   // Short "before X" copy for the footer's right-hand comparison
   // (src/lib/comparisons.ts's beforePhraseFor). Where the candidate list
@@ -82,7 +84,7 @@ export const BEATS: readonly Beat[] = [
     id: 'life',
     atYears: 8,
     title: 'Your whole life',
-    line: 'Your whole life is {age} bricks tall. Everything after this is older than you.',
+    line: 'Your whole life is {brickAge} tall. Everything after this is older than you.',
     needsReview: true,
     icon: 'bricks',
     paper: 'coral',

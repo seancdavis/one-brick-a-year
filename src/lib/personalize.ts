@@ -121,13 +121,16 @@ export function serialize(p: Personalization): string {
 // child's name, or the default "you" — so "older than {name}" reads "older
 // than you" until a name is typed in. `{Name}` is the same value at the
 // start of a sentence, where the default has to become "You". `{age}` is the
-// profile age as a number. A line's tokens are checked against this list in
-// beats.test.ts, so a typo can never ship as literal braces on screen.
+// profile age as a plain number. `{brickAge}` is the complete "N brick(s)"
+// phrase ("one brick", "nine bricks", "100 bricks"), for a line that wants
+// the picture-book brick count rather than a bare number. A line's tokens
+// are checked against this list in beats.test.ts, so a typo can never ship
+// as literal braces on screen.
 //
 // No substitution changes the verb after it, so lines keep the token out of
 // the subject slot ("older than {name}", never "{Name} is eight") — that
 // would need "You are" for the default name and "Ada is" for a real one.
-export const LINE_TOKENS = ['{age}', '{name}', '{Name}'] as const;
+export const LINE_TOKENS = ['{age}', '{brickAge}', '{name}', '{Name}'] as const;
 
 const ONES = [
   'zero',
@@ -171,15 +174,13 @@ export function fillTokens(line: string, profile: Personalization): string {
   const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
   const age = profile.ageYears;
 
-  // "{age} bricks tall" reads like a picture book — "nine bricks tall", "one
-  // brick tall" (singular) — below 100; a life that long spelled out would
-  // be unreadable, so 100 and up stay digits. Every other {age} (the
-  // replaceAll below) stays a plain number.
-  const withBrickAge = line.replace(/\{age\}( bricks?)\b/g, () =>
-    age < 100 ? `${spellAge(age)} brick${age === 1 ? '' : 's'}` : `${age} bricks`,
-  );
+  // The complete "N brick(s)" phrase reads like a picture book — "nine
+  // bricks", "one brick" (singular) — below 100; a life that long spelled
+  // out would be unreadable, so 100 and up stay digits.
+  const brickAge = age < 100 ? `${spellAge(age)} brick${age === 1 ? '' : 's'}` : `${age} bricks`;
 
-  return withBrickAge
+  return line
+    .replaceAll('{brickAge}', brickAge)
     .replaceAll('{age}', String(age))
     .replaceAll('{Name}', capitalized)
     .replaceAll('{name}', name);
