@@ -1,14 +1,14 @@
 // The scrapbook: every fact the stack has reached this build, kept even after
-// an undo drops the tag back off the tower (src/main.ts hands over each
+// an undo drops the popup back off the tower (src/main.ts hands over each
 // newly crossed beat, from its peakYears high-water mark, the moment it
 // crosses — never re-derived from sim.years, which an undo can pull back
-// down). A paper tab in the HUD controls row ("my facts · N") opens a paper
-// panel listing them newest first, each one a compact paper note in the same
-// voice as an opened tag (src/tags.ts). The tab lives in the HUD's tabs row;
-// the panel itself mounts at the app root, never inside the HUD's own
-// fixed-position stacking context, which would otherwise trap it underneath
-// the tag layer (see src/style.css's .modal-backdrop comment). DOM glue
-// only — no state lives here beyond what's been added.
+// down). src/menu.ts's "my facts · N" item opens a paper panel listing them
+// newest first, each one a compact paper note in the same voice as an opened
+// popup (src/popups.ts). This module owns only the panel now — no tab of its
+// own — mounted at the app root, never inside the HUD's own fixed-position
+// stacking context, which would otherwise trap it underneath the popup layer
+// (see src/style.css's .modal-backdrop comment). DOM glue only — no state
+// lives here beyond what's been added.
 
 import { yearsAgo } from './lib/format';
 import { fillTokens, type Personalization } from './lib/personalize';
@@ -22,18 +22,12 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): H
 
 export function createScrapbook(
   root: HTMLElement,
-  tabsSlot: HTMLElement,
   opts: { profile: () => Personalization },
-): { add(events: readonly Beat[]): void; clear(): void } {
-  const tab = el('button', 'hud-tab scrapbook-tab');
-  tab.type = 'button';
-  tab.setAttribute('aria-haspopup', 'dialog');
-  tab.setAttribute('aria-expanded', 'false');
-
+): { add(events: readonly Beat[]): void; clear(): void; open(): void; count(): number } {
   // A tap or drag on the panel's own padding or list must not reach the
   // window scroll listener and be mistaken for a build/undo gesture
   // (src/input.ts's data-scroll-ignore). Shares its backdrop/panel/
-  // close-tab/fact-note CSS with an opened tag card (src/tags.ts) under
+  // close-tab/fact-note CSS with an opened popup's card (src/popups.ts) under
   // common .modal-* class names.
   const backdrop = el('div', 'modal-backdrop');
   backdrop.hidden = true;
@@ -52,7 +46,6 @@ export function createScrapbook(
 
   panel.append(title, list, closeButton);
   backdrop.append(panel);
-  tabsSlot.append(tab);
   root.append(backdrop);
 
   // Ascending by atYears, since every addition arrives that way already
@@ -61,13 +54,6 @@ export function createScrapbook(
   // the stack reached most recently in real-world time.
   let collected: Beat[] = [];
   let returnFocus: HTMLElement | null = null;
-
-  function paintTab(): void {
-    const count = collected.length;
-    tab.textContent = count === 0 ? 'my facts' : `my facts · ${count}`;
-    tab.disabled = count === 0;
-    tab.classList.toggle('hud-tab--disabled', count === 0);
-  }
 
   function paintList(): void {
     const profile = opts.profile();
@@ -96,9 +82,11 @@ export function createScrapbook(
   function open(): void {
     if (collected.length === 0) return;
     paintList();
-    returnFocus = tab;
+    // Whoever had focus when this was called — src/menu.ts's "my facts" item
+    // moves focus back to its own tab before calling this, so that's what
+    // gets it back once this panel closes.
+    returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     backdrop.hidden = false;
-    tab.setAttribute('aria-expanded', 'true');
     document.addEventListener('keydown', onKeydown);
     closeButton.focus();
   }
@@ -106,31 +94,29 @@ export function createScrapbook(
   function close(): void {
     if (backdrop.hidden) return;
     backdrop.hidden = true;
-    tab.setAttribute('aria-expanded', 'false');
     document.removeEventListener('keydown', onKeydown);
     const target = returnFocus;
     returnFocus = null;
     if (target && target.isConnected) target.focus();
   }
 
-  tab.addEventListener('click', open);
   closeButton.addEventListener('click', close);
   backdrop.addEventListener('click', (event) => {
     if (event.target === backdrop) close();
   });
 
-  paintTab();
-
   return {
     add(events) {
       if (events.length === 0) return;
       collected = collected.concat(events);
-      paintTab();
     },
     clear() {
       close();
       collected = [];
-      paintTab();
+    },
+    open,
+    count() {
+      return collected.length;
     },
   };
 }

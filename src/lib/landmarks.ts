@@ -41,6 +41,8 @@ export interface ThingLandmark extends LandmarkBase {
   // "taller than a door!" — every phrase ends in "!" for the exclamation the
   // picture-book copy uses throughout.
   tallerThanPhrase: string;
+  // The left popup's line (src/popups.ts falls back to tallerThanPhrase), set only where docs/content/candidate-heights.md gave one.
+  funLine?: string;
 }
 
 export interface TimeLandmark extends LandmarkBase {
@@ -63,7 +65,8 @@ function fromMeters(meters: number): { meters: number; years: number } {
 // The physical comparisons, ascending by height. Every row keeps a one-line
 // source comment; facts are checked, never invented. Regenerate the skeleton
 // from docs/content/candidate-heights.md with
-// `node scripts/candidates-to-data.mjs`.
+// `node scripts/candidates-to-data.mjs` — the "Fun line" column, where the
+// candidate list has one, becomes a row's optional funLine.
 function buildThings(profile: Personalization): ThingLandmark[] {
   return [
     {
@@ -75,6 +78,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'navy',
       orientation: 'tall',
       tallerThanPhrase: 'taller than one brick!',
+      funLine: 'The brick you are stacking.',
       ...fromMeters(0.0096),
     },
     {
@@ -218,6 +222,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'leaf',
       orientation: 'tall',
       tallerThanPhrase: 'taller than a giraffe!',
+      funLine: 'A giraffe has seven neck bones. So do you.',
       ...fromMeters(5.5),
     },
     {
@@ -264,6 +269,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'leaf',
       orientation: 'tall',
       tallerThanPhrase: 'as long as a blue whale!',
+      funLine: 'The biggest animal that has ever lived. Its heart is the size of a small car.',
       ...fromMeters(30),
     },
     {
@@ -297,6 +303,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'navy',
       orientation: 'tall',
       tallerThanPhrase: 'taller than the biggest tree!',
+      funLine: 'Big enough to hold 40 school buses inside.',
       ...fromMeters(84),
     },
     {
@@ -319,6 +326,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'navy',
       orientation: 'tall',
       tallerThanPhrase: 'taller than Big Ben!',
+      funLine: 'Exactly ten thousand bricks.',
       ...fromMeters(96),
     },
     {
@@ -330,6 +338,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'leaf',
       orientation: 'tall',
       tallerThanPhrase: 'taller than the tallest tree!',
+      funLine: 'A redwood. Its location is secret.',
       ...fromMeters(116),
     },
     {
@@ -341,6 +350,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'navy',
       orientation: 'tall',
       tallerThanPhrase: 'taller than the Great Pyramid!',
+      funLine: 'The tallest building on Earth for almost 4,000 years.',
       ...fromMeters(139),
     },
     {
@@ -396,6 +406,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'leaf',
       orientation: 'tall',
       tallerThanPhrase: 'taller than the tallest waterfall!',
+      funLine: 'The water turns to mist before it reaches the bottom.',
       ...fromMeters(979),
     },
     {
@@ -451,6 +462,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'navy',
       orientation: 'tall',
       tallerThanPhrase: 'as tall as the ocean is deep!',
+      funLine: 'If you dropped Everest into the Mariana Trench, it would disappear.',
       ...fromMeters(10935),
     },
     {
@@ -475,6 +487,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'navy',
       orientation: 'tall',
       tallerThanPhrase: 'higher than any bird has flown!',
+      funLine: 'A vulture, hit by an airplane.',
       ...fromMeters(12000),
     },
     {
@@ -497,6 +510,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'navy',
       orientation: 'tall',
       tallerThanPhrase: 'higher than anyone has jumped from!',
+      funLine: 'A man jumped from here and fell faster than sound.',
       ...fromMeters(39000),
     },
     {
@@ -519,6 +533,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'navy',
       orientation: 'tall',
       tallerThanPhrase: 'higher than shooting stars!',
+      funLine: 'Shooting stars are bits of dust burning up right about here.',
       ...fromMeters(80000),
     },
     {
@@ -530,6 +545,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'leaf',
       orientation: 'tall',
       tallerThanPhrase: 'higher than the highest clouds!',
+      funLine: 'They glow silver-blue after sunset.',
       ...fromMeters(85000),
     },
     {
@@ -575,6 +591,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'leaf',
       orientation: 'flat',
       tallerThanPhrase: 'laid flat, as long as the Great Barrier Reef!',
+      funLine: 'The biggest thing ever built by living things. You can see it from space.',
       ...fromMeters(2300000),
     },
     {
@@ -597,6 +614,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'leaf',
       orientation: 'flat',
       tallerThanPhrase: 'laid flat, as long as the Appalachian Trail!',
+      funLine: 'Walking it takes about six months.',
       ...fromMeters(3500000),
     },
     {
@@ -608,6 +626,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'navy',
       orientation: 'flat',
       tallerThanPhrase: 'laid flat, as long as the Mississippi River!',
+      funLine: 'A drop of water takes about three months to float the whole way.',
       ...fromMeters(3730000),
     },
     {
@@ -619,6 +638,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'leaf',
       orientation: 'flat',
       tallerThanPhrase: 'laid flat, as long as the Amazon!',
+      funLine: 'One fifth of all the river water on Earth is in this one river.',
       ...fromMeters(6400000),
     },
     {
@@ -641,6 +661,7 @@ function buildThings(profile: Personalization): ThingLandmark[] {
       paper: 'leaf',
       orientation: 'flat',
       tallerThanPhrase: 'laid flat, as long as the Great Wall of China!',
+      funLine: 'You cannot see it from space. That one is a myth.',
       ...fromMeters(8850000),
     },
     {

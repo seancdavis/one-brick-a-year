@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BEATS, beatsCrossed, buildBeats, timeLabel } from './beats';
+import { countSentences } from './format';
 import { ICON_IDS } from './icon-paths';
 import { DEFAULT_COLOR_ID } from './lego-colors';
 import { LINE_TOKENS } from './personalize';
@@ -14,17 +15,6 @@ const MIN_TITLE_WORDS = 2;
 const MAX_TITLE_WORDS = 5;
 
 const profile = { name: 'Kid', ageYears: 8, homeMeters: 8, colorId: DEFAULT_COLOR_ID };
-
-// Counts sentence-ending punctuation in a line, ignoring the two kinds of
-// "." that aren't one: a single-letter (or short-title) abbreviation like
-// "T." or "Mr." followed by more text, and a decimal point between digits.
-// A run of terminators ("...", "?!") counts as a single sentence end.
-function countSentences(line: string): number {
-  const stripped = line
-    .replace(/\b(?:[A-Z]|Mr|Mrs|Ms|Dr|Jr|Sr|St)\.(?=\s)/g, '')
-    .replace(/(\d)\.(\d)/g, '$1$2');
-  return stripped.match(/[.!?]+/g)?.length ?? 0;
-}
 
 describe('BEATS', () => {
   it('holds at least the ninety time events the round asked for', () => {

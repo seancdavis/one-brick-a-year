@@ -32,6 +32,11 @@ per resize rather than keeping its own copies. Nothing is duplicated by
 hand. Two hand-lettered typefaces carry all the type: Fredoka for the big
 numbers and footer values, Patrick Hand for everything else.
 
+Controls live behind one compact menu: a single paper tab in the top-right
+corner, under the "next up" teaser (`src/menu.ts`), rather than a scattered
+row of tabs and chips. Its panel holds sound, "my facts", restart, and the
+color chips, in that order, and closes on Escape or a tap outside.
+
 ## Compaction
 
 Every drawn brick is worth `unit` years (`src/lib/compaction.ts`). The legend
@@ -45,30 +50,40 @@ Time events — everything the stack passes on its way back through 4.6 billion
 years — have one source of truth: `src/lib/beats.ts`'s `BEATS` array, a
 `Beat` per event. `src/lib/landmarks.ts` derives the right-side "time"
 landmarks from that same list, so a beat's title, line, and years reach the
-landmark label, the paper tag, and the footer's "before" phrase without being
+landmark label, the popup, and the footer's "before" phrase without being
 written twice.
 
 Copy rules for a beat: `title` is 2 to 5 words with no period; `line` is at
 most two short sentences, present tense, second person where natural, under
-140 characters, with no dates and no "BCE" (the tag shows the years, not the
-line). A line may use the tokens `{age}` and `{name}` (`{Name}` at a
+140 characters, with no dates and no "BCE" (the popup shows the years, not
+the line). A line may use the tokens `{age}` and `{name}` (`{Name}` at a
 sentence's start), filled in by `src/lib/personalize.ts`'s `fillTokens`;
 `beats.test.ts` fails on any other token. Where the candidate list gave no
 line, the developer writes one in this voice and sets `needsReview: true` so
 Sean can find and check it.
 
-Tag lifecycle: an upcoming time event is a muted canvas label with a dashed
-leader (`src/render/stage.ts`). The moment the stack passes it, that label
-leaves the canvas and a paper tag flips out of the tower in its place
-(`src/tags.ts`, modeled by `src/lib/tags.ts`'s `tagsFor`). When compaction
-draws several events' years into one brick, their tags fold into a single
-bundle tag; expanding the tower splits the bundle back. Scrolling back below
-an event's year turns its tag back into the muted upcoming label — undo
-really takes it off the tower. The scrapbook (`src/scrapbook.ts`) sits outside
-that lifecycle: it lists every beat the build's peak years has ever reached
-(`atYears <= peakYears`, a high-water mark `src/main.ts` tracks independently
-of the current, undo-able `sim.years`), so a fact stays collected even after
-undo drops its tag. Restart empties it.
+Popups and pins: at most one popup is open per side at any moment — the
+latest time event on the right, the latest physical comparison on the left
+— modeled by `src/lib/popups.ts`'s `popupsFor` and rendered by
+`src/popups.ts`. An upcoming time event is a muted canvas label with a
+dashed leader (`src/render/stage.ts`); the moment the stack passes it, that
+label leaves the canvas and its popup flips out of the tower, and whatever
+popup it replaces on that side collapses into a small paper pin on its own
+brick. A pin holds its landmark's icon and reopens its popup (or, for a
+bundle, a list of every fact sharing that brick) on tap; when compaction
+draws several events' years into one drawn brick, their pins fold into a
+single bundle pin showing a count instead of an icon, and expanding the
+tower splits the bundle back. Left-side popups work the same way for
+physical comparisons ("a giraffe", "the Eiffel Tower"): the popup's line is
+the thing's `funLine` when one is written, else its `tallerThanPhrase`, with
+its height and brick count underneath. Scrolling back below a landmark's
+year (or height) turns its popup or pin back into the muted upcoming label —
+undo really takes it off the tower. The scrapbook (`src/scrapbook.ts`) sits
+outside that lifecycle: it lists every beat the build's peak years has ever
+reached (`atYears <= peakYears`, a high-water mark `src/main.ts` tracks
+independently of the current, undo-able `sim.years`), so a fact stays
+collected even after undo drops its popup. Restart empties it; opening the
+scrapbook is one item in `src/menu.ts`'s compact menu (see "Look" below).
 
 ## Facts have a source
 
@@ -117,15 +132,18 @@ scrolling to finish the full stack; a curious one takes much longer.
 Every interactive control has a visible focus state.
 `prefers-reduced-motion: reduce` is honored: the compaction squish and other
 transitions become instant. A hidden `aria-live="polite"` region under the
-app root (`src/tags.ts`) announces each newly arrived tag's title as it flips
-out of the tower — a bundle announces its newest title, the same one shown
-on the tag itself — without moving focus. The HUD counter is deliberately
-silent (`aria-live="off"`) — it changes every frame, and announcing it would
-be constant noise, not a milestone. Any modal screen — the start screen, the
-end screen, an opened tag card, or the scrapbook panel — is `role="dialog"`
-with `aria-modal="true"`, moves focus into itself (its close button, where
-there is one) when it opens, traps Escape, and returns focus to whatever
-opened it when it closes.
+app root (`src/popups.ts`) announces each newly arrived popup's title as it
+flips out of the tower — a bundle announces its newest title, the same one
+shown on the popup itself — without moving focus. The HUD counter is
+deliberately silent (`aria-live="off"`) — it changes every frame, and
+announcing it would be constant noise, not a milestone. Any modal screen —
+the start screen, the end screen, an opened popup's card, or the scrapbook
+panel — is `role="dialog"` with `aria-modal="true"`, moves focus into itself
+(its close button, where there is one) when it opens, traps Escape, and
+returns focus to whatever opened it when it closes. The menu's own panel
+(`src/menu.ts`) is a lighter-weight popover rather than a modal dialog — it
+moves focus into itself on open and back to its tab on close, and closes on
+Escape or a tap outside, but doesn't trap focus or block the page behind it.
 
 ## Run and test
 

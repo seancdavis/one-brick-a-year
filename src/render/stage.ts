@@ -8,10 +8,9 @@
 // docs/design/picture-book.dc.html and are pinned as constants below.
 
 import { courseHeightPx, effectiveRenderUnit, renderCourses, unitLabel } from '../lib/compaction';
-import { fmtYears } from '../lib/format';
+import { fmtYears, fmtYearsCompact } from '../lib/format';
 import type { IconId } from '../lib/icon-paths';
-import type { PaperColor } from '../lib/landmarks';
-import type { PlacedLandmark, PlacedLandmarks, StageBox } from '../lib/layout';
+import { boxesIntersect, labelRoom, type OccupiedBox, type PlacedLandmark, type PlacedLandmarks } from '../lib/layout';
 import { shade, type LegoColor } from '../lib/lego-colors';
 import { bricksFor, type SimState } from '../lib/sim';
 
@@ -24,12 +23,12 @@ export interface StageView {
 
 // The picture-book palette and typefaces, resolved from src/style.css's
 // custom properties.
+// Only the colors the canvas itself paints with: a landmark's own paper color
+// (navy, leaf, mustard, coral) is worn by its pin, which is HTML — see
+// src/style.css's .pin-paper--* rules — so it isn't resolved here.
 interface Tokens {
   paper: string;
-  navy: string;
-  coral: string;
   mustard: string;
-  leaf: string;
   muted: string;
   mutedIcon: string;
   shadow: string;
@@ -43,10 +42,7 @@ function readTokens(): Tokens {
   const token = (name: string) => root.getPropertyValue(name).trim();
   return {
     paper: token('--paper'),
-    navy: token('--navy'),
-    coral: token('--coral'),
     mustard: token('--mustard'),
-    leaf: token('--leaf'),
     muted: token('--muted'),
     mutedIcon: token('--muted-icon'),
     shadow: token('--paper-shadow'),
@@ -70,29 +66,16 @@ function ensureTokens(widthCss: number, heightCss: number): Tokens {
   return tokensCache;
 }
 
-// src/lib/landmarks.ts keeps only the four color names; this is where a
-// name becomes an actual drawable color.
-function paperColorHex(tokens: Tokens, color: PaperColor): string {
-  switch (color) {
-    case 'navy':
-      return tokens.navy;
-    case 'leaf':
-      return tokens.leaf;
-    case 'mustard':
-      return tokens.mustard;
-    case 'coral':
-      return tokens.coral;
-  }
-}
-
 const PAPER_DROP_PX = 3;
 
 // Below the ground line, where the stack sits. The ground is the crest of
 // the upper paper hill (see drawPaperHill) — 90px leaves room for both
 // hills to read as hills rather than a sliver.
 const GROUND_MARGIN_PX = 90;
-const TOP_MIN_PX = 150;
-const TOP_FRACTION = 0.2;
+// The floor for the stage's usable top: src/main.ts's real HUD measurement
+// (src/lib/layout.ts's stageTopFor) never pushes it below this, even if a
+// stray zero-height reading came back before the HUD had laid out.
+export const TOP_MIN_PX = 150;
 
 // Sun, top-right: a flat mustard circle with the paper drop. Position is
 // expressed the way the artboard's CSS box is (right/top margins to the
@@ -133,19 +116,21 @@ const STUD_BOTTOM_DARKEN = -0.15;
 
 // Landmark cut-paper icons and labels — see drawLandmarkLabels for how
 // these lay out a side.
+// A label unit's height is the taller of its icon and its one or two text
+// lines, and its above-baseline reach is the taller of the font size and half
+// the icon; src/lib/layout.ts mirrors both as its LABEL_METRICS /
+// LABEL_METRICS_NARROW, which is what it stacks units by, so the two must move
+// together.
 const ICON_PX = 36;
-const ICON_PX_NARROW = 28;
+const ICON_PX_NARROW = 20;
 const LABEL_FONT_PX = 20;
 const LABEL_FONT_NARROW_PX = 16;
-const LABEL_MARGIN_PX = 24;
-const ICON_LABEL_GAP_PX = 8;
 const CONNECTOR_THRESHOLD_PX = 8;
 const SECOND_LINE_HEIGHT_PX = 16;
 const LEADER_WIDTH_PX = 2;
-// Reserved between the icon's near edge and the stack edge so the dashed
-// leader is always visibly a line, never zero-length with the icon touching
-// the tower.
-const LEADER_MIN_PX = 24;
+// Where a label's icon and text sit relative to the stack is pure math and
+// lives in src/lib/layout.ts's labelRoom; this module only draws what it
+// returns.
 
 // Legend beside the tower's base: what one drawn brick is worth right now.
 // On narrow canvases there's no room beside the tower, so instead it's
@@ -197,27 +182,30 @@ function ensureNoiseCanvas(widthCss: number, heightCss: number): HTMLCanvasEleme
   return canvas;
 }
 
-export function stageBox(view: StageView): StageBox {
-  return {
-    top: Math.max(TOP_MIN_PX, view.heightCss * TOP_FRACTION),
-    ground: view.heightCss - GROUND_MARGIN_PX,
-  };
+// The ground line: where the tower stands and the upper hill crests. The
+// stage's usable *top* is not derived here — it is the real HUD measurement
+// src/main.ts takes each resize (src/lib/layout.ts's stageTopFor) and pairs
+// with this to make the StageBox it hands placeLandmarks.
+export function groundY(view: StageView): number {
+  return view.heightCss - GROUND_MARGIN_PX;
 }
 
 // Where the tower stands: a fixed width, centered. drawStage and
-// stageGeometry both read it from here, so the canvas and the HTML tag layer
-// over it can never disagree about where the stack's edges are.
+// stageGeometry both read it from here, so the canvas and the HTML popup
+// layer over it can never disagree about where the stack's edges are.
 function stackBox(view: StageView): { sx: number; sw: number } {
   const sw = view.narrow ? BRICK_WIDTH_NARROW_PX : BRICK_WIDTH_PX;
   return { sx: Math.round(view.widthCss / 2 - sw / 2), sw };
 }
 
-// The handful of numbers src/tags.ts needs to hang paper tags off the drawn
-// tower: where its right edge is, where the ground line is, and how tall one
-// drawn course is right now (BRICK_PX at rest, squished mid-compaction — see
-// src/lib/compaction.ts). Exported so those numbers come from one place
+// The handful of numbers src/popups.ts needs to hang popups and pins off the
+// drawn tower: where each of its edges is (the right side's popups hang off
+// one, the left side's off the other), where the ground line is, and how tall
+// one drawn course is right now (BRICK_PX at rest, squished mid-compaction —
+// see src/lib/compaction.ts). Exported so those numbers come from one place
 // rather than being re-derived in src/main.ts.
 export interface StageGeometry {
+  stackLeftX: number;
   stackRightX: number;
   groundY: number;
   courseHeightPx: number;
@@ -227,18 +215,19 @@ export interface StageGeometry {
 export function stageGeometry(view: StageView, sim: SimState): StageGeometry {
   const { sx, sw } = stackBox(view);
   return {
+    stackLeftX: sx,
     stackRightX: sx + sw,
-    groundY: stageBox(view).ground,
+    groundY: groundY(view),
     courseHeightPx: courseHeightPx(bricksFor(sim.years), sim.compaction),
     narrow: view.narrow,
   };
 }
 
-// The tower nudge: a tag flipping out of a brick gives the whole drawn stack
-// a short scale about its base, so the fact reads as having come out of the
-// tower rather than appearing beside it. State lives here (rather than in the
-// sim) because it is pure presentation — src/main.ts calls nudge() when a tag
-// pops and keeps rendering while nudgeActive() is true.
+// The tower nudge: a popup flipping out of a brick gives the whole drawn
+// stack a short scale about its base, so the fact reads as having come out of
+// the tower rather than appearing beside it. State lives here (rather than in
+// the sim) because it is pure presentation — src/main.ts calls nudge() when a
+// popup pops and keeps rendering while nudgeActive() is true.
 const NUDGE_MS = 120;
 const NUDGE_SCALE = 1.02;
 
@@ -366,6 +355,19 @@ function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
   return end > 0 ? text.slice(0, end).trimEnd() + ELLIPSIS : ELLIPSIS;
 }
 
+// The years of a label whose text has wrapped, fitted to the room its own
+// line has: the full form if it fits, else the compact one ("4.6B years"),
+// else that ellipsized. A second line is no wider than the first, so the years
+// have to be fitted just as the label above them is — otherwise a long number
+// on a narrow canvas runs straight off the screen edge.
+function fitYears(ctx: CanvasRenderingContext2D, years: number, maxWidth: number): string {
+  const full = fmtYears(years);
+  if (ctx.measureText(full).width <= maxWidth) return full;
+
+  const compact = fmtYearsCompact(years);
+  return ctx.measureText(compact).width <= maxWidth ? compact : ellipsize(ctx, compact, maxWidth);
+}
+
 // Greedily wraps text onto a second line once it no longer fits maxWidth,
 // measured with the canvas's current font — used for the narrow legend,
 // which sits centered over the hill rather than in a fixed side column and
@@ -387,19 +389,24 @@ function wrapToTwoLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: n
   return line2 ? [line1, line2] : [line1];
 }
 
-// One side's landmark lines, icons, and labels. Each side gets a fixed,
-// explicit text width — from the outer viewport margin to where the icon
-// column sits (iconSize plus a gap, plus LEADER_MIN_PX reserved short of the
-// stack edge so the dashed leader is never zero-length) — so the longest
-// label can never run off a narrow viewport's edge or crowd the stack: left
-// labels are left-aligned at LABEL_MARGIN_PX, right labels right-aligned at
-// width - LABEL_MARGIN_PX, and the icon column (and the dashed leader
-// reaching it from the stack) sits at the same x for every landmark on that
-// side. A label that fits `${label} · ${years}` within that width draws on
-// one line; otherwise the years drop to their own second line, and if the
-// label alone still doesn't fit, it's ellipsized (years never are). A
-// vertical connector bridges the gap when stacking has pushed the label
-// away from its true (lineY) height.
+// One side's landmark lines, icons, and labels: the label unit sits right
+// beside its icon near the tower — icon then text on the right, text then
+// icon on the left — with the icon LEADER_MIN_PX out from the stack edge (the
+// dashed leader spans exactly that gap) and the text immediately beside it,
+// wrapped within the room labelRoom leaves before the screen margin
+// (src/lib/layout.ts). A label that
+// fits `${label} · ${years}` within that room draws on one line; otherwise
+// the years drop to their own second line, and each line is fitted to that
+// same room in turn — the label ellipsized if it still doesn't fit, the years
+// abbreviated to their compact form first and only then ellipsized. A vertical
+// connector bridges the gap when stacking has pushed the label away from its
+// true (lineY) height.
+//
+// A landmark the stack has already passed draws nothing here: its popup or
+// pin (src/popups.ts) has taken the label's place, hanging off the very brick
+// for its year. And an upcoming label whose own box would land inside an open
+// popup gives way to it — only its leader draws, out to the popup's near
+// edge, so the landmark is still visibly tied to its height on the tower.
 function drawLandmarkLabels(
   ctx: CanvasRenderingContext2D,
   placed: PlacedLandmark[],
@@ -408,53 +415,75 @@ function drawLandmarkLabels(
   stackRight: number,
   width: number,
   iconSize: number,
+  fontPx: number,
   icons: Record<IconId, Path2D>,
   tokens: Tokens,
+  occupied: OccupiedBox[],
 ): void {
   const isLeft = side === 'left';
   const stackEdgeX = isLeft ? stackLeft : stackRight;
-  const textAnchorX = isLeft ? LABEL_MARGIN_PX : width - LABEL_MARGIN_PX;
-  const sideRoomPx = isLeft ? stackLeft - LABEL_MARGIN_PX : width - LABEL_MARGIN_PX - stackRight;
-  const availableWidth = Math.max(0, sideRoomPx - ICON_LABEL_GAP_PX - iconSize - LEADER_MIN_PX);
-  const iconLeftX = isLeft
-    ? textAnchorX + availableWidth + ICON_LABEL_GAP_PX
-    : textAnchorX - availableWidth - ICON_LABEL_GAP_PX - iconSize;
-  const nearEdgeX = isLeft ? iconLeftX + iconSize : iconLeftX;
-  ctx.textAlign = isLeft ? 'left' : 'right';
+  const { iconX, textX, textMaxWidth } = labelRoom(side, stackEdgeX, width, iconSize);
+  // The edge of the label unit nearest the stack — where the dashed leader
+  // from the tower lands, and where a displaced label's connector runs.
+  const nearEdgeX = isLeft ? iconX + iconSize : iconX;
+  ctx.textAlign = isLeft ? 'right' : 'left';
 
   for (const p of placed) {
+    if (p.passed) continue;
+
     const labelText = p.landmark.label;
-    const yearsText = fmtYears(p.landmark.years);
-    const oneLineText = `${labelText} · ${yearsText}`;
-    const twoLine = ctx.measureText(oneLineText).width > availableWidth;
+    const oneLineText = `${labelText} · ${fmtYears(p.landmark.years)}`;
+    const twoLine = ctx.measureText(oneLineText).width > textMaxWidth;
     const line1 = twoLine
-      ? ctx.measureText(labelText).width <= availableWidth
+      ? ctx.measureText(labelText).width <= textMaxWidth
         ? labelText
-        : ellipsize(ctx, labelText, availableWidth)
+        : ellipsize(ctx, labelText, textMaxWidth)
       : oneLineText;
+    // Only a wrapped label has a years line of its own to fit; on one line the
+    // years are already inside the text just measured.
+    const line2 = twoLine ? fitYears(ctx, p.landmark.years, textMaxWidth) : '';
     const iconCenterY = twoLine ? p.labelY + SECOND_LINE_HEIGHT_PX / 2 : p.labelY;
 
-    const labelColor = p.passed ? tokens.navy : tokens.muted;
-    const iconColor = p.passed ? paperColorHex(tokens, p.landmark.paper) : tokens.mutedIcon;
+    // The whole unit's box — icon plus however much of the text actually
+    // rendered, both lines constrained to the room they had — measured against
+    // the open popups before anything is drawn.
+    const textW = Math.max(ctx.measureText(line1).width, twoLine ? ctx.measureText(line2).width : 0);
+    const boxX = isLeft ? textX - textW : iconX;
+    const boxRight = isLeft ? iconX + iconSize : textX + textW;
+    const boxTop = Math.min(iconCenterY - iconSize / 2, p.labelY - fontPx);
+    const lastBaselineY = twoLine ? p.labelY + SECOND_LINE_HEIGHT_PX : p.labelY;
+    const boxBottom = Math.max(iconCenterY + iconSize / 2, lastBaselineY + fontPx / 4);
+    const box = { x: boxX, y: boxTop, w: boxRight - boxX, h: boxBottom - boxTop };
+    const covering = occupied.find((o) => boxesIntersect(box, o));
 
-    const icon = icons[p.landmark.icon];
-    // Full opacity in both states — an upcoming icon reads as muted purely
-    // from its flat --muted-icon color, not from being faded out.
-    drawPaperIcon(ctx, icon, iconLeftX, iconCenterY - iconSize / 2, iconSize, iconColor, 1, tokens.shadow);
-
+    const labelColor = tokens.muted;
     ctx.strokeStyle = labelColor;
     ctx.lineWidth = LEADER_WIDTH_PX;
     ctx.setLineDash([5, 4]);
+
+    if (covering) {
+      // The popup wins the space; the leader still runs from the stack out to
+      // whichever of the popup's edges faces the tower.
+      const popupEdgeX = covering.side === 'left' ? covering.x + covering.w : covering.x;
+      line(ctx, stackEdgeX, Math.round(p.lineY) + 0.5, popupEdgeX, Math.round(p.lineY) + 0.5);
+      ctx.setLineDash([]);
+      continue;
+    }
+
     line(ctx, stackEdgeX, Math.round(p.lineY) + 0.5, nearEdgeX, Math.round(p.lineY) + 0.5);
     if (Math.abs(p.lineY - p.labelY) > CONNECTOR_THRESHOLD_PX) {
       line(ctx, nearEdgeX, Math.round(p.lineY) + 0.5, nearEdgeX, Math.round(p.labelY) + 0.5);
     }
     ctx.setLineDash([]);
 
+    // Full opacity — an upcoming icon reads as muted purely from its flat
+    // --muted-icon color, not from being faded out.
+    drawPaperIcon(ctx, icons[p.landmark.icon], iconX, iconCenterY - iconSize / 2, iconSize, tokens.mutedIcon, 1, tokens.shadow);
+
     ctx.fillStyle = labelColor;
-    ctx.fillText(line1, textAnchorX, p.labelY);
+    ctx.fillText(line1, textX, p.labelY);
     if (twoLine) {
-      ctx.fillText(yearsText, textAnchorX, p.labelY + SECOND_LINE_HEIGHT_PX);
+      ctx.fillText(line2, textX, p.labelY + SECOND_LINE_HEIGHT_PX);
     }
   }
 }
@@ -539,9 +568,13 @@ export function drawStage(
   placed: PlacedLandmarks,
   icons: Record<IconId, Path2D>,
   color: LegoColor,
+  // The open popups' boxes (src/popups.ts's occupiedBoxes), in the same CSS
+  // pixel space this draws in: an upcoming label that would land inside one
+  // gives way to it — see drawLandmarkLabels.
+  occupied: OccupiedBox[],
 ): void {
   const { widthCss: W, heightCss: H, dpr, narrow } = view;
-  const { ground } = stageBox(view);
+  const ground = groundY(view);
   const { sx, sw } = stackBox(view);
   const tokens = ensureTokens(W, H);
 
@@ -565,16 +598,16 @@ export function drawStage(
   );
 
   // Landmark lines, icons, and labels: things (physical comparisons) on the
-  // left, time events (history milestones) on the right, mirrored around
-  // the centered stack. A time event the stack has already passed never
-  // reaches `placed.right` at all (src/lib/layout.ts excludes it before
-  // stacking) — its paper tag (src/tags.ts) has taken the label's place,
-  // hanging off the very brick for its year.
-  ctx.font = `${narrow ? LABEL_FONT_NARROW_PX : LABEL_FONT_PX}px ${tokens.fonts.hand}`;
+  // left, time events (history milestones) on the right, mirrored around the
+  // centered stack. Only the ones still ahead of the stack are drawn — every
+  // landmark it has passed is a popup or a pin by now (src/popups.ts), on the
+  // very brick for its year.
+  const fontPx = narrow ? LABEL_FONT_NARROW_PX : LABEL_FONT_PX;
+  ctx.font = `${fontPx}px ${tokens.fonts.hand}`;
   ctx.textBaseline = 'alphabetic';
   const iconSize = narrow ? ICON_PX_NARROW : ICON_PX;
-  drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, icons, tokens);
-  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, icons, tokens);
+  drawLandmarkLabels(ctx, placed.left, 'left', sx, sx + sw, W, iconSize, fontPx, icons, tokens, occupied);
+  drawLandmarkLabels(ctx, placed.right, 'right', sx, sx + sw, W, iconSize, fontPx, icons, tokens, occupied);
 
   // The stack: always the whole, visible courses renderCourses says to draw
   // (never zero while bricks > 0, never a single course growing to fill the

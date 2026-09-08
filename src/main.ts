@@ -4,16 +4,18 @@ import { createAudio } from './audio';
 import { createEndScreen } from './end-screen';
 import { createScrollInput, type ScrollKind } from './input';
 import { createHud } from './hud';
+import { createMenu } from './menu';
 import { createScrapbook } from './scrapbook';
 import { createStartScreen } from './start-screen';
-import { createTags } from './tags';
+import { createPopups } from './popups';
 import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from './lib/audio-schedule';
 import { beatsCrossed, buildBeats } from './lib/beats';
 import { beforePhraseFor, tallerThan } from './lib/comparisons';
 import { pxPerMeter } from './lib/compaction';
 import { fmtYears } from './lib/format';
-import { buildLandmarks, type Landmark } from './lib/landmarks';
-import { LABEL_MIN_GAP_NARROW_PX, placeLandmarks } from './lib/layout';
+import { buildLandmarks, type Landmark, type ThingLandmark } from './lib/landmarks';
+import { LABEL_METRICS, LABEL_METRICS_NARROW, placeLandmarks, stageTopFor } from './lib/layout';
+import { popupsFor, selectionAfterArrivals, type PopupSelection } from './lib/popups';
 import { colorById } from './lib/lego-colors';
 import {
   hasPersonalizationKeys,
@@ -24,8 +26,7 @@ import {
   type Personalization,
 } from './lib/personalize';
 import { applyScroll, heightM, initialSim, step } from './lib/sim';
-import { tagsFor } from './lib/tags';
-import { drawStage, nudge, nudgeActive, stageBox, stageGeometry, type StageView } from './render/stage';
+import { drawStage, groundY, nudge, nudgeActive, stageGeometry, TOP_MIN_PX, type StageView } from './render/stage';
 import { ICONS } from './render/icons';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -102,6 +103,11 @@ function timeEventsFrom(list: Landmark[]): Landmark[] {
   return list.filter((l) => l.kind === 'time').sort((a, b) => a.years - b.years);
 }
 
+// The "thing" landmarks, for src/lib/popups.ts's popupsFor (the left side).
+function thingsFrom(list: Landmark[]): ThingLandmark[] {
+  return list.filter((l): l is ThingLandmark => l.kind === 'thing');
+}
+
 let profile = parsePersonalization(params, storedRaw);
 // The time events for this profile: only "your whole life" moves with the
 // age, but everything downstream (landmarks, cards, the footer) reads the
@@ -109,6 +115,7 @@ let profile = parsePersonalization(params, storedRaw);
 let beats = buildBeats(profile);
 let landmarks = buildLandmarks(profile);
 let timeEvents = timeEventsFrom(landmarks);
+let things = thingsFrom(landmarks);
 // The most recently reported "next up" event's identity (id and years, since
 // a profile rebuild can change a landmark's years — e.g. age — without
 // changing its id), so setNext is only called when it actually changes.
@@ -133,14 +140,16 @@ if (hasUrlParams) {
 const startScreen = createStartScreen(app, (nextProfile) => {
   profile = nextProfile;
   saveProfile(profile);
-  // Rebuilds profile-derived content (beats, landmarks, timeEvents) — the
-  // running sim (years, compaction) is left untouched, whether this came
+  // Rebuilds profile-derived content (beats, landmarks, timeEvents, things) —
+  // the running sim (years, compaction) is left untouched, whether this came
   // from the mandatory first-run screen or a Restart.
   beats = buildBeats(profile);
   landmarks = buildLandmarks(profile);
   timeEvents = timeEventsFrom(landmarks);
+  things = thingsFrom(landmarks);
   lastNextKey = null; // force the teaser to recheck against the rebuilt list
-  hud.setColor(profile.colorId);
+  // No explicit push to the menu: its color chips re-read profile.colorId
+  // (src/menu.ts's `colorId` opt) the next time the panel opens.
   startScreen.close();
   needsRender = true;
 });
@@ -150,9 +159,27 @@ let soundEnabled = readStoredSound();
 
 const analytics = createAnalytics();
 
-const hud = createHud(app, {
-  colorId: profile.colorId,
-  onSoundToggle: () => {
+const hud = createHud(app);
+
+// The scrapbook: every fact the build has reached, kept even after an undo
+// drops its popup off the tower — fed from peakYears below, never from
+// sim.years itself. Opened from the menu's "my facts" item (menu.onScrapbook
+// below); its panel mounts at the app root, same as the popup layer's
+// bundle-pin card, so neither is trapped under the HUD's own stacking
+// context.
+//
+// Constructed before the menu because the menu reads its count. Ordering rule
+// for this file, guarded by src/main.order.test.ts: anything a create… call's
+// arguments name must already be constructed above it. A callback that only
+// ever runs from a later user interaction would survive a forward reference,
+// but a callback a constructor invokes while building would hit the temporal
+// dead zone — so the whole file keeps to construction order rather than
+// asking which kind each callback is.
+const scrapbook = createScrapbook(app, { profile: () => profile });
+
+// The compact menu holds sound, facts, restart, and color controls.
+const menu = createMenu(hud.menuSlot, {
+  onSound: () => {
     soundEnabled = !soundEnabled;
     saveSound(soundEnabled);
     if (soundEnabled) {
@@ -160,36 +187,56 @@ const hud = createHud(app, {
     } else {
       audio.disable();
     }
-    hud.setSound(soundEnabled);
+    menu.setSound(soundEnabled);
   },
   onRestart: () => restart(),
+  onScrapbook: () => scrapbook.open(),
+  colorId: () => profile.colorId,
   onColorSelect: (colorId) => {
     profile = { ...profile, colorId };
     saveProfile(profile);
     needsRender = true;
   },
+  soundOn: () => soundEnabled,
+  factCount: () => scrapbook.count(),
 });
-hud.setSound(soundEnabled);
 
-// The facts themselves: a tag flips out of the tower for every time event
-// the stack passes, pops once, and nudges the tower as it goes.
-const tags = createTags(app, {
+// Which popup is open on each side. 'latest' — the default, and where a side
+// returns whenever the stack passes something new on it — means "whatever was
+// passed most recently"; an id means a pin was tapped and that fact is being
+// read instead; null means the reader has a pin's card open over that side,
+// so nothing hangs off it until the next arrival. src/lib/popups.ts's
+// popupsFor turns this into one open item per side, with pins for everything
+// else on it.
+let selection: PopupSelection = { right: 'latest', left: 'latest' };
+
+// A pin-tapped id the tower no longer holds — an undo can take the very fact
+// a pin had opened back off it, leaving that side with a selection nothing
+// matches. 'latest' always resolves, and null opens nothing on purpose, so
+// neither of those is ever stale however little the side has open.
+function isStaleSelection(chosen: PopupSelection['right'], hasOpen: boolean): boolean {
+  return chosen !== 'latest' && chosen !== null && !hasOpen;
+}
+
+// The facts themselves: a popup flips out of the tower for every time event
+// (right) and every physical thing (left) the stack passes, pops once, and
+// nudges the tower as it goes; the popup it replaces collapses to a pin.
+const popups = createPopups(app, {
   onPop: () => audio.pop(),
   onNudge: () => {
     nudge();
     needsRender = true;
   },
   profile: () => profile,
+  onSelect: (side, id) => {
+    selection = { ...selection, [side]: id };
+    needsRender = true;
+  },
+  onOpenCard: (side) => {
+    selection = { ...selection, [side]: null };
+    needsRender = true;
+  },
 });
-
-// The scrapbook: every fact the build has reached, kept even after an undo
-// drops its tag off the tower — fed from peakYears below, never from
-// sim.years itself. Its tab slots into the HUD's tabs row (src/hud.ts's
-// tabsSlot) so it sits alongside sound/restart without src/hud.ts knowing
-// anything about facts; its panel mounts at the app root, same as the tags
-// layer's opened-card backdrop, so neither is trapped under the HUD's own
-// stacking context.
-const scrapbook = createScrapbook(app, hud.tabsSlot, { profile: () => profile });
 
 const endScreen = createEndScreen(app, () => resetForReplay());
 
@@ -208,14 +255,17 @@ let sim = initialSim();
 let sessionPeakYears = 0;
 // The build's own high-water mark, independent of the analytics session:
 // unlike sessionPeakYears it is never reset by a session ending (Restart
-// aside), and it is the sole source of "what has this build reached" —
-// nothing else keeps its own copy. Whenever it advances, beatsCrossed
-// (src/lib/beats.ts) between the previous peak and the new one is every
-// beat newly reached this step, handed to the scrapbook to collect and to
-// the tags layer as "new this frame" for its flip animation, pop, and nudge.
-// An undo that pulls sim.years back down takes a fact's tag off the tower
-// (src/tags.ts reads sim.years directly) without forgetting that the build
-// once reached it, since peakYears itself never drops.
+// aside). It feeds the scrapbook and nothing else — whenever it advances,
+// beatsCrossed (src/lib/beats.ts) between the previous peak and the new one
+// is every beat the build has newly reached for the first time, which is
+// exactly what the scrapbook collects. An undo that pulls sim.years back down
+// takes a fact's popup off the tower (src/popups.ts is fed from sim.years
+// directly) without forgetting that the build once reached it, since
+// peakYears itself never drops.
+//
+// What the popups key off is deliberately *not* this: an arrival is an upward
+// crossing this frame (see the frame loop below), so re-passing a fact after
+// an undo opens it again, high-water mark or no.
 let peakYears = 0;
 // Whether the start screen has closed and any scroll has reached the stack
 // — build or undo — since the last replay: the prompt/footer swap responds
@@ -256,8 +306,8 @@ function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void 
   analytics.end({ yearsReached: sessionPeakYears, finished }, opts);
 }
 
-// Shared by "Build it again" (end screen) and Restart (HUD): back to a
-// fresh, unstarted sim, with the prompt, the tags, and the scrapbook reset to
+// Shared by "Build it again" (end screen) and Restart (HUD): back to a fresh,
+// unstarted sim, with the prompt, the popups, and the scrapbook reset to
 // match — resetting peakYears to 0 is what makes the next build's facts flip
 // out (and pop, and collect) again: the very next peak advance finds every
 // beat newly crossed. The analytics session itself is not ended here —
@@ -267,10 +317,11 @@ function endSession(finished: boolean, opts?: { preferBeacon?: boolean }): void 
 // input_kind, not a leftover from this one.
 function resetForReplay(): void {
   endScreen.hide();
-  tags.clear();
+  popups.clear();
   scrapbook.clear();
   sim = initialSim();
   peakYears = 0;
+  selection = { right: 'latest', left: 'latest' };
   tickAccumulator = 0;
   hasInteracted = false;
   hasScrolledOnce = false;
@@ -406,6 +457,20 @@ const NARROW_BREAKPOINT_PX = 700;
 
 let view: StageView = { widthCss: 0, heightCss: 0, dpr: 1, narrow: false };
 
+// The stage's usable top, clear of the HUD's corner blocks
+// (docs/autopilot/2026-09-06-popups-and-menu.md's "Stage top clear of the
+// HUD"): re-measured on resize and whenever the teaser's text changes
+// (measureStageTop below), since either can change how tall the HUD's
+// top-right group renders. TOP_MIN_PX is the floor stageTopFor never drops
+// below, so a stray zero-height reading before the HUD has laid out can't
+// collapse the stage.
+let stageTop = TOP_MIN_PX;
+
+function measureStageTop(): void {
+  stageTop = stageTopFor(hud.cornerBottoms(), TOP_MIN_PX);
+  needsRender = true;
+}
+
 function resize(): void {
   const widthCss = window.innerWidth;
   const heightCss = window.innerHeight;
@@ -414,6 +479,7 @@ function resize(): void {
   view = { widthCss, heightCss, dpr, narrow: widthCss < NARROW_BREAKPOINT_PX };
   canvas.width = Math.round(widthCss * dpr);
   canvas.height = Math.round(heightCss * dpr);
+  measureStageTop();
   needsRender = true;
 }
 
@@ -461,21 +527,42 @@ function frame(timeMs: number): void {
   }
 
   // The session's peak only ever rises, even while an undo pulls sim.years
-  // back down. Nothing else keys off it: the tags read sim.years itself, so
+  // back down. Nothing else keys off it: the popups read sim.years itself, so
   // scrolling back really does take a fact off the tower and put its muted
   // label back.
   if (sessionActive) sessionPeakYears = Math.max(sessionPeakYears, sim.years);
 
   // The build's own peak, independent of any analytics session: whenever it
-  // advances, beatsCrossed is every beat newly reached this step — handed to
-  // the scrapbook to collect right away, and to the tags layer below as
-  // "new this frame" once the render gate decides whether this frame draws.
-  // Scrolling back never un-collects a beat, even though its tag leaves the
-  // tower, since peakYears itself never drops.
+  // advances, beatsCrossed is every beat the build has newly reached — handed
+  // to the scrapbook to collect right away. Scrolling back never un-collects a
+  // beat, even though its popup leaves the tower, since peakYears itself
+  // never drops.
   const prevPeakYears = peakYears;
   peakYears = Math.max(peakYears, sim.years);
-  const newlyCrossed = peakYears > prevPeakYears ? beatsCrossed(prevPeakYears, peakYears, beats) : [];
-  if (newlyCrossed.length > 0) scrapbook.add(newlyCrossed);
+  if (peakYears > prevPeakYears) scrapbook.add(beatsCrossed(prevPeakYears, peakYears, beats));
+
+  // What arrived *this frame*, on each side: the events the stack crossed
+  // upward between the previous frame's years and this one's, and the things
+  // it grew past between the two heights. Derived from the frame's own
+  // before/after state rather than from peakYears, so undoing below a fact and
+  // building back up to it opens, pops, and nudges all over again — which is
+  // what a child scrolling back and forth expects.
+  const beforeHeightM = heightM(before);
+  const nowHeightM = heightM(sim);
+  const arrivedEvents = sim.years > before.years ? beatsCrossed(before.years, sim.years, beats) : [];
+  const arrivedThings =
+    nowHeightM > beforeHeightM ? things.filter((t) => t.meters > beforeHeightM && t.meters <= nowHeightM) : [];
+  // The arrival ids src/popups.ts reads as "this is genuinely new", which is
+  // what earns the flip, the pop, and the tower's nudge.
+  const newIds = new Set<string>([...arrivedEvents.map((e) => e.id), ...arrivedThings.map((t) => t.id)]);
+
+  // Something new arriving takes that side back to its latest fact, whatever
+  // the reader had there — a pin they had tapped open, or the nothing a side
+  // falls to while its card is up.
+  selection = selectionAfterArrivals(selection, {
+    right: arrivedEvents.length > 0,
+    left: arrivedThings.length > 0,
+  });
 
   if (sim.done && !before.done) {
     endScreen.show(profile);
@@ -491,6 +578,9 @@ function frame(timeMs: number): void {
   if (nextKey !== lastNextKey) {
     lastNextKey = nextKey;
     hud.setNext(nextEvent ? `${nextEvent.label} · ${fmtYears(nextEvent.years)}` : null);
+    // The teaser showing or hiding, or wrapping to a different number of
+    // lines, can change how tall the HUD's top-right corner block is.
+    measureStageTop();
   }
 
   // Idle frame: years/done didn't change this step, and no compaction
@@ -501,34 +591,47 @@ function frame(timeMs: number): void {
   const compactionActive = sim.compaction.transition !== null || before.compaction.transition !== null;
 
   if (needsRender || simAdvancing || compactionActive || nudgeActive()) {
-    // The tags are laid out before the canvas draws, so their measured boxes
-    // are available to the stage below: on a narrow viewport a tag clamped
-    // back over the tower can crowd the left side's labels, and those give
-    // way rather than the tag moving. newlyCrossed is always computed on the
-    // very frame these models can first include it (peakYears and sim.years
-    // advance together), so passing its ids straight through is safe even
-    // though tags.update only actually runs on a rendered frame.
-    tags.update(
-      tagsFor(beats, sim.years, sim.compaction),
-      stageGeometry(view, sim),
-      newlyCrossed.map((b) => b.id),
-    );
-    const bands = view.narrow ? tags.occupiedBands() : [];
+    // popupsFor (src/lib/popups.ts) splits each side into one open popup and
+    // a pin for every other drawn brick, keyed by `selection`.
+    const popupArgs = {
+      beats,
+      things,
+      years: sim.years,
+      heightM: nowHeightM,
+      compaction: sim.compaction,
+    };
+    let models = popupsFor({ ...popupArgs, selection });
+    // Falling back to the latest keeps a popup open on a side whose selected
+    // fact has gone, rather than a bare column of pins.
+    const staleRight = isStaleSelection(selection.right, models.right.open !== null);
+    const staleLeft = isStaleSelection(selection.left, models.left.open !== null);
+    if (staleRight || staleLeft) {
+      selection = {
+        right: staleRight ? 'latest' : selection.right,
+        left: staleLeft ? 'latest' : selection.left,
+      };
+      models = popupsFor({ ...popupArgs, selection });
+    }
+
+    // The popups are laid out before the canvas draws, so their measured
+    // boxes are available to the stage below: an open popup owns its band,
+    // and any upcoming label that would land inside it gives way.
+    popups.update(models, stageGeometry(view, sim), newIds);
 
     const placed = placeLandmarks(
       landmarks,
-      heightM(sim),
+      nowHeightM,
       pxPerMeter(sim.compaction),
-      stageBox(view),
-      view.narrow ? LABEL_MIN_GAP_NARROW_PX : undefined,
+      // The ground line comes from the stage; the top is the real HUD
+      // measurement (measureStageTop above), so no canvas label is ever
+      // placed under the HUD's corner.
+      { top: stageTop, ground: groundY(view) },
+      view.narrow ? LABEL_METRICS_NARROW : LABEL_METRICS,
     );
-    if (bands.length > 0) {
-      placed.left = placed.left.filter((p) => !bands.some((b) => p.labelY >= b.top && p.labelY <= b.bottom));
-    }
-    drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId));
+    drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId), popups.occupiedBoxes());
     hud.update(sim);
     hud.setComparisons({
-      tall: tallerThan(heightM(sim), landmarks),
+      tall: tallerThan(nowHeightM, landmarks),
       ago: beforePhraseFor(sim.years, beats, profile.ageYears),
     });
     needsRender = false;
