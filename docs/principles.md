@@ -32,17 +32,25 @@ per resize rather than keeping its own copies. Nothing is duplicated by
 hand. Two hand-lettered typefaces carry all the type: Fredoka for the big
 numbers and footer values, Patrick Hand for everything else.
 
-Controls live behind one compact menu: a single paper tab in the top-right
-corner, under the "next up" teaser (`src/menu.ts`), rather than a scattered
-row of tabs and chips. Its panel holds sound, "my facts", restart, and the
-color chips, in that order, and closes on Escape or a tap outside.
+Controls live behind one compact menu: a single paper tab (`src/menu.ts`)
+alone in the top-right corner, 16 px from the top and right edges, rather
+than a scattered row of tabs and chips. Its panel holds sound, "my facts",
+restart, and the color chips, in that order, and closes on Escape or a tap
+outside.
+
+Below the ground line is the ground band: the scroll prompt above the
+compaction legend, both centered under the tower in the paper color, and
+nothing else. The band's height is reserved above the footer strip
+(`src/render/stage.ts`'s `groundY` lifts the ground line by the footer's
+measured height plus the band), so the footer never covers either line and
+nothing overlaps the prompt on first load.
 
 ## Compaction
 
 Every drawn brick is worth `unit` years (`src/lib/compaction.ts`). The legend
 always describes the effective render unit actually on screen — nothing is
-ever drawn that the legend doesn't account for — and sits beside the tower's
-base on wide layouts, below it on narrow ones.
+ever drawn that the legend doesn't account for — and sits in the ground band
+under the tower at every width.
 
 ## Facts
 
@@ -65,9 +73,14 @@ Sean can find and check it.
 Popups and pins: at most one popup is open per side at any moment — the
 latest time event on the right, the latest physical comparison on the left
 — modeled by `src/lib/popups.ts`'s `popupsFor` and rendered by
-`src/popups.ts`. An upcoming time event is a muted canvas label with a
-dashed leader (`src/render/stage.ts`); the moment the stack passes it, that
-label leaves the canvas and its popup flips out of the tower, and whatever
+`src/popups.ts`. An upcoming landmark is a muted icon on a short dashed
+leader, with no text or years beside it, and only the nearest
+`UPCOMING_PER_SIDE` unpassed ones per side are drawn at all
+(`src/lib/layout.ts`'s `visibleUpcoming`, `src/render/stage.ts`). Each draws
+completely or not at all — a leader never points at nothing — so a landmark
+beyond the cap, or one whose icon would land inside an open popup, draws
+neither icon nor leader. The moment the stack passes a landmark, its icon
+leaves the canvas and its popup flips out of the tower, and whatever
 popup it replaces on that side collapses into a small paper pin on its own
 brick. A pin holds its landmark's icon and reopens its popup (or, for a
 bundle, a list of every fact sharing that brick) on tap; when compaction
@@ -77,7 +90,7 @@ tower splits the bundle back. Left-side popups work the same way for
 physical comparisons ("a giraffe", "the Eiffel Tower"): the popup's line is
 the thing's `funLine` when one is written, else its `tallerThanPhrase`, with
 its height and brick count underneath. Scrolling back below a landmark's
-year (or height) turns its popup or pin back into the muted upcoming label —
+year (or height) turns its popup or pin back into the muted upcoming icon —
 undo really takes it off the tower. The scrapbook (`src/scrapbook.ts`) sits
 outside that lifecycle: it lists every beat the build's peak years has ever
 reached (`atYears <= peakYears`, a high-water mark `src/main.ts` tracks
@@ -96,15 +109,18 @@ to a landmark's line — never drawn to scale, and never a stand-in for the
 
 ## Privacy boundary
 
-A child's name lives in `localStorage` only. Links that personalize should
-use the fragment form (`#name=Ada&age=8&home=8`) — a URL fragment is never
-sent to the server, so it never reaches a server log. The query form
-(`?name=Ada&age=8&home=8`) still works, but a query string does reach
-server logs before the page has a chance to strip it. Either way, the page
-reads and saves the values, then strips both the fragment and the query
-from the address bar, so nothing personal lingers in the browser history or
-gets shared if the page's URL is copied mid-session. The page never writes
-the name — or anything else personal — into a URL it generates.
+The page never asks for or carries a child's name — not in the profile, the
+URL, storage, or the analytics payload — so nothing it holds identifies
+anyone. What personalization it does take (age, home height, brick color)
+lives in `localStorage` and can be shared as a link. Links should use the
+fragment form (`#age=8&home=8`) — a URL fragment is never sent to the
+server, so it never reaches a server log. The query form (`?age=8&home=8`)
+still works, but a query string does reach server logs before the page has a
+chance to strip it. Either way, the page reads and saves the values, then
+strips both the fragment and the query from the address bar, so nothing
+lingers in the browser history or gets shared if the page's URL is copied
+mid-session. The page never writes anything personal into a URL it
+generates.
 
 ## Sessions
 

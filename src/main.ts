@@ -12,9 +12,15 @@ import { humFor, ticksPerSecond, SOUND_DEFAULT_ENABLED, SOUND_STORAGE_KEY } from
 import { beatsCrossed, buildBeats } from './lib/beats';
 import { beforePhraseFor, tallerThan } from './lib/comparisons';
 import { pxPerMeter } from './lib/compaction';
-import { fmtYears } from './lib/format';
 import { buildLandmarks, type Landmark, type ThingLandmark } from './lib/landmarks';
-import { LABEL_METRICS, LABEL_METRICS_NARROW, placeLandmarks, stageTopFor } from './lib/layout';
+import {
+  LABEL_METRICS,
+  LABEL_METRICS_NARROW,
+  placeLandmarks,
+  stageTopFor,
+  UPCOMING_PER_SIDE,
+  visibleUpcoming,
+} from './lib/layout';
 import { popupsFor, selectionAfterArrivals, type PopupSelection } from './lib/popups';
 import { colorById } from './lib/lego-colors';
 import {
@@ -26,7 +32,16 @@ import {
   type Personalization,
 } from './lib/personalize';
 import { applyScroll, heightM, initialSim, step } from './lib/sim';
-import { drawStage, groundY, nudge, nudgeActive, stageGeometry, TOP_MIN_PX, type StageView } from './render/stage';
+import {
+  BAND_PROMPT_TOP_PX,
+  drawStage,
+  groundY,
+  nudge,
+  nudgeActive,
+  stageGeometry,
+  TOP_MIN_PX,
+  type StageView,
+} from './render/stage';
 import { ICONS } from './render/icons';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -85,23 +100,16 @@ function saveSound(enabled: boolean): void {
   }
 }
 
-// The fragment (#name=Ada&age=8&home=8) never leaves the browser, so it
-// never reaches a server log the way the query string does. Both can carry
-// values at once (e.g. a share target appends its own query string on top
-// of a hand-written fragment) — mergeParams keeps only the three recognized
-// keys and lets the fragment win per field over the query.
+// The fragment (#age=8&home=8) never leaves the browser, so it never reaches
+// a server log the way the query string does. Both can carry values at once
+// (e.g. a share target appends its own query string on top of a hand-written
+// fragment) — mergeParams keeps only the recognized keys and lets the
+// fragment win per field over the query.
 const query = new URLSearchParams(location.search);
 const fragment = new URLSearchParams(location.hash.slice(1));
 const params = mergeParams(query, fragment);
 const storedRaw = readStoredProfile();
 const hasUrlParams = hasPersonalizationKeys(params);
-
-// The "time" landmarks (src/lib/landmarks.ts), ascending by years-ago, for
-// the HUD's "next up" teaser (src/hud.ts's setNext) — the first one not yet
-// passed by sim.years.
-function timeEventsFrom(list: Landmark[]): Landmark[] {
-  return list.filter((l) => l.kind === 'time').sort((a, b) => a.years - b.years);
-}
 
 // The "thing" landmarks, for src/lib/popups.ts's popupsFor (the left side).
 function thingsFrom(list: Landmark[]): ThingLandmark[] {
@@ -114,22 +122,17 @@ let profile = parsePersonalization(params, storedRaw);
 // same list so there is one source of truth per profile.
 let beats = buildBeats(profile);
 let landmarks = buildLandmarks(profile);
-let timeEvents = timeEventsFrom(landmarks);
 let things = thingsFrom(landmarks);
-// The most recently reported "next up" event's identity (id and years, since
-// a profile rebuild can change a landmark's years — e.g. age — without
-// changing its id), so setNext is only called when it actually changes.
-let lastNextKey: string | null = null;
 
 // URL params are applied and stored like any other source, but the page
-// never writes the child's name (or anything else) back into the URL —
-// "Copy link" (src/end-screen.ts) copies the bare page URL only.
+// never writes anything personal back into the URL — "Copy link"
+// (src/end-screen.ts) copies the bare page URL only.
 if (hasUrlParams) {
   saveProfile(profile);
   try {
     // location.pathname carries neither a hash nor a query string, so this
-    // strips both forms at once — the child's name never lingers in the URL
-    // or history.
+    // strips both forms at once — nothing personal lingers in the URL or
+    // history.
     history.replaceState(null, '', location.pathname);
   } catch {
     // Some environments (e.g. a sandboxed iframe) block history mutation:
@@ -140,14 +143,12 @@ if (hasUrlParams) {
 const startScreen = createStartScreen(app, (nextProfile) => {
   profile = nextProfile;
   saveProfile(profile);
-  // Rebuilds profile-derived content (beats, landmarks, timeEvents, things) —
-  // the running sim (years, compaction) is left untouched, whether this came
-  // from the mandatory first-run screen or a Restart.
+  // Rebuilds profile-derived content (beats, landmarks, things) — the running
+  // sim (years, compaction) is left untouched, whether this came from the
+  // mandatory first-run screen or a Restart.
   beats = buildBeats(profile);
   landmarks = buildLandmarks(profile);
-  timeEvents = timeEventsFrom(landmarks);
   things = thingsFrom(landmarks);
-  lastNextKey = null; // force the teaser to recheck against the rebuilt list
   // No explicit push to the menu: its color chips re-read profile.colorId
   // (src/menu.ts's `colorId` opt) the next time the panel opens.
   startScreen.close();
@@ -451,19 +452,23 @@ const MAX_DPR = 2;
 // layout, matching the prototype's `W < 700` breakpoint.
 const NARROW_BREAKPOINT_PX = 700;
 
-let view: StageView = { widthCss: 0, heightCss: 0, dpr: 1, narrow: false };
+let view: StageView = { widthCss: 0, heightCss: 0, dpr: 1, narrow: false, footerPx: 0 };
 
-// The stage's usable top, clear of the HUD's corner blocks
-// (docs/autopilot/2026-09-06-popups-and-menu.md's "Stage top clear of the
-// HUD"): re-measured on resize and whenever the teaser's text changes
-// (measureStageTop below), since either can change how tall the HUD's
-// top-right group renders. TOP_MIN_PX is the floor stageTopFor never drops
-// below, so a stray zero-height reading before the HUD has laid out can't
-// collapse the stage.
+// The stage's usable top, clear of the HUD's big number block: TOP_MIN_PX is
+// the floor stageTopFor never drops below, so a stray zero-height reading
+// before the HUD has laid out can't collapse the stage.
 let stageTop = TOP_MIN_PX;
 
-function measureStageTop(): void {
-  stageTop = stageTopFor(hud.cornerBottoms(), TOP_MIN_PX);
+// The two real HUD measurements the stage is built around: how far the number
+// block reaches down (the stage's top) and how tall the footer strip renders
+// (the ground line sits a whole ground band above it, so the prompt and the
+// legend in that band are never covered). Both are re-taken on resize and
+// again once the hand-lettered fonts land, since either can change a block's
+// rendered height.
+function measureHud(): void {
+  stageTop = stageTopFor([hud.numberBlockBottom()], TOP_MIN_PX);
+  view = { ...view, footerPx: hud.footerHeight() };
+  hud.setPromptTop(groundY(view) + BAND_PROMPT_TOP_PX);
   needsRender = true;
 }
 
@@ -472,24 +477,24 @@ function resize(): void {
   const heightCss = window.innerHeight;
   const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
 
-  view = { widthCss, heightCss, dpr, narrow: widthCss < NARROW_BREAKPOINT_PX };
+  view = { widthCss, heightCss, dpr, narrow: widthCss < NARROW_BREAKPOINT_PX, footerPx: view.footerPx };
   canvas.width = Math.round(widthCss * dpr);
   canvas.height = Math.round(heightCss * dpr);
-  measureStageTop();
+  measureHud();
   needsRender = true;
 }
 
 window.addEventListener('resize', resize);
 resize();
 
-// Canvas labels are set in Patrick Hand (src/render/stage.ts); if that font
-// is still loading when the first frame paints, the browser falls back to
-// the generic cursive stack for that draw. document.fonts.ready resolves
-// once every requested font has finished loading (or failed), so this
-// forces one more redraw right after, which is enough to pick up the real
-// font even if it wasn't ready in time for the very first paint.
+// Canvas text is set in Patrick Hand (src/render/stage.ts); if that font is
+// still loading when the first frame paints, the browser falls back to the
+// generic cursive stack for that draw. document.fonts.ready resolves once
+// every requested font has finished loading (or failed), so this forces one
+// more redraw right after — and re-measures the HUD, whose own blocks are set
+// in the same typefaces and settle to their real heights only then.
 void document.fonts.ready.then(() => {
-  needsRender = true;
+  measureHud();
 });
 
 let lastTimeMs: number | null = null;
@@ -566,19 +571,6 @@ function frame(timeMs: number): void {
     endSession(true);
   }
 
-  // The "next up" teaser: the first time landmark not yet passed. Cheap
-  // enough to check every frame regardless of needsRender — it only calls
-  // into the HUD when the identity (id + years) actually changes.
-  const nextEvent = timeEvents.find((t) => t.years > sim.years) ?? null;
-  const nextKey = nextEvent ? `${nextEvent.id}:${nextEvent.years}` : null;
-  if (nextKey !== lastNextKey) {
-    lastNextKey = nextKey;
-    hud.setNext(nextEvent ? `${nextEvent.label} · ${fmtYears(nextEvent.years)}` : null);
-    // The teaser showing or hiding, or wrapping to a different number of
-    // lines, can change how tall the HUD's top-right corner block is.
-    measureStageTop();
-  }
-
   // Idle frame: years/done didn't change this step, and no compaction
   // transition is running (in either the previous or the new state).
   // Redrawing would produce pixel-identical output, so skip it — the rAF
@@ -619,12 +611,26 @@ function frame(timeMs: number): void {
       nowHeightM,
       pxPerMeter(sim.compaction),
       // The ground line comes from the stage; the top is the real HUD
-      // measurement (measureStageTop above), so no canvas label is ever
-      // placed under the HUD's corner.
+      // measurement (measureHud above), so no canvas icon is ever placed
+      // under the HUD's number block.
       { top: stageTop, ground: groundY(view) },
       view.narrow ? LABEL_METRICS_NARROW : LABEL_METRICS,
     );
-    drawStage(ctx, view, sim, placed, ICONS, colorById(profile.colorId), popups.occupiedBoxes());
+    // Only the nearest few unpassed landmarks per side are ever drawn as
+    // upcoming icons; passed ones stay in the list, holding their place in
+    // the stacking chain while their pin does the marking (src/popups.ts).
+    drawStage(
+      ctx,
+      view,
+      sim,
+      {
+        left: visibleUpcoming(placed.left, UPCOMING_PER_SIDE),
+        right: visibleUpcoming(placed.right, UPCOMING_PER_SIDE),
+      },
+      ICONS,
+      colorById(profile.colorId),
+      popups.occupiedBoxes(),
+    );
     hud.update(sim);
     hud.setComparisons({
       tall: tallerThan(nowHeightM, landmarks),

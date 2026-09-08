@@ -10,7 +10,7 @@
 // into bundles when it compacts. DOM glue only — the grouping math is pure
 // and lives in src/lib/popups.ts.
 
-import { fmtInt, fmtMeters, yearsAgo } from './lib/format';
+import { fmtCount, fmtMeters, yearsAgo } from './lib/format';
 import type { Beat } from './lib/beats';
 import { ICON_PATHS, type IconId } from './lib/icon-paths';
 import type { PaperColor, ThingLandmark } from './lib/landmarks';
@@ -300,7 +300,7 @@ export function createPopups(
     return {
       title: thing.label,
       line: thing.funLine ?? thing.tallerThanPhrase,
-      meta: `${fmtMeters(thing.meters)} · ${fmtInt(Math.round(thing.years))} bricks`,
+      meta: `${fmtMeters(thing.meters)} · ${fmtCount(thing.years, 'brick')}`,
     };
   }
 

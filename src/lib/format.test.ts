@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countSentences, fmtInt, fmtMeters, fmtYears, fmtYearsCompact, yearsAgo } from './format';
+import { countSentences, fmtCount, fmtInt, fmtMeters, fmtYears, yearsAgo } from './format';
 
 describe('fmtYears', () => {
   it('formats billions', () => {
@@ -23,25 +23,24 @@ describe('fmtYears', () => {
   });
 });
 
-describe('fmtYearsCompact', () => {
-  it('abbreviates each magnitude word', () => {
-    expect(fmtYearsCompact(4.6e9)).toBe('4.6B years');
-    expect(fmtYearsCompact(66e6)).toBe('66M years');
-    expect(fmtYearsCompact(5000)).toBe('5K years');
+describe('fmtCount', () => {
+  it('singularizes exactly one', () => {
+    expect(fmtCount(1, 'brick')).toBe('1 brick');
+    expect(fmtCount(1, 'year')).toBe('1 year');
   });
 
-  it('leaves small numbers exactly as fmtYears does', () => {
-    expect(fmtYearsCompact(31)).toBe(fmtYears(31));
+  it('pluralizes everything else, zero included', () => {
+    expect(fmtCount(0, 'brick')).toBe('0 bricks');
+    expect(fmtCount(2, 'year')).toBe('2 years');
   });
 
-  it('singularizes exactly one year, like fmtYears', () => {
-    expect(fmtYearsCompact(1)).toBe('1 year');
+  it('keeps the exact number, with thousands separators and never abbreviated', () => {
+    expect(fmtCount(1234567, 'brick')).toBe('1,234,567 bricks');
   });
 
-  it('is never longer than the full form it stands in for', () => {
-    for (const years of [4.6e9, 252e6, 66e6, 12000, 5000, 300, 1]) {
-      expect(fmtYearsCompact(years).length).toBeLessThanOrEqual(fmtYears(years).length);
-    }
+  it('rounds to the nearest whole before deciding singular or plural', () => {
+    expect(fmtCount(1.4, 'brick')).toBe('1 brick');
+    expect(fmtCount(1.6, 'brick')).toBe('2 bricks');
   });
 });
 

@@ -3,11 +3,11 @@ import type { Landmark } from './landmarks';
 import {
   boxesIntersect,
   GROUND_HIDE_PX,
-  LABEL_MARGIN_PX,
+  iconXFor,
   LABEL_METRICS,
   LABEL_METRICS_NARROW,
   LABEL_RISE_PX,
-  labelRoom,
+  LEADER_MIN_PX,
   placeLandmarks,
   STAGE_TOP_GAP_PX,
   stageTopFor,
@@ -25,21 +25,13 @@ const stage: StageBox = { top: 150, ground: 650 };
 const tallStage: StageBox = { top: 40, ground: 650 };
 const pxPerMeter = 50;
 
-// The rectangle a placed label unit occupies: it hangs from its baseline,
-// reaching metrics.risePx above it and standing as tall as its text made it —
-// one line, or two once the years have wrapped to their own. Every unit on a
-// side shares the same x range, so only the vertical spans can separate them.
-function unitBox(p: PlacedLandmark, metrics: LabelMetrics, wrapped: boolean) {
-  return {
-    x: 0,
-    y: p.labelY - metrics.risePx,
-    w: 100,
-    h: wrapped ? metrics.twoLineHeightPx : metrics.oneLineHeightPx,
-  };
+// The rectangle a placed label unit occupies: its icon, centered on its own
+// baseline, reaching metrics.risePx above it and standing metrics.heightPx
+// tall. Every unit on a side shares the same x range, so only the vertical
+// spans can separate them.
+function unitBox(p: PlacedLandmark, metrics: LabelMetrics) {
+  return { x: 0, y: p.labelY - metrics.risePx, w: 100, h: metrics.heightPx };
 }
-
-// Which of a cluster's units wrap: none of them, all of them, and a mix.
-const WRAP_PATTERNS: ((i: number) => boolean)[] = [() => false, () => true, (i) => i % 2 === 0];
 
 function mark(id: string, meters: number, kind: Landmark['kind'] = 'thing'): Landmark {
   const base = { id, meters, years: meters * 100, label: id, icon: 'bricks' as const, paper: 'navy' as const };
@@ -82,14 +74,10 @@ describe('placeLandmarks', () => {
       expect(placed.left, metricsLabel).toHaveLength(5);
       expect(placed.right, metricsLabel).toHaveLength(0);
 
-      // Whichever of them wrap and whichever don't: a unit's own height is
-      // reserved for it either way, so no mix of the two can overlap.
-      for (const wraps of WRAP_PATTERNS) {
-        const boxes = placed.left.map((p, i) => unitBox(p, metrics, wraps(i)));
-        for (let i = 0; i < boxes.length; i++) {
-          for (let j = i + 1; j < boxes.length; j++) {
-            expect(boxesIntersect(boxes[i], boxes[j]), `${metricsLabel}: units ${i} and ${j}`).toBe(false);
-          }
+      const boxes = placed.left.map((p) => unitBox(p, metrics));
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          expect(boxesIntersect(boxes[i], boxes[j]), `${metricsLabel}: units ${i} and ${j}`).toBe(false);
         }
       }
     }
@@ -229,60 +217,34 @@ describe('visibleUpcoming', () => {
   });
 });
 
-describe('labelRoom', () => {
+describe('iconXFor', () => {
   // A 768px stage with a 60px stack centered: stackLeft=354, stackRight=414.
-  const width = 768;
   const stackLeft = 354;
   const stackRight = 414;
   const iconSize = 36;
 
-  it('gives both sides positive room for their text', () => {
-    const left = labelRoom('left', stackLeft, width, iconSize);
-    const right = labelRoom('right', stackRight, width, iconSize);
+  it('leaves exactly the leader gap between the stack edge and the icon, on both sides', () => {
+    const left = iconXFor('left', stackLeft, iconSize);
+    const right = iconXFor('right', stackRight, iconSize);
 
-    expect(left.textMaxWidth).toBeGreaterThan(0);
-    expect(right.textMaxWidth).toBeGreaterThan(0);
-  });
-
-  it('sits the icon on the far side of the text from the stack, mirrored on each side', () => {
-    const left = labelRoom('left', stackLeft, width, iconSize);
-    const right = labelRoom('right', stackRight, width, iconSize);
-
-    // Left: margin ... text ... icon ... stack. Right: stack ... icon ... text ... margin.
-    expect(left.textX).toBeLessThan(left.iconX);
-    expect(right.iconX).toBeLessThan(right.textX);
+    // Left: icon ... gap ... stack. Right: stack ... gap ... icon.
+    expect(stackLeft - (left + iconSize)).toBe(LEADER_MIN_PX);
+    expect(right - stackRight).toBe(LEADER_MIN_PX);
   });
 
   it('is symmetric for a stack centered on the stage', () => {
-    const left = labelRoom('left', stackLeft, width, iconSize);
-    const right = labelRoom('right', stackRight, width, iconSize);
+    const width = 768;
+    const left = iconXFor('left', stackLeft, iconSize);
+    const right = iconXFor('right', stackRight, iconSize);
 
-    expect(right.textMaxWidth).toBe(left.textMaxWidth);
+    expect(width - (right + iconSize)).toBe(left);
   });
 
-  it('starts the text within 60px of the stack edge on a wide stage', () => {
-    // A wider stage than the narrow breakpoint, with a small icon: the text
-    // hugs the icon, which hugs the stack — "labels next to their icons"
-    // replaces the old margin-anchored layout, where a wide screen could
-    // leave the label stranded far from its icon.
-    const wideWidth = 1180;
-    const wideStackLeft = 560;
-    const wideStackRight = 620;
-    const smallIcon = 20;
+  it('moves the icon with its size on the left and leaves it put on the right', () => {
+    const small = 20;
 
-    const left = labelRoom('left', wideStackLeft, wideWidth, smallIcon);
-    const right = labelRoom('right', wideStackRight, wideWidth, smallIcon);
-
-    expect(wideStackLeft - left.textX).toBeLessThanOrEqual(60);
-    expect(right.textX - wideStackRight).toBeLessThanOrEqual(60);
-  });
-
-  it('keeps the text within the screen margin', () => {
-    const left = labelRoom('left', stackLeft, width, iconSize);
-    const right = labelRoom('right', stackRight, width, iconSize);
-
-    expect(left.textX - left.textMaxWidth).toBeGreaterThanOrEqual(LABEL_MARGIN_PX - 1);
-    expect(right.textX + right.textMaxWidth).toBeLessThanOrEqual(width - LABEL_MARGIN_PX + 1);
+    expect(iconXFor('left', stackLeft, small)).toBeGreaterThan(iconXFor('left', stackLeft, iconSize));
+    expect(iconXFor('right', stackRight, small)).toBe(iconXFor('right', stackRight, iconSize));
   });
 });
 
