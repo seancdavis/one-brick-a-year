@@ -28,6 +28,7 @@ import {
   mergeParams,
   parsePersonalization,
   serialize,
+  shouldScrubUrl,
   STORAGE_KEY,
   type Personalization,
 } from './lib/personalize';
@@ -109,7 +110,16 @@ const query = new URLSearchParams(location.search);
 const fragment = new URLSearchParams(location.hash.slice(1));
 const params = mergeParams(query, fragment);
 const storedRaw = readStoredProfile();
+// Whether the URL actually asked for personalization — gates saving the
+// parsed profile and skipping the mandatory first-run start screen below.
 const hasUrlParams = hasPersonalizationKeys(params);
+// Whether the address bar needs cleaning up: broader than hasUrlParams,
+// since a URL carrying only a `name` key (an older or hand-edited link) has
+// nothing mergeParams keeps, but the name still has to be scrubbed from the
+// address bar and history rather than left sitting there. Checked against
+// the raw query and fragment, not `params`, since mergeParams has already
+// dropped `name` by the time it builds `params`.
+const needsUrlScrub = shouldScrubUrl(query, fragment);
 
 // The "thing" landmarks, for src/lib/popups.ts's popupsFor (the left side).
 function thingsFrom(list: Landmark[]): ThingLandmark[] {
@@ -129,6 +139,8 @@ let things = thingsFrom(landmarks);
 // (src/end-screen.ts) copies the bare page URL only.
 if (hasUrlParams) {
   saveProfile(profile);
+}
+if (needsUrlScrub) {
   try {
     // location.pathname carries neither a hash nor a query string, so this
     // strips both forms at once — nothing personal lingers in the URL or
@@ -230,9 +242,6 @@ const popups = createPopups(app, {
     selection = { ...selection, [side]: id };
     needsRender = true;
   },
-  // Opening a card leaves both sides' popups exactly where they are — the
-  // null "nothing open" selection no longer exists.
-  onOpenCard: () => {},
 });
 
 const endScreen = createEndScreen(app, () => resetForReplay());
@@ -558,8 +567,7 @@ function frame(timeMs: number): void {
   const newIds = new Set<string>([...arrivedEvents.map((e) => e.id), ...arrivedThings.map((t) => t.id)]);
 
   // Something new arriving takes that side back to its latest fact, whatever
-  // the reader had there — a pin they had tapped open, or the nothing a side
-  // falls to while its card is up.
+  // the reader had there — a pin they had tapped open.
   selection = selectionAfterArrivals(selection, {
     right: arrivedEvents.length > 0,
     left: arrivedThings.length > 0,

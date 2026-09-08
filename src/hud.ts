@@ -42,7 +42,6 @@ export function createHud(root: HTMLElement): {
   yearsEl.className = 'hud-years';
   const agoLabel = document.createElement('div');
   agoLabel.className = 'hud-ago';
-  agoLabel.textContent = 'years ago!';
   big.append(yearsEl, agoLabel);
 
   const menuSlot = document.createElement('div');
@@ -88,6 +87,7 @@ export function createHud(root: HTMLElement): {
     yearsEl.textContent = fmtInt(bricks);
     tallValue.textContent = fmtMeters(heightM(sim));
     agoValue.textContent = fmtCount(bricks, 'year');
+    agoLabel.textContent = `${bricks === 1 ? 'year' : 'years'} ago!`;
   }
 
   paint(initialSim());

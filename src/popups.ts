@@ -223,11 +223,6 @@ export function createPopups(
     profile: () => Personalization;
     // A pin was tapped and that one fact is now what the side is reading.
     onSelect(side: Side, id: string): void;
-    // A pin's card was opened over the side instead — a bundle's list, or a
-    // lone fact where there is no room to read it as a popup. The card is the
-    // reading now, so the side closes what it had open behind it and shows
-    // every one of its facts as a pin until the stack passes something new.
-    onOpenCard(side: Side): void;
   },
 ): Popups {
   const layer = el('div', 'popup-layer');
@@ -433,7 +428,6 @@ export function createPopups(
       const members = pinMembers(record.model);
       if (members.length > 1 || !roomForPopup[side]) {
         openCard(pinNotes(record.model), paper);
-        opts.onOpenCard(side);
         return;
       }
       tapped.add(side);
@@ -639,7 +633,7 @@ export function createPopups(
         record.el.style.left = `${Math.round(left)}px`;
         record.el.style.top = `${Math.round(top)}px`;
         setStub(record.el, towerEdgeX, stubWidthFor(side, towerEdgeX, width), anchorY - top, record.heightPx);
-        record.box = { side, x: left, y: top, w: width, h: record.heightPx };
+        record.box = { x: left, y: top, w: width, h: record.heightPx };
       }
 
       // Pins stack per side from the ground up, each pushing against the one

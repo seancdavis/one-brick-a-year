@@ -64,9 +64,9 @@ written twice.
 Copy rules for a beat: `title` is 2 to 5 words with no period; `line` is at
 most two short sentences, present tense, second person where natural, under
 140 characters, with no dates and no "BCE" (the popup shows the years, not
-the line). A line may use the tokens `{age}` and `{name}` (`{Name}` at a
-sentence's start), filled in by `src/lib/personalize.ts`'s `fillTokens`;
-`beats.test.ts` fails on any other token. Where the candidate list gave no
+the line). A line may use the tokens `{age}` and `{brickAge}`, filled in by
+`src/lib/personalize.ts`'s `fillTokens`; `beats.test.ts` fails on any other
+token. Where the candidate list gave no
 line, the developer writes one in this voice and sets `needsReview: true` so
 Sean can find and check it.
 

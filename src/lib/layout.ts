@@ -29,10 +29,8 @@ export function stageTopFor(hudBottoms: readonly number[], minTop: number): numb
 // A rectangle in stage coordinates (CSS px, the same space the canvas draws
 // in and the popup layer is positioned in) that something already occupies:
 // src/popups.ts reports one per open popup, and src/render/stage.ts draws
-// nothing of an upcoming landmark that would land inside one. `side` says
-// which side of the tower the popup hangs on.
+// nothing of an upcoming landmark that would land inside one.
 export interface OccupiedBox {
-  side: 'left' | 'right';
   x: number;
   y: number;
   w: number;
@@ -66,16 +64,21 @@ export interface PlacedLandmarks {
 // landmarks are.
 export const LABEL_STACK_GAP_PX = 4;
 
+// The two sizes an upcoming landmark's icon is ever drawn at — wide
+// (desktop) and narrow (src/main.ts's NARROW_BREAKPOINT_PX) — defined once
+// here and imported by src/render/stage.ts, which draws at exactly these
+// sizes, so the two can never drift apart.
+export const ICON_PX = 36;
+export const ICON_PX_NARROW = 20;
+
 // One label unit is a landmark's icon alone — src/render/stage.ts draws an
 // upcoming landmark as a muted icon on a dashed leader, with no text beside
 // it — so a unit is as tall as the icon and, being centered on its own
-// baseline, reaches half that above it. Both heights mirror
-// src/render/stage.ts's ICON_PX / ICON_PX_NARROW, which is what a unit is
-// really drawn at: the two must move together.
-export const LABEL_RISE_PX = 18;
-export const LABEL_RISE_NARROW_PX = 10;
-const LABEL_HEIGHT_PX = 36;
-const LABEL_HEIGHT_NARROW_PX = 20;
+// baseline, reaches half that above it.
+export const LABEL_RISE_PX = ICON_PX / 2;
+export const LABEL_RISE_NARROW_PX = ICON_PX_NARROW / 2;
+const LABEL_HEIGHT_PX = ICON_PX;
+const LABEL_HEIGHT_NARROW_PX = ICON_PX_NARROW;
 
 // What one side's label units cost vertically: how tall each is, and how far
 // each reaches above its own baseline. The rise is what StageBox.top is
@@ -178,21 +181,15 @@ function placeSide(
 // counts as "nearest".
 export const UPCOMING_PER_SIDE = 3;
 
-// Caps a side's placed landmarks to the nearest `count` unpassed ones, for a
-// renderer that draws upcoming markers as icons only: every passed landmark
-// is kept exactly as it was (a passed thing still holds its place in the
-// left side's stacking chain — see placeSide's `excludePassed` comment), and
-// among the unpassed the ones with the smallest meters — the soonest to be
-// reached — survive, however many there were.
+// The next `count` unpassed landmarks on a side, nearest first: passed
+// landmarks are never returned (a pin marks those instead — src/popups.ts),
+// and among the unpassed the ones with the smallest meters — the soonest to
+// be reached — survive, however many there were.
 export function visibleUpcoming(placed: PlacedLandmark[], count: number): PlacedLandmark[] {
-  const nearestUnpassedIds = new Set(
-    placed
-      .filter((p) => !p.passed)
-      .sort((a, b) => a.landmark.meters - b.landmark.meters)
-      .slice(0, count)
-      .map((p) => p.landmark.id),
-  );
-  return placed.filter((p) => p.passed || nearestUnpassedIds.has(p.landmark.id));
+  return placed
+    .filter((p) => !p.passed)
+    .sort((a, b) => a.landmark.meters - b.landmark.meters)
+    .slice(0, count);
 }
 
 export function placeLandmarks(
@@ -203,11 +200,11 @@ export function placeLandmarks(
   metrics: LabelMetrics = LABEL_METRICS,
 ): PlacedLandmarks {
   return {
-    // Things (left) stay in the stack after the stack passes them, unlike
-    // time events: a passed thing's own icon is no longer drawn (its popup
-    // or pin has taken its place — src/render/stage.ts), but keeping it here
-    // holds its place in the chain, so the upcoming icons above it don't
-    // jump down the instant the stack passes it.
+    // Things (left) stay in the stacking chain after the stack passes them,
+    // unlike time events: `excludePassed: false` means a passed thing is
+    // still placed here (though visibleUpcoming below never draws it),
+    // continuing to occupy its slot so units above it are positioned exactly
+    // as if it were still there.
     left: placeSide(
       landmarks.filter((l) => l.kind === 'thing'),
       heightM,

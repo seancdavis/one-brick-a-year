@@ -10,7 +10,15 @@
 
 import { courseHeightPx, effectiveRenderUnit, renderCourses, unitLabel } from '../lib/compaction';
 import type { IconId } from '../lib/icon-paths';
-import { boxesIntersect, iconXFor, type OccupiedBox, type PlacedLandmark, type PlacedLandmarks } from '../lib/layout';
+import {
+  boxesIntersect,
+  ICON_PX,
+  ICON_PX_NARROW,
+  iconXFor,
+  type OccupiedBox,
+  type PlacedLandmark,
+  type PlacedLandmarks,
+} from '../lib/layout';
 import { shade, type LegoColor } from '../lib/lego-colors';
 import { bricksFor, type SimState } from '../lib/sim';
 
@@ -124,12 +132,10 @@ const STUD_LIGHTEN = 0.3;
 const STUD_BOTTOM_DARKEN = -0.15;
 
 // Landmark cut-paper icons — see drawUpcomingMarkers for how these lay out a
-// side. An upcoming landmark is drawn as its icon alone, so a label unit is
-// as tall as the icon and reaches half of it above its own baseline;
-// src/lib/layout.ts mirrors both as its LABEL_METRICS / LABEL_METRICS_NARROW,
-// which is what it stacks units by, so the two must move together.
-const ICON_PX = 36;
-const ICON_PX_NARROW = 20;
+// side. ICON_PX / ICON_PX_NARROW live in src/lib/layout.ts, which also
+// derives its LABEL_METRICS / LABEL_METRICS_NARROW (what it stacks units by)
+// from the same two sizes, so this drawing and that stacking can never drift
+// apart.
 // The dashed leader from the stack edge out to the icon, plus a vertical
 // connector drawn only when stacking has pushed the icon this far off its own
 // height.
@@ -378,11 +384,12 @@ function wrapToTwoLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: n
 // true (lineY) height.
 //
 // A landmark draws completely or not at all — never a leader pointing at
-// nothing. Three ways it draws nothing: the stack has already passed it (its
-// popup or pin has taken its place, hanging off the very brick for its year —
-// src/popups.ts); it is past the upcoming cap the caller applied
-// (src/lib/layout.ts's visibleUpcoming); or its whole unit, leader included,
-// would land inside an open popup, which owns that band.
+// nothing. `placed` never holds a passed landmark by the time it gets here
+// (src/lib/layout.ts's visibleUpcoming already filtered those out — a
+// passed one's popup or pin has taken its place, hanging off the very brick
+// for its year, src/popups.ts) and is already capped to the upcoming count;
+// the one way a unit still draws nothing here is its whole box, leader
+// included, landing inside an open popup, which owns that band.
 function drawUpcomingMarkers(
   ctx: CanvasRenderingContext2D,
   placed: PlacedLandmark[],
@@ -402,8 +409,6 @@ function drawUpcomingMarkers(
   const nearEdgeX = isLeft ? iconX + iconSize : iconX;
 
   for (const p of placed) {
-    if (p.passed) continue;
-
     // The whole unit's box: the icon centered on its own baseline, plus the
     // leader's run back to the tower at the landmark's true height. Measured
     // against the open popups before any part of it is drawn, so a hidden

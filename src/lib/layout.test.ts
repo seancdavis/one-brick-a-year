@@ -196,19 +196,17 @@ describe('visibleUpcoming', () => {
     expect(visibleUpcoming(list, 2).map((p) => p.landmark.id)).toEqual(['near', 'mid']);
   });
 
-  it('leaves every passed landmark untouched and uncapped', () => {
+  it('drops every passed landmark', () => {
     const list = [
       placedItem('p1', 1, true),
       placedItem('p2', 2, true),
       placedItem('u1', 3, false),
       placedItem('u2', 4, false),
-      placedItem('u3', 5, false),
-      placedItem('u4', 6, false),
     ];
 
     const visible = visibleUpcoming(list, 3);
-    expect(visible.filter((p) => p.passed).map((p) => p.landmark.id)).toEqual(['p1', 'p2']);
-    expect(visible.filter((p) => !p.passed)).toHaveLength(3);
+    expect(visible.some((p) => p.passed)).toBe(false);
+    expect(visible.map((p) => p.landmark.id)).toEqual(['u1', 'u2']);
   });
 
   it('returns every unpassed landmark when there are fewer than `count`', () => {

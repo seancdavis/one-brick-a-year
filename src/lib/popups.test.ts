@@ -296,6 +296,17 @@ describe('popupsFor: both sides at once', () => {
   });
 });
 
+describe('PopupSelection', () => {
+  it('has no null state on either side (compile-time only, enforced by npm run typecheck)', () => {
+    // @ts-expect-error right must be an id or 'latest', never null
+    const invalidRight: PopupSelection = { right: null, left: 'latest' };
+    // @ts-expect-error left must be an id or 'latest', never null
+    const invalidLeft: PopupSelection = { right: 'latest', left: null };
+    expect(invalidRight).toBeTruthy();
+    expect(invalidLeft).toBeTruthy();
+  });
+});
+
 describe('selectionAfterArrivals', () => {
   it('takes a pinned side back to its latest fact when something arrives on it', () => {
     expect(selectionAfterArrivals({ right: 'a', left: 't1' }, { right: true, left: false })).toEqual({

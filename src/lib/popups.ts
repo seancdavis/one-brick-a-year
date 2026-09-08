@@ -166,9 +166,9 @@ export function popupsFor(args: {
 }
 
 // Something new arriving on a side takes it back to its latest fact, whatever
-// the reader had there — a pin they had tapped open, or the nothing a side
-// falls to while its card is up. The arrival is the page's new thing to say,
-// so it always wins; a side nothing arrived on is left exactly as it was.
+// the reader had there — a pin they had tapped open. The arrival is the
+// page's new thing to say, so it always wins; a side nothing arrived on is
+// left exactly as it was.
 export function selectionAfterArrivals(
   selection: PopupSelection,
   arrived: { right: boolean; left: boolean },

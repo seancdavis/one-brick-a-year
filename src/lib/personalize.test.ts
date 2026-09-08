@@ -8,6 +8,7 @@ import {
   mergeParams,
   parsePersonalization,
   serialize,
+  shouldScrubUrl,
   type Personalization,
 } from './personalize';
 
@@ -169,5 +170,27 @@ describe('hasPersonalizationKeys', () => {
 
   it('is true when only the color key is present', () => {
     expect(hasPersonalizationKeys(new URLSearchParams('color=black'))).toBe(true);
+  });
+});
+
+describe('shouldScrubUrl', () => {
+  it('is true for a query carrying only a name key', () => {
+    expect(shouldScrubUrl(new URLSearchParams('name=Ada'), new URLSearchParams())).toBe(true);
+  });
+
+  it('is true for a fragment carrying only a name key', () => {
+    expect(shouldScrubUrl(new URLSearchParams(), new URLSearchParams('name=Ada'))).toBe(true);
+  });
+
+  it('is true when a recognized key is present alongside no name', () => {
+    expect(shouldScrubUrl(new URLSearchParams('age=9'), new URLSearchParams())).toBe(true);
+  });
+
+  it('is false when neither source carries a recognized key or a name', () => {
+    expect(shouldScrubUrl(new URLSearchParams('utm_source=newsletter'), new URLSearchParams('about'))).toBe(false);
+  });
+
+  it('is false for two empty sources', () => {
+    expect(shouldScrubUrl(new URLSearchParams(), new URLSearchParams())).toBe(false);
   });
 });
