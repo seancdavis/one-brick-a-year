@@ -11,7 +11,8 @@ export function fmtYears(years: number): string {
   if (years >= 1000) {
     return `${Math.round(years).toLocaleString('en-US')} years`;
   }
-  return `${Math.round(years)} years`;
+  const n = Math.round(years);
+  return `${n} ${n === 1 ? 'year' : 'years'}`;
 }
 
 // fmtYears with its magnitude words abbreviated: "4.6B years", "66M years",
@@ -30,7 +31,7 @@ export function fmtYearsCompact(years: number): string {
   if (years >= 1000) {
     return `${trimTrailingZero(Math.round(years / 100) / 10)}K years`;
   }
-  return `${Math.round(years)} years`;
+  return fmtYears(years);
 }
 
 export function fmtMeters(meters: number): string {
@@ -47,12 +48,11 @@ export function fmtInt(n: number): string {
   return Math.round(n).toLocaleString('en-US');
 }
 
-// fmtYears says "1 years" for a single-year gap, which is right for a
-// landmark label ("... · 1 years") but wrong in a sentence ("1 year ago").
-// Shared by the popups and their opened card (src/popups.ts) and the scrapbook
-// (src/scrapbook.ts) so both read the same way.
+// fmtYears already singularizes a one-year gap ("1 year"), so this only
+// appends "ago". Shared by the popups and their opened card (src/popups.ts)
+// and the scrapbook (src/scrapbook.ts) so both read the same way.
 export function yearsAgo(years: number): string {
-  return Math.round(years) === 1 ? '1 year ago' : `${fmtYears(years)} ago`;
+  return `${fmtYears(years)} ago`;
 }
 
 function trimTrailingZero(n: number): string {

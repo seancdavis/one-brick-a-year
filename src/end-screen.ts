@@ -3,16 +3,12 @@
 // glue only — src/main.ts decides when to show/hide it.
 
 import { BEYOND_THE_STACK } from './lib/beats';
-import { DEFAULT_PROFILE, type Personalization } from './lib/personalize';
+import type { Personalization } from './lib/personalize';
 
 const COPY_LABEL_RESET_MS = 2000;
 
 function nameLine(profile: Personalization): string {
-  if (profile.name === DEFAULT_PROFILE.name) {
-    return `You were the first ${profile.ageYears}.`;
-  }
-  const name = profile.name.charAt(0).toUpperCase() + profile.name.slice(1);
-  return `${name}, you were the first ${profile.ageYears}.`;
+  return `You were the first ${profile.ageYears}.`;
 }
 
 export function createEndScreen(

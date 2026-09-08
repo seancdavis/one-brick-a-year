@@ -11,6 +11,8 @@ import {
   placeLandmarks,
   STAGE_TOP_GAP_PX,
   stageTopFor,
+  UPCOMING_PER_SIDE,
+  visibleUpcoming,
   type LabelMetrics,
   type PlacedLandmark,
   type StageBox,
@@ -72,13 +74,13 @@ describe('placeLandmarks', () => {
     // these units would be drawn on top of the last.
     const landmarks = [mark('a', 5.0), mark('b', 5.1), mark('c', 5.2), mark('d', 5.3), mark('e', 5.4)];
 
-    for (const [name, metrics] of [
+    for (const [metricsLabel, metrics] of [
       ['wide', LABEL_METRICS],
       ['narrow', LABEL_METRICS_NARROW],
     ] as const) {
       const placed = placeLandmarks(landmarks, 0, pxPerMeter, tallStage, metrics);
-      expect(placed.left, name).toHaveLength(5);
-      expect(placed.right, name).toHaveLength(0);
+      expect(placed.left, metricsLabel).toHaveLength(5);
+      expect(placed.right, metricsLabel).toHaveLength(0);
 
       // Whichever of them wrap and whichever don't: a unit's own height is
       // reserved for it either way, so no mix of the two can overlap.
@@ -86,7 +88,7 @@ describe('placeLandmarks', () => {
         const boxes = placed.left.map((p, i) => unitBox(p, metrics, wraps(i)));
         for (let i = 0; i < boxes.length; i++) {
           for (let j = i + 1; j < boxes.length; j++) {
-            expect(boxesIntersect(boxes[i], boxes[j]), `${name}: units ${i} and ${j}`).toBe(false);
+            expect(boxesIntersect(boxes[i], boxes[j]), `${metricsLabel}: units ${i} and ${j}`).toBe(false);
           }
         }
       }
@@ -176,6 +178,54 @@ describe('placeLandmarks', () => {
     expect(low).toBeDefined();
     expect(high).toBeDefined();
     expect(high!.lineY).toBeLessThan(low!.lineY);
+  });
+});
+
+describe('visibleUpcoming', () => {
+  function placedItem(id: string, meters: number, passed: boolean): PlacedLandmark {
+    return { landmark: mark(id, meters), lineY: 0, labelY: 0, passed };
+  }
+
+  it('keeps at most `count` unpassed landmarks', () => {
+    const list = [
+      placedItem('a', 1, false),
+      placedItem('b', 2, false),
+      placedItem('c', 3, false),
+      placedItem('d', 4, false),
+    ];
+
+    expect(visibleUpcoming(list, UPCOMING_PER_SIDE).filter((p) => !p.passed)).toHaveLength(UPCOMING_PER_SIDE);
+  });
+
+  it('keeps the nearest unpassed landmarks by ascending meters, dropping the rest', () => {
+    const list = [
+      placedItem('far', 10, false),
+      placedItem('near', 1, false),
+      placedItem('mid', 5, false),
+      placedItem('farthest', 20, false),
+    ];
+
+    expect(visibleUpcoming(list, 2).map((p) => p.landmark.id)).toEqual(['near', 'mid']);
+  });
+
+  it('leaves every passed landmark untouched and uncapped', () => {
+    const list = [
+      placedItem('p1', 1, true),
+      placedItem('p2', 2, true),
+      placedItem('u1', 3, false),
+      placedItem('u2', 4, false),
+      placedItem('u3', 5, false),
+      placedItem('u4', 6, false),
+    ];
+
+    const visible = visibleUpcoming(list, 3);
+    expect(visible.filter((p) => p.passed).map((p) => p.landmark.id)).toEqual(['p1', 'p2']);
+    expect(visible.filter((p) => !p.passed)).toHaveLength(3);
+  });
+
+  it('returns every unpassed landmark when there are fewer than `count`', () => {
+    const list = [placedItem('a', 1, false), placedItem('b', 2, false)];
+    expect(visibleUpcoming(list, UPCOMING_PER_SIDE)).toHaveLength(2);
   });
 });
 

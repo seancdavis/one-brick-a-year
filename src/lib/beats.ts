@@ -7,9 +7,9 @@
 // with no period; `line` is at most two short sentences and 140 characters,
 // present tense for things still true, past tense for one-off happenings,
 // second person where natural, no dates and no "BCE" (the popup shows the
-// years). `{age}`, `{brickAge}`, and `{name}` are filled in by
-// src/lib/personalize.ts's fillTokens. `needsReview: true` marks a line
-// written by the developer
+// years). `{age}` and `{brickAge}` are filled in by src/lib/personalize.ts's
+// fillTokens; there is no name token — a line addresses the reader as "you".
+// `needsReview: true` marks a line written by the developer
 // rather than taken from the candidate list, so Sean can find them. Every
 // row keeps a one-line source comment; facts are checked, never invented.
 //
@@ -27,7 +27,7 @@ export interface Beat {
   // label (see timeLabel) and of beforePhraseFor's fallback.
   title: string;
   // At most two short sentences, 140 characters. May contain
-  // {age}/{brickAge}/{name}.
+  // {age}/{brickAge}.
   line: string;
   // Short "before X" copy for the footer's right-hand comparison
   // (src/lib/comparisons.ts's beforePhraseFor). Where the candidate list
@@ -94,7 +94,7 @@ export const BEATS: readonly Beat[] = [
     id: 'minecraft',
     atYears: 17,
     title: 'Minecraft comes out',
-    line: 'Seventeen bricks. Minecraft is older than {name}.',
+    line: 'Seventeen bricks. Minecraft is older than you.',
     icon: 'bricks',
     paper: 'mustard',
   },
@@ -535,7 +535,7 @@ export const BEATS: readonly Beat[] = [
     id: 'lucy',
     atYears: 3.2e6,
     title: 'Lucy walks upright',
-    line: 'She was about as tall as {name}, walked on two legs, and climbed trees.',
+    line: 'She was about as tall as you, walked on two legs, and climbed trees.',
     icon: 'person',
     paper: 'coral',
   },
@@ -632,7 +632,7 @@ export const BEATS: readonly Beat[] = [
     id: 't-rex',
     atYears: 68e6,
     title: 'T. rex',
-    line: 'T. rex lived closer to {name} than to Stegosaurus.',
+    line: 'T. rex lived closer to you than to Stegosaurus.',
     icon: 'dinosaur',
     paper: 'coral',
   },

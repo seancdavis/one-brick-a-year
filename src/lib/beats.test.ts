@@ -14,7 +14,7 @@ const MAX_LINE_LENGTH = 140;
 const MIN_TITLE_WORDS = 2;
 const MAX_TITLE_WORDS = 5;
 
-const profile = { name: 'Kid', ageYears: 8, homeMeters: 8, colorId: DEFAULT_COLOR_ID };
+const profile = { ageYears: 8, homeMeters: 8, colorId: DEFAULT_COLOR_ID };
 
 describe('BEATS', () => {
   it('holds at least the ninety time events the round asked for', () => {

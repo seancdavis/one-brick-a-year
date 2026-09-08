@@ -13,9 +13,9 @@ import menuSource from './menu.ts?raw';
 
 // The body of a `function name() { ... }` declared at createMenu's own indent,
 // from its opening line to the two-space `}` that closes it.
-function bodyOf(source: string, name: string): string {
-  const body = new RegExp(`\\n  function ${name}\\(\\)[\\s\\S]*?\\n  \\}`).exec(source);
-  if (!body) throw new Error(`src/menu.ts has no ${name}() at createMenu's indent`);
+function bodyOf(source: string, fnName: string): string {
+  const body = new RegExp(`\\n  function ${fnName}\\(\\)[\\s\\S]*?\\n  \\}`).exec(source);
+  if (!body) throw new Error(`src/menu.ts has no ${fnName}() at createMenu's indent`);
   return body[0];
 }
 

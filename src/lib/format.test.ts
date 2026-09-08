@@ -17,6 +17,10 @@ describe('fmtYears', () => {
   it('formats small numbers plainly', () => {
     expect(fmtYears(31)).toBe('31 years');
   });
+
+  it('singularizes exactly one year', () => {
+    expect(fmtYears(1)).toBe('1 year');
+  });
 });
 
 describe('fmtYearsCompact', () => {
@@ -28,6 +32,10 @@ describe('fmtYearsCompact', () => {
 
   it('leaves small numbers exactly as fmtYears does', () => {
     expect(fmtYearsCompact(31)).toBe(fmtYears(31));
+  });
+
+  it('singularizes exactly one year, like fmtYears', () => {
+    expect(fmtYearsCompact(1)).toBe('1 year');
   });
 
   it('is never longer than the full form it stands in for', () => {

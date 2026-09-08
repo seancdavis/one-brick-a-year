@@ -204,18 +204,15 @@ const menu = createMenu(hud.menuSlot, {
 // Which popup is open on each side. 'latest' — the default, and where a side
 // returns whenever the stack passes something new on it — means "whatever was
 // passed most recently"; an id means a pin was tapped and that fact is being
-// read instead; null means the reader has a pin's card open over that side,
-// so nothing hangs off it until the next arrival. src/lib/popups.ts's
-// popupsFor turns this into one open item per side, with pins for everything
-// else on it.
+// read instead. src/lib/popups.ts's popupsFor turns this into one open item
+// per side, with pins for everything else on it.
 let selection: PopupSelection = { right: 'latest', left: 'latest' };
 
 // A pin-tapped id the tower no longer holds — an undo can take the very fact
 // a pin had opened back off it, leaving that side with a selection nothing
-// matches. 'latest' always resolves, and null opens nothing on purpose, so
-// neither of those is ever stale however little the side has open.
+// matches. 'latest' always resolves, so it is never stale.
 function isStaleSelection(chosen: PopupSelection['right'], hasOpen: boolean): boolean {
-  return chosen !== 'latest' && chosen !== null && !hasOpen;
+  return chosen !== 'latest' && !hasOpen;
 }
 
 // The facts themselves: a popup flips out of the tower for every time event
@@ -232,10 +229,9 @@ const popups = createPopups(app, {
     selection = { ...selection, [side]: id };
     needsRender = true;
   },
-  onOpenCard: (side) => {
-    selection = { ...selection, [side]: null };
-    needsRender = true;
-  },
+  // Opening a card leaves both sides' popups exactly where they are — the
+  // null "nothing open" selection no longer exists.
+  onOpenCard: () => {},
 });
 
 const endScreen = createEndScreen(app, () => resetForReplay());

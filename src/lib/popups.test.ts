@@ -296,37 +296,8 @@ describe('popupsFor: both sides at once', () => {
   });
 });
 
-describe('popupsFor: a side with nothing open', () => {
-  const beats = [beat('a', 12), beat('b', 30)];
-  const things = [thing('t1', 2), thing('t2', 5)];
-  const args = { beats, things, years: 40, heightM: 6, compaction: at(1) };
-
-  it('opens no popup and shows every passed item as a pin', () => {
-    const result = popupsFor({ ...args, selection: { right: null, left: null } });
-
-    expect(result.right.open).toBeNull();
-    expect(pinIds(result.right)).toEqual(['a', 'b']);
-    expect(result.left.open).toBeNull();
-    expect(pinIds(result.left)).toEqual(['t1', 't2']);
-  });
-
-  it('closes only its own side', () => {
-    const result = popupsFor({ ...args, selection: { right: null, left: 'latest' } });
-
-    expect(result.right.open).toBeNull();
-    expect(openId(result.left)).toBe('t2');
-  });
-});
-
 describe('selectionAfterArrivals', () => {
-  it('takes a closed side back to its latest fact when something arrives on it', () => {
-    expect(selectionAfterArrivals({ right: null, left: null }, { right: true, left: false })).toEqual({
-      right: 'latest',
-      left: null,
-    });
-  });
-
-  it('overrides a pin the reader had tapped open, on the arriving side only', () => {
+  it('takes a pinned side back to its latest fact when something arrives on it', () => {
     expect(selectionAfterArrivals({ right: 'a', left: 't1' }, { right: true, left: false })).toEqual({
       right: 'latest',
       left: 't1',
@@ -334,8 +305,8 @@ describe('selectionAfterArrivals', () => {
   });
 
   it('leaves both sides alone when nothing arrived', () => {
-    expect(selectionAfterArrivals({ right: null, left: 't1' }, { right: false, left: false })).toEqual({
-      right: null,
+    expect(selectionAfterArrivals({ right: 'latest', left: 't1' }, { right: false, left: false })).toEqual({
+      right: 'latest',
       left: 't1',
     });
   });

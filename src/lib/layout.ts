@@ -218,6 +218,30 @@ function placeSide(
   return placed;
 }
 
+// Per side, at most this many unpassed landmarks are ever placed as upcoming
+// icons (docs/autopilot/2026-09-08-quiet-corner.md's "Upcoming"): a busy
+// right side (lots of time events close together) should never look denser
+// than the left, and nothing should jumble after a compaction regroups what
+// counts as "nearest".
+export const UPCOMING_PER_SIDE = 3;
+
+// Caps a side's placed landmarks to the nearest `count` unpassed ones, for a
+// renderer that draws upcoming markers as icons only: every passed landmark
+// is kept exactly as it was (a passed thing still holds its place in the
+// left side's stacking chain — see placeSide's `excludePassed` comment), and
+// among the unpassed the ones with the smallest meters — the soonest to be
+// reached — survive, however many there were.
+export function visibleUpcoming(placed: PlacedLandmark[], count: number): PlacedLandmark[] {
+  const nearestUnpassedIds = new Set(
+    placed
+      .filter((p) => !p.passed)
+      .sort((a, b) => a.landmark.meters - b.landmark.meters)
+      .slice(0, count)
+      .map((p) => p.landmark.id),
+  );
+  return placed.filter((p) => p.passed || nearestUnpassedIds.has(p.landmark.id));
+}
+
 export function placeLandmarks(
   landmarks: Landmark[],
   heightM: number,

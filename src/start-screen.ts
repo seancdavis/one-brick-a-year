@@ -128,9 +128,9 @@ export function createStartScreen(
   return {
     open(profile, opts) {
       dismissible = opts?.dismissible ?? true;
-      // Leave the field blank rather than show the fallback token "you" as
-      // if it were a real name; every other field's default is a real value.
-      nameInput.value = profile.name === DEFAULT_PROFILE.name ? '' : profile.name;
+      // Personalization no longer carries a name, so this field never has
+      // one to prefill.
+      nameInput.value = '';
       ageInput.value = String(profile.ageYears);
       homeSelect.value = String(profile.homeMeters);
       selectedColorId = profile.colorId;

@@ -7,8 +7,7 @@
 // - The open popup is exactly one event (right) or one thing (left) — never a
 //   bundle. 'latest' means the most recently passed one: the highest atYears
 //   on the right, the tallest passed thing on the left. An id means a pin was
-//   tapped and that one fact is being read instead. null means nothing is open
-//   on that side at all, and every passed item on it is a pin.
+//   tapped and that one fact is being read instead.
 // - Which item is open is chosen before anything is grouped, so a compaction
 //   regrouping the bricks underneath can never change it. The open item's own
 //   brick may still carry a pin — for the rest of that brick's members.
@@ -46,13 +45,12 @@ export type PinModel =
   | { side: 'right'; bricksFromGround: number; members: Beat[] }
   | { side: 'left'; bricksFromGround: number; members: ThingLandmark[] };
 
-// Which popup is open on each side: an id (an event's or a thing's), 'latest'
-// for the most recently passed one — the default, and where a side returns
-// whenever the stack passes something new on it — or null for none at all,
-// which is where a side goes when the reader opens a pin's card over it.
+// Which popup is open on each side: an id (an event's or a thing's), or
+// 'latest' for the most recently passed one — the default, and where a side
+// returns whenever the stack passes something new on it.
 export interface PopupSelection {
-  right: string | 'latest' | null;
-  left: string | 'latest' | null;
+  right: string | 'latest';
+  left: string | 'latest';
 }
 
 export interface PopupSide {
@@ -95,15 +93,10 @@ function rightSide(beats: readonly Beat[], years: number, unit: number, selectio
   const passed = beats.filter((beat) => beat.atYears <= years).sort((a, b) => a.atYears - b.atYears);
   if (passed.length === 0) return { open: null, pins: [] };
 
-  // null opens nothing deliberately. A selected id the stack no longer holds
-  // opens nothing by accident; src/main.ts notices that one and falls back to
-  // 'latest'.
+  // A selected id the stack no longer holds opens nothing; src/main.ts
+  // notices that and falls back to 'latest'.
   const openEvent =
-    selection === null
-      ? null
-      : selection === 'latest'
-        ? passed[passed.length - 1]
-        : (passed.find((b) => b.id === selection) ?? null);
+    selection === 'latest' ? passed[passed.length - 1] : (passed.find((b) => b.id === selection) ?? null);
 
   const open: PopupModel | null = openEvent
     ? { side: 'right', bricksFromGround: brickOf(openEvent.atYears, unit), event: openEvent }
@@ -135,11 +128,7 @@ function leftSide(
   if (passed.length === 0) return { open: null, pins: [] };
 
   const openThing =
-    selection === null
-      ? null
-      : selection === 'latest'
-        ? passed[passed.length - 1]
-        : (passed.find((t) => t.id === selection) ?? null);
+    selection === 'latest' ? passed[passed.length - 1] : (passed.find((t) => t.id === selection) ?? null);
 
   const open: PopupModel | null = openThing
     ? { side: 'left', bricksFromGround: brickOf(openThing.years, unit), thing: openThing }

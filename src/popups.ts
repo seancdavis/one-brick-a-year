@@ -420,8 +420,8 @@ export function createPopups(
     }
 
     const lead = pinLead(model);
-    const name = 'title' in lead ? lead.title : lead.label;
-    paper.setAttribute('aria-label', count > 1 ? `${name} and ${count - 1} more facts` : name);
+    const label = 'title' in lead ? lead.title : lead.label;
+    paper.setAttribute('aria-label', count > 1 ? `${label} and ${count - 1} more facts` : label);
 
     container.append(paper);
     layer.append(container);
