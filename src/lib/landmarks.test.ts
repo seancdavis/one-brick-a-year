@@ -13,7 +13,7 @@ const MAX_FUN_LINE_LENGTH = 140;
 const PAPER_COLOR_NAMES: readonly PaperColor[] = ['navy', 'leaf', 'mustard', 'coral'];
 const THING_PAPER_NAMES: readonly PaperColor[] = ['navy', 'leaf'];
 
-const profile = { name: 'Kid', ageYears: 8, homeMeters: 8, colorId: DEFAULT_COLOR_ID };
+const profile = { ageYears: 8, homeMeters: 8, colorId: DEFAULT_COLOR_ID };
 
 describe('buildLandmarks', () => {
   it('sorts landmarks ascending by meters', () => {
@@ -60,7 +60,7 @@ describe('buildLandmarks', () => {
   });
 
   it('reflects the profile for personal landmarks', () => {
-    const landmarks = buildLandmarks({ name: 'Kid', ageYears: 10, homeMeters: 4, colorId: DEFAULT_COLOR_ID });
+    const landmarks = buildLandmarks({ ageYears: 10, homeMeters: 4, colorId: DEFAULT_COLOR_ID });
     const life = landmarks.find((l) => l.id === 'life');
     const home = landmarks.find((l) => l.id === 'home');
     expect(life?.years).toBe(10);

@@ -1,20 +1,20 @@
-// Personalization: the child's name, age, home height, and brick color, used
-// to build the "your whole life" and "your home" landmarks, the brick tower
-// color, and (later) the end screen copy. Pure — no DOM, no localStorage
-// reads/writes here. src/main.ts owns reading/writing localStorage and the
-// URL; this module only parses and validates whatever strings it is handed.
+// Personalization: age, home height, and brick color, used to build the
+// "your whole life" and "your home" landmarks and the brick tower color.
+// Never a name — the page never names the reader, so it stays shareable with
+// anyone (docs/autopilot/2026-09-08-quiet-corner.md). Pure — no DOM, no
+// localStorage reads/writes here. src/main.ts owns reading/writing
+// localStorage and the URL; this module only parses and validates whatever
+// strings it is handed.
 
 import { DEFAULT_COLOR_ID, LEGO_COLORS } from './lego-colors';
 
 export interface Personalization {
-  name: string;
   ageYears: number;
   homeMeters: number;
   colorId: string;
 }
 
 export const DEFAULT_PROFILE: Personalization = {
-  name: 'you',
   ageYears: 8,
   homeMeters: 8,
   colorId: DEFAULT_COLOR_ID,
@@ -30,14 +30,6 @@ export const HOME_OPTIONS: readonly { label: string; meters: number }[] = [
   { label: 'a two-story home', meters: 8 },
   { label: 'an apartment building', meters: 30 },
 ];
-
-const MAX_NAME_LENGTH = 24;
-
-function parseName(raw: string | null | undefined): string | null {
-  if (raw == null) return null;
-  const trimmed = raw.trim().slice(0, MAX_NAME_LENGTH);
-  return trimmed.length > 0 ? trimmed : null;
-}
 
 function parseAge(raw: string | null | undefined): number | null {
   if (raw == null) return null;
@@ -85,9 +77,8 @@ function parseStored(stored: string | null): Partial<Personalization> {
   const record = parsed as Record<string, unknown>;
   const result: Partial<Personalization> = {};
 
-  const name = parseName(toValidatable(record.name));
-  if (name !== null) result.name = name;
-
+  // A `name` key from an older stored profile (or a hand-edited value) is
+  // simply not read: this profile never carries a name.
   const ageYears = parseAge(toValidatable(record.ageYears));
   if (ageYears !== null) result.ageYears = ageYears;
 
@@ -100,37 +91,32 @@ function parseStored(stored: string | null): Partial<Personalization> {
   return result;
 }
 
-// Precedence: URL params override stored JSON, which overrides defaults.
-// `URLSearchParams` is available in Node, so this stays pure and testable.
+// Precedence: URL params override stored JSON, which overrides defaults. A
+// `name` key on either source is simply never read here — this profile never
+// carries a name. `URLSearchParams` is available in Node, so this stays pure
+// and testable.
 export function parsePersonalization(params: URLSearchParams, stored: string | null): Personalization {
   const fromStored = parseStored(stored);
 
-  const name = parseName(params.get('name')) ?? fromStored.name ?? DEFAULT_PROFILE.name;
   const ageYears = parseAge(params.get('age')) ?? fromStored.ageYears ?? DEFAULT_PROFILE.ageYears;
   const homeMeters = parseHome(params.get('home')) ?? fromStored.homeMeters ?? DEFAULT_PROFILE.homeMeters;
   const colorId = parseColor(params.get('color')) ?? fromStored.colorId ?? DEFAULT_PROFILE.colorId;
 
-  return { name, ageYears, homeMeters, colorId };
+  return { ageYears, homeMeters, colorId };
 }
 
 export function serialize(p: Personalization): string {
   return JSON.stringify(p);
 }
 
-// The tokens a beat's line (src/lib/beats.ts) may contain. `{name}` is the
-// child's name, or the default "you" — so "older than {name}" reads "older
-// than you" until a name is typed in. `{Name}` is the same value at the
-// start of a sentence, where the default has to become "You". `{age}` is the
+// The tokens a beat's line (src/lib/beats.ts) may contain. `{age}` is the
 // profile age as a plain number. `{brickAge}` is the complete "N brick(s)"
 // phrase ("one brick", "nine bricks", "100 bricks"), for a line that wants
-// the picture-book brick count rather than a bare number. A line's tokens
-// are checked against this list in beats.test.ts, so a typo can never ship
-// as literal braces on screen.
-//
-// No substitution changes the verb after it, so lines keep the token out of
-// the subject slot ("older than {name}", never "{Name} is eight") — that
-// would need "You are" for the default name and "Ada is" for a real one.
-export const LINE_TOKENS = ['{age}', '{brickAge}', '{name}', '{Name}'] as const;
+// the picture-book brick count rather than a bare number. There is no name
+// token: a line addresses the reader as "you" directly instead. A line's
+// tokens are checked against this list in beats.test.ts, so a typo can never
+// ship as literal braces on screen.
+export const LINE_TOKENS = ['{age}', '{brickAge}'] as const;
 
 const ONES = [
   'zero',
@@ -167,11 +153,9 @@ function spellAge(age: number): string {
   return ones === 0 ? TENS[tens] : `${TENS[tens]}-${ONES[ones]}`;
 }
 
-// Fills a beat's line in for one child. Unknown braces are left alone —
+// Fills a beat's line in for one profile. Unknown braces are left alone —
 // there is a test that no line has any.
 export function fillTokens(line: string, profile: Personalization): string {
-  const name = profile.name.trim() === '' ? DEFAULT_PROFILE.name : profile.name;
-  const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
   const age = profile.ageYears;
 
   // The complete "N brick(s)" phrase reads like a picture book — "nine
@@ -179,20 +163,25 @@ export function fillTokens(line: string, profile: Personalization): string {
   // out would be unreadable, so 100 and up stay digits.
   const brickAge = age < 100 ? `${spellAge(age)} brick${age === 1 ? '' : 's'}` : `${age} bricks`;
 
-  return line
-    .replaceAll('{brickAge}', brickAge)
-    .replaceAll('{age}', String(age))
-    .replaceAll('{Name}', capitalized)
-    .replaceAll('{name}', name);
+  return line.replaceAll('{brickAge}', brickAge).replaceAll('{age}', String(age));
 }
 
-// The URL keys this page recognizes for personalization. Anything else on
-// the query string or in the fragment (tracking params, a stray "#about"
-// anchor) is not a personalization source and gets dropped.
-export const PERSONALIZATION_KEYS = ['name', 'age', 'home', 'color'] as const;
+// The URL keys this page recognizes for personalization. A `name` key on
+// either the query string or the fragment is not one of them, so it's
+// dropped like any other unrecognized key (tracking params, a stray
+// "#about" anchor) — this profile never carries a name.
+export const PERSONALIZATION_KEYS = ['age', 'home', 'color'] as const;
 
 export function hasPersonalizationKeys(params: URLSearchParams): boolean {
   return PERSONALIZATION_KEYS.some((key) => params.has(key));
+}
+
+// Checks the raw query and fragment, not mergeParams' output: mergeParams
+// drops `name`, but a `name` key still has to be scrubbed from the address bar.
+export function shouldScrubUrl(query: URLSearchParams, fragment: URLSearchParams): boolean {
+  return (
+    hasPersonalizationKeys(query) || hasPersonalizationKeys(fragment) || query.has('name') || fragment.has('name')
+  );
 }
 
 // Combines the query string and the fragment into one set of params, kept

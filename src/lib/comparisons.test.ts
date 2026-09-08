@@ -4,7 +4,7 @@ import { beforePhraseFor, tallerThan } from './comparisons';
 import { buildLandmarks } from './landmarks';
 import { DEFAULT_COLOR_ID } from './lego-colors';
 
-const profile = { name: 'Kid', ageYears: 8, homeMeters: 8, colorId: DEFAULT_COLOR_ID };
+const profile = { ageYears: 8, homeMeters: 8, colorId: DEFAULT_COLOR_ID };
 const landmarks = buildLandmarks(profile);
 
 describe('tallerThan', () => {

@@ -11,26 +11,8 @@ export function fmtYears(years: number): string {
   if (years >= 1000) {
     return `${Math.round(years).toLocaleString('en-US')} years`;
   }
-  return `${Math.round(years)} years`;
-}
-
-// fmtYears with its magnitude words abbreviated: "4.6B years", "66M years",
-// "5K years". For the one place the full form doesn't fit — a landmark label
-// whose years have wrapped to their own line on a narrow canvas
-// (src/render/stage.ts) — where dropping "billion" to "B" is a far better
-// trade than ellipsizing the number itself. Below a thousand there is nothing
-// to abbreviate, so it reads exactly as fmtYears does.
-export function fmtYearsCompact(years: number): string {
-  if (years >= 1e9) {
-    return `${trimTrailingZero(Math.round(years / 1e8) / 10)}B years`;
-  }
-  if (years >= 1e6) {
-    return `${trimTrailingZero(Math.round(years / 1e5) / 10)}M years`;
-  }
-  if (years >= 1000) {
-    return `${trimTrailingZero(Math.round(years / 100) / 10)}K years`;
-  }
-  return `${Math.round(years)} years`;
+  const n = Math.round(years);
+  return `${n} ${n === 1 ? 'year' : 'years'}`;
 }
 
 export function fmtMeters(meters: number): string {
@@ -47,12 +29,20 @@ export function fmtInt(n: number): string {
   return Math.round(n).toLocaleString('en-US');
 }
 
-// fmtYears says "1 years" for a single-year gap, which is right for a
-// landmark label ("... · 1 years") but wrong in a sentence ("1 year ago").
-// Shared by the popups and their opened card (src/popups.ts) and the scrapbook
-// (src/scrapbook.ts) so both read the same way.
+// A whole count with its own noun, singular at exactly one: "1 brick",
+// "1,204 bricks", "1 year". Unlike fmtYears this never abbreviates the number
+// — the HUD's counter and a thing's brick count both show the exact figure —
+// and the noun's plural is its "s" form, which is all this page counts.
+export function fmtCount(n: number, noun: string): string {
+  const whole = Math.round(n);
+  return `${fmtInt(whole)} ${whole === 1 ? noun : `${noun}s`}`;
+}
+
+// fmtYears already singularizes a one-year gap ("1 year"), so this only
+// appends "ago". Shared by the popups and their opened card (src/popups.ts)
+// and the scrapbook (src/scrapbook.ts) so both read the same way.
 export function yearsAgo(years: number): string {
-  return Math.round(years) === 1 ? '1 year ago' : `${fmtYears(years)} ago`;
+  return `${fmtYears(years)} ago`;
 }
 
 function trimTrailingZero(n: number): string {

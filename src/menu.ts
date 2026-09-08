@@ -1,9 +1,8 @@
-// The compact menu: one paper tab in the HUD's top-right corner, under the
-// "next up" teaser, that opens a small paper panel holding everything that
-// used to be its own row of controls — sound, "my facts", restart, and the
-// color chips (docs/autopilot/2026-09-06-popups-and-menu.md's "Compact
-// menu"). DOM glue only; the color palette itself lives in
-// src/lib/lego-colors.ts and is drawn by the shared src/color-picker.ts.
+// The compact menu: the one paper tab in the HUD's top-right corner, opening
+// a small paper panel that holds every control the page has — sound, "my
+// facts", restart, and the color chips. DOM glue only; the color palette
+// itself lives in src/lib/lego-colors.ts and is drawn by the shared
+// src/color-picker.ts.
 
 import { createColorPicker } from './color-picker';
 

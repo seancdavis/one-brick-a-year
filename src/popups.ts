@@ -10,7 +10,7 @@
 // into bundles when it compacts. DOM glue only — the grouping math is pure
 // and lives in src/lib/popups.ts.
 
-import { fmtInt, fmtMeters, yearsAgo } from './lib/format';
+import { fmtCount, fmtMeters, yearsAgo } from './lib/format';
 import type { Beat } from './lib/beats';
 import { ICON_PATHS, type IconId } from './lib/icon-paths';
 import type { PaperColor, ThingLandmark } from './lib/landmarks';
@@ -223,11 +223,6 @@ export function createPopups(
     profile: () => Personalization;
     // A pin was tapped and that one fact is now what the side is reading.
     onSelect(side: Side, id: string): void;
-    // A pin's card was opened over the side instead — a bundle's list, or a
-    // lone fact where there is no room to read it as a popup. The card is the
-    // reading now, so the side closes what it had open behind it and shows
-    // every one of its facts as a pin until the stack passes something new.
-    onOpenCard(side: Side): void;
   },
 ): Popups {
   const layer = el('div', 'popup-layer');
@@ -238,8 +233,10 @@ export function createPopups(
   // over it scrolls the card's own content instead of building or undoing the
   // tower. Shares its backdrop/panel/close-tab/fact-note CSS with the
   // scrapbook (src/scrapbook.ts) under common .modal-* class names — see
-  // src/style.css's comment there.
-  const backdrop = el('div', 'modal-backdrop');
+  // src/style.css's comment there. The extra popup-card-backdrop class keeps
+  // this one backdrop transparent: opening the card must not dim the open
+  // popups it sits over, unlike the scrapbook's own dimmed backdrop.
+  const backdrop = el('div', 'modal-backdrop popup-card-backdrop');
   backdrop.hidden = true;
   backdrop.setAttribute('data-scroll-ignore', '');
   const card = el('div', 'popup-card modal-panel');
@@ -300,7 +297,7 @@ export function createPopups(
     return {
       title: thing.label,
       line: thing.funLine ?? thing.tallerThanPhrase,
-      meta: `${fmtMeters(thing.meters)} · ${fmtInt(Math.round(thing.years))} bricks`,
+      meta: `${fmtMeters(thing.meters)} · ${fmtCount(thing.years, 'brick')}`,
     };
   }
 
@@ -420,8 +417,8 @@ export function createPopups(
     }
 
     const lead = pinLead(model);
-    const name = 'title' in lead ? lead.title : lead.label;
-    paper.setAttribute('aria-label', count > 1 ? `${name} and ${count - 1} more facts` : name);
+    const label = 'title' in lead ? lead.title : lead.label;
+    paper.setAttribute('aria-label', count > 1 ? `${label} and ${count - 1} more facts` : label);
 
     container.append(paper);
     layer.append(container);
@@ -431,7 +428,6 @@ export function createPopups(
       const members = pinMembers(record.model);
       if (members.length > 1 || !roomForPopup[side]) {
         openCard(pinNotes(record.model), paper);
-        opts.onOpenCard(side);
         return;
       }
       tapped.add(side);
@@ -637,7 +633,7 @@ export function createPopups(
         record.el.style.left = `${Math.round(left)}px`;
         record.el.style.top = `${Math.round(top)}px`;
         setStub(record.el, towerEdgeX, stubWidthFor(side, towerEdgeX, width), anchorY - top, record.heightPx);
-        record.box = { side, x: left, y: top, w: width, h: record.heightPx };
+        record.box = { x: left, y: top, w: width, h: record.heightPx };
       }
 
       // Pins stack per side from the ground up, each pushing against the one
