@@ -529,6 +529,13 @@ select {
   display: none;
 }
 
+/* The fact card's backdrop (src/popups.ts) stays fully transparent, unlike
+   the scrapbook's dimmed one above: opening a card must not dim, hide, or
+   otherwise change the open popups it sits over. */
+.popup-card-backdrop {
+  background: transparent;
+}
+
 .modal-panel {
   width: 100%;
   max-height: 80vh;
@@ -559,8 +566,11 @@ select {
   cursor: pointer;
 }
 
+/* 420px on desktop; min(420px, 92vw) keeps it off the edges on a narrow
+   screen. The list inside scrolls under .modal-panel's own max-height/
+   overflow-y above once it runs long. */
 .popup-card {
-  max-width: 34ch;
+  width: min(420px, 92vw);
 }
 
 .popup-card-title {

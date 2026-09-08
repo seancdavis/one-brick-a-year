@@ -238,8 +238,10 @@ export function createPopups(
   // over it scrolls the card's own content instead of building or undoing the
   // tower. Shares its backdrop/panel/close-tab/fact-note CSS with the
   // scrapbook (src/scrapbook.ts) under common .modal-* class names — see
-  // src/style.css's comment there.
-  const backdrop = el('div', 'modal-backdrop');
+  // src/style.css's comment there. The extra popup-card-backdrop class keeps
+  // this one backdrop transparent: opening the card must not dim the open
+  // popups it sits over, unlike the scrapbook's own dimmed backdrop.
+  const backdrop = el('div', 'modal-backdrop popup-card-backdrop');
   backdrop.hidden = true;
   backdrop.setAttribute('data-scroll-ignore', '');
   const card = el('div', 'popup-card modal-panel');
