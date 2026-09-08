@@ -113,12 +113,7 @@ const storedRaw = readStoredProfile();
 // Whether the URL actually asked for personalization — gates saving the
 // parsed profile and skipping the mandatory first-run start screen below.
 const hasUrlParams = hasPersonalizationKeys(params);
-// Whether the address bar needs cleaning up: broader than hasUrlParams,
-// since a URL carrying only a `name` key (an older or hand-edited link) has
-// nothing mergeParams keeps, but the name still has to be scrubbed from the
-// address bar and history rather than left sitting there. Checked against
-// the raw query and fragment, not `params`, since mergeParams has already
-// dropped `name` by the time it builds `params`.
+// Whether the address bar needs cleaning up: broader than hasUrlParams (see shouldScrubUrl).
 const needsUrlScrub = shouldScrubUrl(query, fragment);
 
 // The "thing" landmarks, for src/lib/popups.ts's popupsFor (the left side).

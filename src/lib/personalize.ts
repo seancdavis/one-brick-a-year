@@ -176,14 +176,8 @@ export function hasPersonalizationKeys(params: URLSearchParams): boolean {
   return PERSONALIZATION_KEYS.some((key) => params.has(key));
 }
 
-// Whether src/main.ts should scrub the address bar: true when either raw
-// source (the query string or the fragment, before mergeParams drops
-// anything unrecognized) carries a recognized personalization key, or a
-// `name` key — a link built for an older or hand-edited version of this page
-// that still names someone. Checked against the raw sources rather than
-// mergeParams' output, since that output never carries `name` to begin with
-// and so could never trigger a scrub on its own; `name`'s value is still
-// never read into the profile; it is only ever a reason to clean the URL.
+// Checks the raw query and fragment, not mergeParams' output: mergeParams
+// drops `name`, but a `name` key still has to be scrubbed from the address bar.
 export function shouldScrubUrl(query: URLSearchParams, fragment: URLSearchParams): boolean {
   return (
     hasPersonalizationKeys(query) || hasPersonalizationKeys(fragment) || query.has('name') || fragment.has('name')

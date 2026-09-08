@@ -337,6 +337,6 @@ These fill the gap between the space station (42 million bricks) and the width o
 
 ## Personalization ideas
 
-- Height: "as tall as you" needs her height. One more field on the start screen, or skip.
+- Height: "as tall as you" needs their height. One more field on the start screen, or skip.
 - Home: already there (one story, two stories, apartment).
-- A landmark she knows: the tallest building in her city, or her school. Would need a name and a height typed in; probably not worth it.
+- A landmark they know: the tallest building in their city, or their school. Would need a name and a height typed in; probably not worth it.

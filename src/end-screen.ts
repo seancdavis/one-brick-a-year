@@ -7,12 +7,6 @@ import type { Personalization } from './lib/personalize';
 
 const COPY_LABEL_RESET_MS = 2000;
 
-// "You were the first {age}." — the one line of copy that reads the profile,
-// so it lands as personal without ever asking who's reading.
-function ageLine(profile: Personalization): string {
-  return `You were the first ${profile.ageYears}.`;
-}
-
 export function createEndScreen(
   root: HTMLElement,
   onAgain: () => void,
@@ -109,7 +103,7 @@ export function createEndScreen(
 
   return {
     show(profile) {
-      youLine.textContent = ageLine(profile);
+      youLine.textContent = `You were the first ${profile.ageYears}.`;
       overlay.hidden = false;
       againButton.focus();
     },

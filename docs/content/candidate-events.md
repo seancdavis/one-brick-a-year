@@ -4,7 +4,7 @@ One brick per year. Years are counted back from 2026. "About" means the number i
 
 Personal rows use the profile (age, and possibly two new fields).
 
-## 1 to 100 years: bricks she can count
+## 1 to 100 years: bricks they can count
 
 - [x] your whole life — age (already on the stack)
       Source note: profile
@@ -67,7 +67,7 @@ Personal rows use the profile (age, and possibly two new fields).
       Card line: Everything great since then is "the best thing since sliced bread."
 - [x] the first television (1926) — 100
 
-## 100 to 5,000 years: things she has heard of
+## 100 to 5,000 years: things they have heard of
 
 - [ ] the Titanic sinks (1912) — 114
       Card line: The biggest ship in the world hit an iceberg on its first trip.

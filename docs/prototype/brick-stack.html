@@ -110,7 +110,7 @@
     var dt=Math.min((t-last)/1000,0.05); last=t;
     if(held&&!done){
       heldTime+=dt;
-      var rate=8*Math.exp(0.25*heldTime);       // years per second, growing the longer she holds
+      var rate=8*Math.exp(0.25*heldTime);       // years per second, growing the longer they hold
       years=Math.min(TOTAL,years+rate*dt);
       if(years>=TOTAL){ done=true; held=false; doneEl.classList.add('on'); }
     }
